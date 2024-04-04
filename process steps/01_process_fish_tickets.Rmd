@@ -50,6 +50,8 @@ keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_me
 
 rm(list=setdiff(ls(),keepers))
 
+#confidential <- "/Users/kelly.andrews/Documents/GitHub/VMS-pipeline/Confidential"
+
 ```
 
 Choose directories and set objects

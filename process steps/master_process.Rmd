@@ -17,6 +17,8 @@ library(here)
 
 This document collates all individual steps of VMS/Fish Ticket processing for a chosen year.
 
+#Kelly adding stuff to see if it commits to the repo
+
 ```{r timer, include=FALSE}
 alltime <- proc.time()
 ```
