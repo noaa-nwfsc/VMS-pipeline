@@ -83,7 +83,7 @@ This should be a .csv file containing raw PacFIN data. We only read in columns t
 
 ```{r rawdata}
 ## for running 2020 and 2021 pipeline, all fish tickets are already together:
-rawdat <- read_rds(here::here('data','raw','fish tickets','pacfin_compiled_2004thru2021.rds'))
+rawdat <- read_rds(here::here('Confidential','data','raw','fish tickets','all_fishtickets_1994_2023.rds'))
 rawdat <- rawdat %>%
   filter(LANDING_YEAR %in%  process_year)
 

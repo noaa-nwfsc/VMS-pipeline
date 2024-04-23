@@ -88,7 +88,7 @@ plot_output <- TRUE
 Load permits data
 
 ```{r}
-permits <- read_csv(here('data','2009_2023_vesselreg.csv'))
+permits <- read_csv(here('Confidential','data','raw','vessel info','2009_2023_vesselreg.csv'))
 ```
 
 ## Subset Permit Data
