@@ -272,9 +272,6 @@ r2 = 1500
 
 ## cutoff value for speed (m/s) -- 1m/s ~ 2 knots
 speed_cutoff <- 1
-
-## do you want to filter out data points that are potentially on shore (NGDC > 0m)?
-bathy_filter=FALSE
 ```
 
 Using port coordinates from above, indicated whether they are in the "smaller buffer" category
