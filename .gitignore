@@ -3,4 +3,5 @@
 .Rhistory
 .RData
 .Ruserdata
-Confidential/
+/Confidential/
+/data/Confidential/
