@@ -49,7 +49,7 @@ options(dplyr.summarise.inform=F)
 First, the full vms data set for `r process_year`.
 
 ```{r data}
-vms <- read_rds(here::here('data','processed','matched','matching',paste0(process_year,'matched_vmstix_only_withFTID.rds')))
+vms <- read_rds(here::here('Confidential','processed','matched','matching',paste0(process_year,'matched_vmstix_only_withFTID.rds')))
 ```
 
 ***
@@ -59,7 +59,7 @@ vms <- read_rds(here::here('data','processed','matched','matching',paste0(proces
 Latitude/longitude of ports. Coordinates were provided by Blake Feist.
 
 ```{r}
-portlist_coords <- read_csv(here::here('data','raw','port_coords.csv'),col_types='cddd') %>% 
+portlist_coords <- read_csv(here::here('data','port_coords_fromBlake_edited.csv'),col_types='cddd') %>% 
   select(port_code,Lon,Lat) %>% 
   set_names(c('port_code','portlon','portlat'))
 ```
@@ -579,8 +579,8 @@ Save the output and the full, non-filtered data set
 
 ```{r}
 #Save version with FTID and length
-write_rds(vms_filtered,here::here('data','processed','matched','filtering',paste0(process_year,'matched_filtered_withFTID_length.rds')))
-write_rds(vms_wfilters,here::here('data','processed','matched','filtering',paste0(process_year,'matched_unfiltered.rds')))
+write_rds(vms_filtered,here::here('Confidential','processed','matched','filtering',paste0(process_year,'matched_filtered_withFTID_length.rds')))
+write_rds(vms_wfilters,here::here('Confidential','processed','matched','filtering',paste0(process_year,'matched_unfiltered.rds')))
 ```
 
 ```{r}

@@ -1,0 +1,26 @@
+# misc code boneyard for processing files in VMS Pipeline
+# Blake Feist - 7 May 2024
+
+# packages
+library(knitr)
+library(here)
+library(dplyr)
+library(fredr)
+library(readr)
+
+# load master 1994 - 2023 fish tickets file
+all_fishtickets_1994_2023 <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/raw/fish tickets/all_fishtickets_1994_2023.rds")
+
+# take a look at the attribute structure
+glimpse(all_fishtickets_1994_2023)
+
+# filter only Dungeness crab tickets
+Dungeness <- all_fishtickets_1994_2023 %>%
+  filter(PACFIN_SPECIES_CODE == "DCRB")
+
+# take a look at the Dungeness crab attribute structure
+glimpse(Dungeness)
+
+# tally the number of tickets by PacFIN gear code to figure out which gear types to use
+DCRB_gear <- table(Dungeness$PACFIN_GEAR_CODE)
+# 99.73% of all DCRB tickets are from CPT, CLP, OTH or OPT, so only select those in master_process script

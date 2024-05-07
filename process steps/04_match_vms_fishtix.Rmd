@@ -43,11 +43,11 @@ Load fish ticket data (processed), including the last month of the previous year
 
 ```{r load tix}
 #Load in data with FTID and vessel length
-fishtix <- read_rds(here::here('data','processed','fish tickets',paste0(process_year,'fishtix_vlengths_withFTID.rds')))
+fishtix <- read_rds(here::here('Confidential','processed','fish tickets',paste0(process_year,'fishtix_vlengths_withFTID.rds')))
 
 #Note tho that atm some of the previous years don't have length and FTID as I haven't run that
 if(process_year>2009){
-  fishtix_prev <- read_rds(here::here('data','processed','fish tickets',paste0(process_year-1,'fishtix_withFTID.rds'))) %>% 
+  fishtix_prev <- read_rds(here::here('Confidential','processed','fish tickets',paste0(process_year-1,'fishtix_withFTID.rds'))) %>% 
     filter(month(date)==max(month(date)))
   fishtix <- bind_rows(fishtix_prev,fishtix)
   rm(fishtix_prev)
@@ -58,10 +58,10 @@ if(process_year>2009){
 Load VMS data, including the last month of the previous year (for handling trips spanning January 1st of the current year)
 
 ```{r load vms}
-vms <- read_rds(here::here('data','processed','vms',paste0(process_year,'_vms_clean.rds')))
+vms <- read_rds(here::here('Confidential','processed','vms',paste0(process_year,'_vms_clean.rds')))
 
 if(process_year>2009){
-  vms_prev <- read_rds(here::here('data','processed','vms',paste0(process_year-1,'_vms_clean.rds'))) %>% 
+  vms_prev <- read_rds(here::here('Confidential','processed','vms',paste0(process_year-1,'_vms_clean.rds'))) %>% 
     filter(month(UTCDATETIME)==max(month(UTCDATETIME)))
   vms <- bind_rows(vms_prev,vms)
   rm(vms_prev)
@@ -241,6 +241,6 @@ fishtix_vms %<>% select(-month)
 fishtix_vms_all <- fishtix_vms
 fishtix_vms_only <- fishtix_vms %>% filter(has_vms==1)
 #Save versions that have FTID and length
-write_rds(fishtix_vms_all,here::here('data','processed','matched','matching',paste0(process_year,'matched_alltix_withFTID.rds')))
-write_rds(fishtix_vms_only,here::here('data','processed','matched','matching',paste0(process_year,'matched_vmstix_only_withFTID.rds')))
+write_rds(fishtix_vms_all,here::here('Confidential','processed','matched','matching',paste0(process_year,'matched_alltix_withFTID.rds')))
+write_rds(fishtix_vms_only,here::here('Confidential','processed','matched','matching',paste0(process_year,'matched_vmstix_only_withFTID.rds')))
 ```
