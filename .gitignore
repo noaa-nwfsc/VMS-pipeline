@@ -4,4 +4,8 @@
 .RData
 .Ruserdata
 Confidential/
+<<<<<<< HEAD
 data/bathymetry/composite_bath.tif
+=======
+composite_bath.tif
+>>>>>>> cb986af3ecc35ca96d625dfbad1581ef555d6802
