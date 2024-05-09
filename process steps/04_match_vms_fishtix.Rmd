@@ -230,6 +230,10 @@ fishtix_vms %>%
   geom_histogram(bins=10)+
   facet_wrap(~has_vms)+
   labs(x=paste("Number of Trips in",process_year),y="Number of Vessels",title="Distribution of Number of Recorded Trips per Vessel")
+
+# adjust for inflation based on reference year using Fred deflators (added 8May2024)
+left_join(gdp_defl, by = YEAR) %>% #left_join(gdp_defl, by = c("year in fishtix_vms name" = "YEAR")
+  mutate(AFI_REVENUE = EXVESSEL_REVENUE / DEFL)
 ```
 
 ## Save Results

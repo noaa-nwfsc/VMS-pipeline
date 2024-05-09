@@ -129,10 +129,10 @@ First, subset the raw data to include only the columns that are needed. Rename t
 
 ```{r}
 rawdat.sub <- rawdat %>% 
-  dplyr::select(FISH_TICKET_ID, FTID, PACFIN_PORT_CODE, PACFIN_GROUP_PORT_CODE, VESSEL_NUM, AGENCY_CODE, GEAR_CODE, GEAR_NAME, PACFIN_GROUP_GEAR_CODE, REMOVAL_TYPE_CODE, REMOVAL_TYPE_NAME, LANDING_DATE, LANDING_MONTH, LANDING_YEAR, PACFIN_SPECIES_CODE, LANDED_WEIGHT_LBS, EXVESSEL_REVENUE, AFI_EXVESSEL_REVENUE) %>% 
+  dplyr::select(FISH_TICKET_ID, FTID, PACFIN_PORT_CODE, PACFIN_GROUP_PORT_CODE, VESSEL_NUM, AGENCY_CODE, GEAR_CODE, GEAR_NAME, PACFIN_GROUP_GEAR_CODE, REMOVAL_TYPE_CODE, REMOVAL_TYPE_NAME, LANDING_DATE, LANDING_MONTH, LANDING_YEAR, PACFIN_SPECIES_CODE, LANDED_WEIGHT_LBS, EXVESSEL_REVENUE) %>% 
 # change some column names
   set_colnames(c("Rec_ID", "FTID", "pacfin_port_code", "port_group_code","drvid", "agency_code","gear_code", "gear_name", "gear_group", "removal_type_code", "removal_type_name", "date", "month", "year", 
-                          "PACFIN_SPECIES_CODE", "LANDED_WEIGHT_LBS", "EXVESSEL_REVENUE", "AFI_EXVESSEL_REVENUE"))
+                          "PACFIN_SPECIES_CODE", "LANDED_WEIGHT_LBS", "EXVESSEL_REVENUE"))
 ```
 
 Remove the columns where the vessel identifier (drvid) is either "UNKNOWN" or blank ("")
