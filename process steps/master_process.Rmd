@@ -59,7 +59,7 @@ This parameter will get passed through all processing steps
 ```{r choose year}
 # Leena will be working through all steps for 2014 as a test
 alltime <- proc.time()
-process_year <- 2020
+process_year <- 2009
 ```
 
 ## Lookback Window
