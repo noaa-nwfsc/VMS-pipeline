@@ -64,7 +64,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.major = element_line(color="gray50",linetype=3))
 theme_set(plot_theme)
 
-keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback window','year_begin','year_end','lookback_begin')
+keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin')
 
 rm(list=setdiff(ls(),keepers))
 

@@ -27,7 +27,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.minor = element_blank())
 theme_set(plot_theme)
 
-keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback window','year_begin','year_end','lookback_begin')
+keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin')
 
 rm(list=setdiff(ls(),keepers))
 options(dplyr.summarise.inform=F)
@@ -232,8 +232,8 @@ fishtix_vms %>%
   labs(x=paste("Number of Trips in",process_year),y="Number of Vessels",title="Distribution of Number of Recorded Trips per Vessel")
 
 # adjust for inflation based on reference year using Fred deflators (added 8May2024)
-left_join(gdp_defl, by = YEAR) %>% #left_join(gdp_defl, by = c("year in fishtix_vms name" = "YEAR")
-  mutate(AFI_REVENUE = EXVESSEL_REVENUE / DEFL)
+# left_join(gdp_defl, by = YEAR) %>% #left_join(gdp_defl, by = c("year in fishtix_vms name" = "YEAR")
+#   mutate(AFI_REVENUE = EXVESSEL_REVENUE / DEFL)
 ```
 
 ## Save Results
