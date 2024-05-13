@@ -23,6 +23,6 @@ x <- read_csv(here('Confidential','raw','vms','vms_01012009_12312023.csv'),
   mutate(UTCDATETIME=parse_date_time(UTC_TIME, c("mdy HM","mdy HMS"))) %>% 
   mutate(year=year(UTCDATETIME))
 yrs_captured <- paste(unique(x$year),collapse=" ")
-write_rds(x,here('data','raw','vms',paste0('vms chunk ',chunk_num," ",yrs_captured,'.rds')))
+write_rds(x,here('Confidential','raw','vms',paste0('vms chunk ',chunk_num," ",yrs_captured,'.rds')))
 st <- st+1e7
 chunk_num <- chunk_num+1
