@@ -257,7 +257,7 @@ rawdat.w.targets %<>%
 
 ## Calculate "Other" Category
 
-For each fish ticket, sum up an "Other" category based on the choice made in the beginning of the script (`gear_types`)
+For each fish ticket, sum up an "Other" category based on the choice made in the beginning of the script (`gear_codes`)
 
 ```{r calc other}
 dat_targets_other <- rawdat.w.targets %>% 
