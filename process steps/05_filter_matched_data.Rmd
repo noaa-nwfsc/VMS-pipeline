@@ -579,8 +579,8 @@ Save the output and the full, non-filtered data set
 
 ```{r}
 #Save version with FTID and length
-write_rds(vms_filtered,here::here('Confidential','processed','matched','filtering',paste0(process_year,'matched_filtered_withFTID_length.rds')))
-write_rds(vms_wfilters,here::here('Confidential','processed','matched','filtering',paste0(process_year,'matched_unfiltered.rds')))
+write_rds(vms_filtered,here::here('Confidential','processed','matched','filtering',paste0(process_year,'_',spp_codes,'_matched_filtered_withFTID_length.rds')))
+write_rds(vms_wfilters,here::here('Confidential','processed','matched','filtering',paste0(process_year,'_',spp_codes,'_matched_unfiltered.rds')))
 ```
 
 ```{r}
