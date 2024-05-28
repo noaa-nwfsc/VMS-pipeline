@@ -28,13 +28,13 @@ alltime <- proc.time()
 Indicate the PacFIN codes for the fish ticket species you are interested in tracking, as well as the gears. Landings and revenue for these species and gears will be tracked in the pipeline, for both targeted and non-targeted trips. Keep in mind that although the pipeline will record all species that are landed on each fish ticket, exact landings and revenues for these species will ONLY be reported if they are included in `spp_codes`. Likewise, `gear_codes` should be thought of NOT as a filter on which gears you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings, regardless of target species.
 
 ```{r}
-spp_codes <- c("DCRB") # All of the species for which you want specific revenue and landings by ticket
+spp_codes <- c("DCRB","CHNK") # All of the species for which you want specific revenue and landings by ticket
+# spp_codes_name <- "DCRB_CHNK"
 # here's your options
 #https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/sp.txt
-
-gear_codes <- c("CRAB POT","CRAB OR LOBSTER POT")
+gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING","TROLL, (SALMON)","OCEAN TROLL","TROLL (SALMON)","DRAG SEINE","DIP BAG NET","HOOK AND LINE","PURSE SEINE (SALMON)")
 # All of the gears for which you want total revenue and landings by ticket
-# As implemented, these are the full names (i.e., the fourth column of the table linked here, e.g. "CRAB POT", not "CPT")
+# As implemented, these are the full names (i.e., the "AGENCY DESCRIPTION" column of the table linked here, e.g. "CRAB POT", not "CPT")
 # https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/agency_gears.txt
 ```
 
@@ -61,7 +61,7 @@ This parameter will get passed through all processing steps
 ```{r choose year}
 # Leena will be working through all steps for 2014 as a test
 alltime <- proc.time()
-process_year <- 2009
+process_year <- 2023
 ```
 
 ## Lookback Window

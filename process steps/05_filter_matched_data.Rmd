@@ -49,7 +49,7 @@ options(dplyr.summarise.inform=F)
 First, the full vms data set for `r process_year`.
 
 ```{r data}
-vms <- read_rds(here::here('Confidential','processed','matched','matching',paste0(process_year,'matched_vmstix_only_withFTID.rds')))
+vms <- read_rds(here::here('Confidential','processed','matched','matching',paste0(process_year,'_matched_vmstix_only_withFTID.rds')))
 ```
 
 ***
@@ -579,8 +579,8 @@ Save the output and the full, non-filtered data set
 
 ```{r}
 #Save version with FTID and length
-write_rds(vms_filtered,here::here('Confidential','processed','matched','filtering',paste0(process_year,'_',spp_codes,'_matched_filtered_withFTID_length.rds')))
-write_rds(vms_wfilters,here::here('Confidential','processed','matched','filtering',paste0(process_year,'_',spp_codes,'_matched_unfiltered.rds')))
+write_rds(vms_filtered,here::here('Confidential','processed','matched','filtering',paste0(process_year,'_matched_filtered_withFTID_length.rds')))
+write_rds(vms_wfilters,here::here('Confidential','processed','matched','filtering',paste0(process_year,'_matched_unfiltered.rds')))
 ```
 
 ```{r}

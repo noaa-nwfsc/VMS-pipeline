@@ -296,7 +296,7 @@ Vessel lengths key
 for(y in unique(vessel_length_key_df$year)){
   key_subset <- vessel_length_key_df %>%
     filter(year == y)
-  write_rds(key_subset,here::here('Confidential','processed','vessel length keys',paste0(spp_codes,'_vessel_length_key_', y, '.rds')))
+  write_rds(key_subset,here::here('Confidential','processed','vessel length keys',paste0('vessel_length_key_', y, '.rds')))
 }
 ```
 
@@ -311,6 +311,6 @@ for(y in unique(vessel_length_key_df$year)){
     filter(year==y) %>%
     select(-year)
   landings_length <- left_join(landings_subset,vessel_length_key_df_subset, by=c("drvid", "agency_code"))
-  write_rds(landings_length,here::here('Confidential','processed','fish tickets',paste0(spp_codes,'_',y, 'fishtix_vlengths_withFTID.rds')))
+  write_rds(landings_length,here::here('Confidential','processed','fish tickets',paste0(y, 'fishtix_vlengths_withFTID.rds')))
 }
 ```

@@ -363,7 +363,7 @@ yrs_of_data <- unique(dat_out$year)
 for(y in 1:length(yrs_of_data)) {
  dat_out %>% 
     filter(year==yrs_of_data[y]) %>% 
-    write_rds(here::here('Confidential','processed','fish tickets',paste0(spp_codes,'_',yrs_of_data[y],"fishtix_withFTID",".rds",collapse=""))) 
+    write_rds(here::here('Confidential','processed','fish tickets',paste0(yrs_of_data[y],"fishtix_withFTID",".rds",collapse=""))) 
 }
 # for(y in unique(rawdat$LANDING_YEAR)){
 #   year.final.processdat <- filter(final.processdat, year == y )

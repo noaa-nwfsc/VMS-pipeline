@@ -192,7 +192,7 @@ vms_dupes <- vms %>%
   dplyr::select(dupe_count,everything())
 proc.time()-tm
 
-write_rds(vms_dupes, here::here('Confidential','processed','vms',paste0(process_year,'_',spp_codes,'_duplicates_only.rds')))
+write_rds(vms_dupes, here::here('Confidential','processed','vms',paste0(process_year,'_duplicates_only.rds')))
 ```
 
 ## Add Bathymetry
@@ -257,5 +257,5 @@ vms_ordered <- vms_nodup_bathy %>%
 ## Save Results
 
 ```{r save rds}
-write_rds(vms_ordered,here::here('Confidential','processed','vms',paste0(process_year,'_',spp_codes,'_vms_clean.rds')))
+write_rds(vms_ordered,here::here('Confidential','processed','vms',paste0(process_year,'_vms_clean.rds')))
 ```

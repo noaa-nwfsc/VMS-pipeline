@@ -245,6 +245,6 @@ fishtix_vms %<>% select(-month)
 fishtix_vms_all <- fishtix_vms
 fishtix_vms_only <- fishtix_vms %>% filter(has_vms==1)
 #Save versions that have FTID and length
-write_rds(fishtix_vms_all,here::here('Confidential','processed','matched','matching',paste0(process_year,'_',spp_codes,'_matched_alltix_withFTID.rds')))
-write_rds(fishtix_vms_only,here::here('Confidential','processed','matched','matching',paste0(process_year,'_',spp_codes,'_matched_vmstix_only_withFTID.rds')))
+write_rds(fishtix_vms_all,here::here('Confidential','processed','matched','matching',paste0(process_year,'_matched_alltix_withFTID.rds')))
+write_rds(fishtix_vms_only,here::here('Confidential','processed','matched','matching',paste0(process_year,'_matched_vmstix_only_withFTID.rds')))
 ```
