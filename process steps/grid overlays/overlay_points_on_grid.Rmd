@@ -174,9 +174,11 @@ target_rev <- "DCRB"
 target_lbs <- "DCRB"
 winter_months <- c("November", "December", "January", "February", "March")
 removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
-max_speed <- 4.11556
-min_speed <- 0
-
+max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
+min_speed <- 0 # units = m/s
+# placeholder for adding daytime filter appropriate for salmon trolling boats.
+# Potentially use suncalc package to use lat, lon, local date/time ('westcoastdate' attribute)
+# to filter out points that occured in non-daylight times 
 
 ```
 
@@ -211,7 +213,7 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
     Rec_ID, VMS_RECNO, drvid,
     westcoastdate_notime, year, crab_year, year_month, month, month_as_numeric, week_of_year, day_of_year, season,
     CellID, pacfin_port_code, port_group_code, NGDC_M,
-    TARGET_lbs, TARGET_rev, DCRB_lbs, DCRB_revenue
+    TARGET_lbs, TARGET_rev, DCRB_lbs, DCRB_revenue, other_lbs, other_rev, species_code_all
     ) # DEPTH_CATM, 
 
 glimpse(dcrb_vms_tix_analysis)
@@ -236,6 +238,8 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
   mutate(
     DCRB_lbs_per_VMSlocation = DCRB_lbs/trip_VMSrecords,
     DCRB_rev_per_VMSlocation = DCRB_revenue/trip_VMSrecords,
+    other_lbs_per_VMSlocation = other_lbs/trip_VMSrecords,
+    other_rev_per_VMSlocation = other_rev/trip_VMSrecords,
     Num_DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
   )
 glimpse(dcrb_vms_tix_analysis_TripInfo)
@@ -259,7 +263,9 @@ con_df_daily_years_2km <- dcrb_vms_tix_analysis_TripInfo %>%
   group_by(year, crab_year, year_month, season, month, month_as_numeric, week_of_year, day_of_year, CellID) %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
-    DCRB_rev =sum(DCRB_rev_per_VMSlocation),
+    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
+    other_lbs = sum(other_lbs_per_VMSlocation),
+    other_rev = sum(other_rev_per_VMSlocation),
     Num_DCRB_VMS_pings = n(),
     Num_DCRB_Vessels = sum(Num_DCRB_Vessels_per_VMSlocation),
     Num_Unique_DCRB_Vessels = length(unique(as.character(drvid))),
@@ -277,4 +283,38 @@ write_rds(con_df_daily_years_2km,here::here('Confidential', 'processed', 'pipeli
 
 ```
 
-Did not yet, but could summarise by yr, yr_month, etc
+# Old note from Jameal: Did not yet, but could summarise by yr, yr_month, etc
+
+## code from Kelly for creating dfs for 1) drvid confidentiality (vessels_SPECIES) and 2) pings/grid cell/year with lbs and rev
+#unique vessel ids by year
+# load raw DCRB pings 2009-2023 (sub CHNK for chinook)
+DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/processed/pipeline output/DCRB and CHNK 28May2024/DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter.rds")
+
+vessels_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter %>%
+dplyr::select(CellID, year, drvid) %>%
+distinct()
+
+# save the df (sub CHNK for chinook_)
+write_rds(vessels_DCRB,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vessels_4_confidentiality_DCRB.rds'))
+
+
+## figuring out whether unique vessel ids are summed per year?
+# load DCRB pings overlaid on 2km grid (sub CHNK for chinook)
+DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/processed/pipeline output/DCRB and CHNK 28May2024/DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter.rds")
+
+test_sum_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter 
+
+## create output table with unique vessels, target rev/lba and other rev/lbs, by year (sub CHNK for chinook)
+pings_per_gridcell_DCRB <- test_sum_DCRB %>%
+group_by(CellID, year) %>%
+summarise(DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
+    DCRB_rev = sum(DCRB_rev, na.rm = TRUE),
+    #other_lbs = sum(other_lbs, na.rm = TRUE),
+    #other_rev = sum(other_rev, na.rm = TRUE),
+    Num_DCRB_VMS_pings = n())
+    
+# save the df (sub CHNK for chinook)
+write_rds(pings_per_gridcell_DCRB,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'pings_per_gridcell_DCRB.rds'))
+
+
+
