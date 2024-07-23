@@ -213,7 +213,7 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
     Rec_ID, VMS_RECNO, drvid,
     westcoastdate_notime, year, crab_year, year_month, month, month_as_numeric, week_of_year, day_of_year, season,
     CellID, pacfin_port_code, port_group_code, NGDC_M,
-    TARGET_lbs, TARGET_rev, DCRB_lbs, DCRB_revenue, other_lbs, other_rev, species_code_all
+    TARGET_lbs, TARGET_rev, DCRB_lbs, DCRB_revenue, all_species_lbs, all_species_rev, species_code_all
     ) # DEPTH_CATM, 
 
 glimpse(dcrb_vms_tix_analysis)
@@ -238,8 +238,8 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
   mutate(
     DCRB_lbs_per_VMSlocation = DCRB_lbs/trip_VMSrecords,
     DCRB_rev_per_VMSlocation = DCRB_revenue/trip_VMSrecords,
-    other_lbs_per_VMSlocation = other_lbs/trip_VMSrecords,
-    other_rev_per_VMSlocation = other_rev/trip_VMSrecords,
+    all_species_lbs_per_VMSlocation = all_species_lbs/trip_VMSrecords,
+    all_species_rev_per_VMSlocation = all_species_rev/trip_VMSrecords,
     Num_DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
   )
 glimpse(dcrb_vms_tix_analysis_TripInfo)
@@ -264,8 +264,8 @@ con_df_daily_years_2km <- dcrb_vms_tix_analysis_TripInfo %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
     DCRB_rev = sum(DCRB_rev_per_VMSlocation),
-    other_lbs = sum(other_lbs_per_VMSlocation),
-    other_rev = sum(other_rev_per_VMSlocation),
+    all_species_lbs = sum(all_species_lbs_per_VMSlocation),
+    all_species_rev = sum(all_species_rev_per_VMSlocation),
     Num_DCRB_VMS_pings = n(),
     Num_DCRB_Vessels = sum(Num_DCRB_Vessels_per_VMSlocation),
     Num_Unique_DCRB_Vessels = length(unique(as.character(drvid))),
@@ -309,8 +309,8 @@ pings_per_gridcell_DCRB <- test_sum_DCRB %>%
 group_by(CellID, year) %>%
 summarise(DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
     DCRB_rev = sum(DCRB_rev, na.rm = TRUE),
-    #other_lbs = sum(other_lbs, na.rm = TRUE),
-    #other_rev = sum(other_rev, na.rm = TRUE),
+    #all_species_lbs = sum(all_species_lbs, na.rm = TRUE),
+    #all_species_rev = sum(all_species_rev, na.rm = TRUE),
     Num_DCRB_VMS_pings = n())
     
 # save the df (sub CHNK for chinook)

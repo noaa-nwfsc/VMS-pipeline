@@ -267,8 +267,8 @@ dat_targets_other <- rawdat.w.targets %>%
   mutate(is_other=gear_name %in% gear_codes) %>% 
   
   # sum the other category for each ticket
-  mutate(other_rev=sum(tot_revenue_spp[is_other]),
-         other_lbs=sum(tot_lbs_spp[is_other]))
+  mutate(all_species_rev=sum(tot_revenue_spp[is_other]),
+         all_species_lbs=sum(tot_lbs_spp[is_other]))
 ```
 
 ## Add Species-Specific Columns
@@ -347,7 +347,7 @@ Clean up the output by reording the columns of interest
 #Added FTID to select list
 dat_out %<>%
   select(-(spp_lbs:prop_revenue_spp),-is_other) %>% 
-  select(Rec_ID,FTID,pacfin_port_code,port_group_code,drvid,agency_code,removal_type_code,removal_type_name,gear_code_all,TRAP.OR.POT.OR.RING,date,month,year,year_mo,jdate,year_jdate,Week,year_Wk,contains("_lbs"),contains("_rev"),species_code_all,other_lbs,other_rev) %>% 
+  select(Rec_ID,FTID,pacfin_port_code,port_group_code,drvid,agency_code,removal_type_code,removal_type_name,gear_code_all,TRAP.OR.POT.OR.RING,date,month,year,year_mo,jdate,year_jdate,Week,year_Wk,contains("_lbs"),contains("_rev"),species_code_all,all_species_lbs,all_species_rev) %>% 
   # the last distinct() removes records for which we no longer care about individual sub-trip species catches (we only care about catched of the focal species, plus total catch and TARGETs)
   distinct()
 ```
