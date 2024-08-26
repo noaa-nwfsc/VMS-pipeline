@@ -1,5 +1,5 @@
 # misc code boneyard for processing files in VMS Pipeline
-# Blake Feist - 7 May 2024
+# Blake Feist - created 7 May 2024
 
 # packages
 library(dplyr)
@@ -89,3 +89,29 @@ write_tsv(ALBC_gear, "Albacore gear type freq distribution 1994-2023.txt")
 spp_codes <- c("ALBC")
 
 gear_codes <- c("OCEAN TROLL","TROLL (SALMON)","TROLL (ALBACORE)","HOOK AND LINE","JIG (ALBACORE)","GILL NET, DRIFT","LONG LINE, SET","TROLL, (SALMON)")
+
+
+## Code from Kelly for selecting and filtering duplicate fish tickets in Pipeline intermediate output
+
+library(tidyverse)
+
+matched_alltix_withFTID_2017 <- readRDS("/Volumes/Thunderblade 4TB/VMS Pipeline/Pipeline run output raw file BACKUPS/CHNK and DCRB 28May2024/Confidential/processed/matched/matching/2017_matched_alltix_withFTID.rds")
+View(matched_alltix_withFTID_2017)
+length(unique(matched_alltix_withFTID_2017$FTID))
+test <- matched_alltix_withFTID_2017 %>% filter(has_vms == 0)
+length(unique(test$FTID))
+test <- test %>% group_by(FTID) %>% mutate(no_ftids = n())
+test <- test %>% filter(no_ftids > 1)
+View(test)
+
+
+## this-n-that
+
+select_pipe <- filter(matched_alltix_withFTID_2017,
+FTID == "Z993360" | 
+FTID == "Z987035" |
+FTID == "Z984953" |
+FTID == "Z984738" |
+FTID == "Z984725")
+
+write.csv(select_pipe, here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'unmatched_pipeline_output_fish_tix_with_error_dupes_2017.csv'))
