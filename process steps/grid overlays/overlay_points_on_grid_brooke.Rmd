@@ -1,5 +1,5 @@
 ---
-title: "Overlay VMS points grid of choice and calcailate value of each grid cell per year per spp"
+title: "Overlay VMS points grid of choice and calcailate value of each 5km x 5km grid cell per year for dungeness crab"
 output: 
   html_document:
     toc: true
@@ -32,9 +32,11 @@ Import files for an example year to match. We use the matched, filtered with FTI
 ```{r}
 # matched and filteredVMS Pipeline data from 2009 produced by Blake Feist 28 May 2024
 vms2009 <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2009_matched_filtered_withFTID_length.rds'))
+# TODO update to recent runs
 
 # 2x2 grid shapefile
-grd <- read_sf(here('GIS_layers', 'master_2km_grid_tmer.shp'))
+grd <- read_sf(here('GIS_layers', 'master_2km_grid_tmer.shp')) 
+# TODO update to 5x5km grid
 names(grd)
 
 ```
@@ -78,6 +80,7 @@ rm(list=setdiff(ls(),'grd'))
 
 # load 2009-2023 data. 
 # 2009-2023 fish ticket and VMS data
+# TODO update data to recent runs
 
 # load rds files
 vms_all <- vms2009 %>%
@@ -124,17 +127,6 @@ x<-proc.time()-pt
 
 The join took`r round(x[3]/60,2)` minutes.
 
-<!-- ### Add BIAs -->
-
-<!-- We can add whale BIAs into the data as well. They have previously been matched to the 5km grid, courtesy of Sam Woodman. -->
-
-<!-- ```{r add BIAs} -->
-<!-- BIA <- read_csv(here::here('data','raw','grid','Grid5km_BIA_overlap.csv'),col_types = cols()) -->
-<!-- BIA %<>% select(GRID5KM_ID,BIA_mn,BIA_bm) -->
-
-<!-- vms_all_grd_match %<>% left_join(BIA,by='GRID5KM_ID') -->
-<!-- ``` -->
-
 ### Save and Write
 
 ```{r}
@@ -143,6 +135,7 @@ glimpse(vms_all_grd_match)
 vms_all_grd_match %>% 
   st_set_geometry(NULL) %>% 
   write_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_2km.rds'))
+# TODO rename output
 ```
 
 ## Prep data for DCRB focused analysis
@@ -156,11 +149,13 @@ Start by choosing which variables to use to filter to fishing locations only.
 ```{r fishing data prep 1}
 
 vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_2km.rds'))
+# TODO update data source
 glimpse(vms_all_grd_match)
 
 vms_all_grd_match <- vms_all_grd_match %>% mutate(
   year = lubridate::year(westcoastdate_notime)
 )
+# TODO add month
 
 # check years included
 unique(vms_all_grd_match$year)
@@ -168,6 +163,7 @@ unique(vms_all_grd_match$year)
 #####################################################
 # filter the data using the control variables below
 # years <- seq(2009,2019,1)
+# TODO add iteration over months
 
 # state_agency_code <- "C"
 target_rev <- "DCRB"
@@ -224,6 +220,8 @@ Distribute rev and lbs to grid cells.
 
 ```{r distribute $ and lbs to cells}
 
+# TODO check - are pings in the files from Blake? I don't remember it in walk through with Blake or with Owen...
+
 ### create new columns that apportion pings/lbs/$ from each fish ticket based on proportion of pings related to each ticket in each grid cell
 
 # total records per trip (total number of VMS records associated with each fish ticket)
@@ -236,7 +234,7 @@ VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
 # add to fish ticket / vms data, make columns vessels, lbs, and $ per VMS location. note that columns with "...." in them, like ""TARGET...." reflect revenue 
 dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_analysis, by="Rec_ID") %>%
   mutate(
-    DCRB_lbs_per_VMSlocation = DCRB_lbs/trip_VMSrecords,
+    DCRB_lbs_per_VMSlocation = DCRB_lbs/trip_VMSrecords, # TODO understand trip_VMSrecords
     DCRB_rev_per_VMSlocation = DCRB_revenue/trip_VMSrecords,
     all_species_lbs_per_VMSlocation = all_species_lbs/trip_VMSrecords,
     all_species_rev_per_VMSlocation = all_species_rev/trip_VMSrecords,
@@ -259,6 +257,7 @@ write_rds(dcrb_vms_tix_analysis_TripInfo,here::here('Confidential', 'processed',
 
 start.time <- Sys.time()
 
+# TODO I think this needs some values removed from group_by?
 con_df_daily_years_2km <- dcrb_vms_tix_analysis_TripInfo %>%
   group_by(year, crab_year, year_month, season, month, month_as_numeric, week_of_year, day_of_year, CellID) %>%
   summarise(
@@ -279,11 +278,14 @@ glimpse(con_df_daily_years_2km)
 ### if and when satisfied, write out rds
 
 write_rds(con_df_daily_years_2km,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter.rds'))
-
-
+#TODO update output name
 ```
 
-# Old note from Jameal: Did not yet, but could summarise by yr, yr_month, etc
+
+## Old note from Jameal: Did not yet, but could summarise by yr, yr_month, etc
+
+```{r}
+#TODO remove this section?
 
 ## code from Kelly for creating dfs for 1) drvid confidentiality (vessels_SPECIES) and 2) pings/grid cell/year with lbs and rev
 #unique vessel ids by year
@@ -315,6 +317,4 @@ summarise(DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
     
 # save the df (sub CHNK for chinook)
 write_rds(pings_per_gridcell_DCRB,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'pings_per_gridcell_DCRB.rds'))
-
-
-
+```
