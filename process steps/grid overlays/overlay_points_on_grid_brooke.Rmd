@@ -35,8 +35,7 @@ vms2009 <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB a
 # TODO update to recent runs
 
 # 2x2 grid shapefile
-grd <- read_sf(here('GIS_layers', 'master_2km_grid_tmer.shp')) 
-# TODO update to 5x5km grid
+grd <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp')) 
 names(grd)
 
 ```
@@ -134,13 +133,13 @@ The join took`r round(x[3]/60,2)` minutes.
 glimpse(vms_all_grd_match)
 vms_all_grd_match %>% 
   st_set_geometry(NULL) %>% 
-  write_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_2km.rds'))
+  write_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_5km.rds'))
 # TODO rename output
 ```
 
 ## Prep data for DCRB focused analysis
 
-Ok now that we have the VMS data on the 2km grid, we need to prepare it for analysis as in Samhouri et al. 2021 PRSB, with a focus on DCRB fishing effort.
+Ok now that we have the VMS data on the 5km grid, we need to prepare it for analysis as in Samhouri et al. 2021 PRSB, with a focus on DCRB fishing effort.
 
 The code below is based on prep_data_for_scenario_df_function.R
 
@@ -148,7 +147,7 @@ Start by choosing which variables to use to filter to fishing locations only.
 
 ```{r fishing data prep 1}
 
-vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_2km.rds'))
+vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_5km.rds'))
 # TODO update data source
 glimpse(vms_all_grd_match)
 
@@ -258,7 +257,7 @@ write_rds(dcrb_vms_tix_analysis_TripInfo,here::here('Confidential', 'processed',
 start.time <- Sys.time()
 
 # TODO I think this needs some values removed from group_by?
-con_df_daily_years_2km <- dcrb_vms_tix_analysis_TripInfo %>%
+con_df_daily_years_5km <- dcrb_vms_tix_analysis_TripInfo %>%
   group_by(year, crab_year, year_month, season, month, month_as_numeric, week_of_year, day_of_year, CellID) %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
@@ -273,11 +272,11 @@ con_df_daily_years_2km <- dcrb_vms_tix_analysis_TripInfo %>%
   ungroup() 
 Sys.time() - start.time
 
-glimpse(con_df_daily_years_2km)
+glimpse(con_df_daily_years_5km)
 
 ### if and when satisfied, write out rds
 
-write_rds(con_df_daily_years_2km,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter.rds'))
+write_rds(con_df_daily_years_5km,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter.rds'))
 #TODO update output name
 ```
 
@@ -301,10 +300,10 @@ write_rds(vessels_DCRB,here::here('Confidential', 'processed', 'pipeline output'
 
 
 ## figuring out whether unique vessel ids are summed per year?
-# load DCRB pings overlaid on 2km grid (sub CHNK for chinook)
-DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/processed/pipeline output/DCRB and CHNK 28May2024/DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter.rds")
+# load DCRB pings overlaid on 5km grid (sub CHNK for chinook)
+DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/processed/pipeline output/DCRB and CHNK 28May2024/DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter.rds")
 
-test_sum_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter 
+test_sum_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter 
 
 ## create output table with unique vessels, target rev/lba and other rev/lbs, by year (sub CHNK for chinook)
 pings_per_gridcell_DCRB <- test_sum_DCRB %>%
