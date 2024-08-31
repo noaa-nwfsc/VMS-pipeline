@@ -22,8 +22,8 @@ library(here)
 library(knitr)
 library(lubridate)
 library(glue)
+library(readr)
 ```
-
 
 ## Sample Year
 
@@ -31,20 +31,18 @@ Import files for an example year to match. We use the matched, filtered with FTI
 
 ```{r}
 # matched and filteredVMS Pipeline data from 2009 produced by Blake Feist 28 May 2024
-vms2009 <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2009_matched_filtered_withFTID_length.rds'))
-# TODO update to recent runs
+vms2014 <- read_rds(here('Confidential', 'data', 'interim', '2014_matched_filtered_withFTID_length.rds'))
 
-# 2x2 grid shapefile
+# 5x5 grid shapefile
 grd <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp')) 
 names(grd)
-
 ```
 
 ## Match Points
 
 ```{r}
 # convert vms to spatial object (longitude/latitude)
-vms_sf <- vms2009 %>%
+vms_sf <- vms2014 %>%
   st_as_sf(coords=c('LON','LAT'),crs=4326) %>% 
   # then, convert to planar projection to match the grid
   st_transform(st_crs(grd))
@@ -53,18 +51,16 @@ vms_sf <- vms2009 %>%
 pt <- proc.time()
 vms_grd_match <- vms_sf %>%
   st_join(grd)
-proc.time()-pt
+proc.time() - pt
 ```
 
 ## Check
 
-Did the join work? How many unique 5km, 25km, and 50km cells are represented in the 2009 data?
+Did the join work? How many unique 5km, 25km, and 50km cells are represented in the 2014 data?
 
 ```{r checks}
 names(vms_grd_match)
-
-length(unique(vms_grd_match$CellID))
-
+length(unique(vms_grd_match$GRID5KM_ID)) # TODO check 8742 is reasonable number of grid cells
 ```
 
 ## All Data
@@ -74,31 +70,25 @@ We now match all of the VMS points from all years. We process each year just as 
 ### Import
 
 ```{r import all}
-# clear wrkspace
+# clear workspace of everything but 5km grid
 rm(list=setdiff(ls(),'grd'))
+# TODO put in a loop using paste, e.g. for y in years paste(y,'_matched_filtered_withFTID_length.rds', sep='')
 
-# load 2009-2023 data. 
-# 2009-2023 fish ticket and VMS data
-# TODO update data to recent runs
-
-# load rds files
-vms_all <- vms2009 %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2010_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2011_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2012_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2013_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2014_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2015_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2016_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2017_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2018_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2019_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2020_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2021_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2022_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2023_matched_filtered_withFTID_length.rds')))
+# load 2014-2023 fish ticket and VMS data
+vms_all <- read_rds(here('Confidential', 'data', 'interim', '2014_matched_filtered_withFTID_length.rds')) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2015_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2016_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2017_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2018_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2019_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2020_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2021_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2022_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2023_matched_filtered_withFTID_length.rds')))
 
 glimpse(vms_all)
+
+# TODO put the # years check back, add some other checks like # grid cells and year_month as well
 
 ```
 
@@ -108,20 +98,20 @@ glimpse(vms_all)
 # convert VMS to spatial object
 pt <- proc.time()
 vms_all_sf <- vms_all %>%
-  st_as_sf(coords=c('LON','LAT'),crs=4326) %>% 
+  st_as_sf(coords= c('LON','LAT'), crs=4326) %>% 
   # then, convert to planar projection to match the grid
   st_transform(st_crs(grd))
-x<-proc.time()-pt
+x <- proc.time() - pt
 ```
 
 Took `r round(x[3]/60,2)` minutes to do the conversion. Now for the join...
 
-```{r join to grid}
+```{r join VMS with spatial object to grid}
 # do the join
 pt <- proc.time()
 vms_all_grd_match <- vms_all_sf %>%
   st_join(grd)
-x<-proc.time()-pt
+x <- proc.time() - pt
 ```
 
 The join took`r round(x[3]/60,2)` minutes.
@@ -133,13 +123,12 @@ The join took`r round(x[3]/60,2)` minutes.
 glimpse(vms_all_grd_match)
 vms_all_grd_match %>% 
   st_set_geometry(NULL) %>% 
-  write_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_5km.rds'))
-# TODO rename output
+  write_rds(here('Confidential', 'data', 'interim', 'vms_all_w_grd_5km.rds'))
 ```
 
 ## Prep data for DCRB focused analysis
 
-Ok now that we have the VMS data on the 5km grid, we need to prepare it for analysis as in Samhouri et al. 2021 PRSB, with a focus on DCRB fishing effort.
+The VMS data is now on the 5km grid,and I need to prepare it for Heather's CDFW data request, with a focus on DCRB fishing effort.
 
 The code below is based on prep_data_for_scenario_df_function.R
 
@@ -147,144 +136,155 @@ Start by choosing which variables to use to filter to fishing locations only.
 
 ```{r fishing data prep 1}
 
-vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_5km.rds'))
-# TODO update data source
+# TODO possibly delete this line, not needed since vms_all_grd_match was just generated?
+vms_all_grd_match <- read_rds(here('Confidential', 'data', 'interim', 'vms_all_w_grd_5km.rds'))
 glimpse(vms_all_grd_match)
-
-vms_all_grd_match <- vms_all_grd_match %>% mutate(
-  year = lubridate::year(westcoastdate_notime)
-)
-# TODO add month
-
-# check years included
-unique(vms_all_grd_match$year)
-
-#####################################################
-# filter the data using the control variables below
-# years <- seq(2009,2019,1)
-# TODO add iteration over months
-
-# state_agency_code <- "C"
-target_rev <- "DCRB"
-target_lbs <- "DCRB"
-winter_months <- c("November", "December", "January", "February", "March")
-removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
-max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
-min_speed <- 0 # units = m/s
-# placeholder for adding daytime filter appropriate for salmon trolling boats.
-# Potentially use suncalc package to use lat, lon, local date/time ('westcoastdate' attribute)
-# to filter out points that occured in non-daylight times 
-
 ```
 
 Now filter the data based on control variables above: California, DCRB trips only, commercial removal types only, slow vessel speeds. Need to add DEPTH_CATM, but for now ask Blake to filter based on NGDC_M or the depth of each grid cell.
 
 ```{r filter fishing data}
 
-# subset the data based on above queries
+# set filter parameters
+state_agency_code = "C" # TODO check if this is correct way to filter for California data, or if should be done by grid cell or coordinates instead
+target_rev <- "DCRB"
+target_lbs <- "DCRB"
+winter_months <- c("November", "December", "January", "February", "March") # used to set season as Winter or Spring-Summer
+removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN") # TODO does unknown cover much?
+max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
+min_speed <- 0 # units = m/s
+
+# filter data, add year/season columns, and select columns for analysis
 dcrb_vms_tix_analysis <- vms_all_grd_match %>%
-  # filter(agency_code == state_agency_code) %>%
+  filter(agency_code == state_agency_code) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   filter(removal_type_name %in% removal_types) %>%
-  #filter(DEPTH_CATM == "0-100m" | DEPTH_CATM == "100-150m") %>%
-  #filter(NGDC_M <= 0 & NGDC_M >= -12000) %>% # considered adding 052220. also see "evaluate fishing depths.R". probably unnecessary because NGDC_M refers to centroid depth and we can match depths by 5km grid cell later
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
-  #filter(is.na(in_port) == TRUE) %>% # only removes ~4000 records
-  #filter(port_group_code %in% ports) %>%
+  # TODO confirm removed filters that were commented out is ok
+    # TODO confirm ok to remove DEPTH)CATM and NGDC_M filters? 
+    # TODO confirm ok to remove in_port = NA filter?
+    # TODO need any filter for port_group_code?
   mutate(
-         year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime),6,7)), # substr() ensures month is a 2 digit value
-         month = lubridate::month(westcoastdate_notime, label=TRUE, abbr = FALSE),
-         month_as_numeric = month(westcoastdate_notime),
-         week_of_year = week(westcoastdate_notime),
-         day_of_year = yday(westcoastdate_notime),
-         season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-         crab_year = ifelse(
-           month_as_numeric >= 11, paste0(year,"_",1+year), paste0(year - 1,"_",year)
-         )
+    year = lubridate::year(westcoastdate_notime),
+    year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime),6,7)),
+    # substr() ensures month is a 2 digit value, e.g. February is "02" not "2"
+    month = lubridate::month(westcoastdate_notime, label=TRUE, abbr = FALSE),
+    month_as_numeric = month(westcoastdate_notime),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    crab_year = ifelse(month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year))
+    # e.g. for Nov. 2014, crab_year is 2014_2015. for Oct. 2014, crab_year is 2013_2014
   ) %>%
-  # filter(westcoastdate_notime >= as.Date("2009-11-01") & westcoastdate_notime <= as.Date("2019-08-01")) %>%
-  # #filter(month_as_numeric %in% crab_months) %>%
   dplyr::select(
-    Rec_ID, VMS_RECNO, drvid,
-    westcoastdate_notime, year, crab_year, year_month, month, month_as_numeric, week_of_year, day_of_year, season,
-    CellID, pacfin_port_code, port_group_code, NGDC_M,
-    TARGET_lbs, TARGET_rev, DCRB_lbs, DCRB_revenue, all_species_lbs, all_species_rev, species_code_all
-    ) # DEPTH_CATM, 
+      GRID5KM_ID, 
+      Rec_ID,
+      VMS_RECNO,
+      drvid,
+      westcoastdate_notime,
+      year,
+      crab_year, 
+      year_month,
+      month, 
+      month_as_numeric,
+      season,
+      pacfin_port_code, 
+      port_group_code, 
+      NGDC_M,
+      TARGET_lbs, 
+      TARGET_rev, 
+      DCRB_lbs, 
+      DCRB_revenue
+    ) 
 
 glimpse(dcrb_vms_tix_analysis)
-
 ```
 
 Distribute rev and lbs to grid cells. 
 
 ```{r distribute $ and lbs to cells}
 
-# TODO check - are pings in the files from Blake? I don't remember it in walk through with Blake or with Owen...
-
-### create new columns that apportion pings/lbs/$ from each fish ticket based on proportion of pings related to each ticket in each grid cell
+# create new columns that attribute pings, lbs, and $ from each fish ticket 
+# based on proportion of pings related to each ticket in each grid cell
 
 # total records per trip (total number of VMS records associated with each fish ticket)
+# one record = one fish ticket # TODO ...right? confirm
 VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
   group_by(Rec_ID) %>%
   summarise(trip_VMSrecords = n(),
-            .groups = 'drop') #%>%
-  #filter(trip_VMSrecords > 1)
+            .groups = 'drop') # %>%
+  # filter(trip_VMSrecords > 1) # TODO why filter here?
 
-# add to fish ticket / vms data, make columns vessels, lbs, and $ per VMS location. note that columns with "...." in them, like ""TARGET...." reflect revenue 
+# join total records per trip to VMS and fish ticket data and calculate vessels, lbs, and $ per VMS ping
 dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_analysis, by="Rec_ID") %>%
   mutate(
-    DCRB_lbs_per_VMSlocation = DCRB_lbs/trip_VMSrecords, # TODO understand trip_VMSrecords
+    DCRB_lbs_per_VMSlocation = DCRB_lbs/trip_VMSrecords,
     DCRB_rev_per_VMSlocation = DCRB_revenue/trip_VMSrecords,
-    all_species_lbs_per_VMSlocation = all_species_lbs/trip_VMSrecords,
-    all_species_rev_per_VMSlocation = all_species_rev/trip_VMSrecords,
-    Num_DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
+    DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
   )
 glimpse(dcrb_vms_tix_analysis_TripInfo)
 
-# could add in depth filter by excluding all NGDC_M values >-1500
+# save interim output
+write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'data', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
 
-# write out for Blake
-write_rds(dcrb_vms_tix_analysis_TripInfo,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter.rds'))
+# TODO is this the right number of records generated each time? not sure how many grid cells there are, or where to expect 0's
 
-#####################################################
-
-#####################################################
-
-### at long last, make the df we want
-
-### all vessels
-
-start.time <- Sys.time()
-
-# TODO I think this needs some values removed from group_by?
-con_df_daily_years_5km <- dcrb_vms_tix_analysis_TripInfo %>%
-  group_by(year, crab_year, year_month, season, month, month_as_numeric, week_of_year, day_of_year, CellID) %>%
+# summarize baseline data (2014-2018) at monthly temporal grain and grid cell ID spatial grain
+baseline_2014_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
+  filter(year >= 2014 & year <= 2018) %>%
+  group_by(GRID5KM_ID, month, month_as_numeric) %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
     DCRB_rev = sum(DCRB_rev_per_VMSlocation),
-    all_species_lbs = sum(all_species_lbs_per_VMSlocation),
-    all_species_rev = sum(all_species_rev_per_VMSlocation),
-    Num_DCRB_VMS_pings = n(),
-    Num_DCRB_Vessels = sum(Num_DCRB_Vessels_per_VMSlocation),
-    Num_Unique_DCRB_Vessels = length(unique(as.character(drvid))),
-    mean_depth = mean(NGDC_M)
-  ) %>%
-  ungroup() 
-Sys.time() - start.time
+    DCRB_VMS_pings = n(),
+    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
+    Unique_DCRB_Vessels = length(unique(as.character(drvid))),
+    .groups = 'drop'
+  )
+glimpse(baseline_2014_2018)
+sort(unique(baseline_2014_2018$month_as_numeric)) # TODO check completeness here, and # grid cells per month
+write_rds(baseline_2014_2018, here::here('Confidential', 'data', 'processed', 'baseline_2014_2018.rds'))
 
-glimpse(con_df_daily_years_5km)
+# summarize baseline data (2017-2018) at monthly temporal grain and grid cell ID spatial grain
+baseline_2017_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
+  filter(year >= 2017 & year <= 2018) %>%
+  group_by(GRID5KM_ID, month, month_as_numeric) %>%
+  summarise(
+    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
+    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
+    DCRB_VMS_pings = n(),
+    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
+    Unique_DCRB_Vessels = length(unique(as.character(drvid))),
+    .groups = 'drop'
+  )
+glimpse(baseline_2017_2018)
+sort(unique(baseline_2017_2018$month_as_numeric)) # TODO check completeness here, and # grid cells per month
+write_rds(baseline_2017_2018, here::here('Confidential', 'data', 'processed', 'baseline_2017_2018.rds'))
 
-### if and when satisfied, write out rds
+# TODO join baselines into one dataframe, joined on grid ID and month
 
-write_rds(con_df_daily_years_5km,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter.rds'))
-#TODO update output name
+# summarize real-time data (2019-2023) at yearly and monthly temporal grain and grid cell ID spatial grain
+realtime_2019_2023 <- dcrb_vms_tix_analysis_TripInfo %>%
+  filter(year >= 2019 & year <= 2023) %>%
+  group_by(GRID5KM_ID, year_month, year, month, month_as_numeric) %>%
+  summarise(
+    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
+    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
+    DCRB_VMS_pings = n(),
+    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
+    Unique_DCRB_Vessels = length(unique(as.character(drvid))),
+    .groups = 'drop'
+  )
+glimpse(realtime_2019_2023)
+sort(unique(realtime_2019_2023$year_month)) # TODO check completeness here, and # grid cells per year_month
+write_rds(realtime_2019_2023, here::here('Confidential', 'data', 'processed', 'realtime_2019_2023.rds'))
+
+# TODO does this now need to be normalized? how so?
+# TODO which metric should Heather be using for fishing effort? I assume normalized # pings...
 ```
-
 
 ## Old note from Jameal: Did not yet, but could summarise by yr, yr_month, etc
 
 ```{r}
-#TODO remove this section?
+#TODO explore these two summaries, I didn't touch this section
 
 ## code from Kelly for creating dfs for 1) drvid confidentiality (vessels_SPECIES) and 2) pings/grid cell/year with lbs and rev
 #unique vessel ids by year
@@ -292,7 +292,7 @@ write_rds(con_df_daily_years_5km,here::here('Confidential', 'processed', 'pipeli
 DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/processed/pipeline output/DCRB and CHNK 28May2024/DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter.rds")
 
 vessels_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter %>%
-dplyr::select(CellID, year, drvid) %>%
+dplyr::select(GRID5KM_ID, year, drvid) %>%
 distinct()
 
 # save the df (sub CHNK for chinook_)
@@ -307,13 +307,13 @@ test_sum_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter
 
 ## create output table with unique vessels, target rev/lba and other rev/lbs, by year (sub CHNK for chinook)
 pings_per_gridcell_DCRB <- test_sum_DCRB %>%
-group_by(CellID, year) %>%
-summarise(DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
+  group_by(GRID5KM_ID, year) %>%
+  summarise(
+    DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
     DCRB_rev = sum(DCRB_rev, na.rm = TRUE),
-    #all_species_lbs = sum(all_species_lbs, na.rm = TRUE),
-    #all_species_rev = sum(all_species_rev, na.rm = TRUE),
-    Num_DCRB_VMS_pings = n())
+    Num_DCRB_VMS_pings = n()
+  )
     
-# save the df (sub CHNK for chinook)
+# save the df
 write_rds(pings_per_gridcell_DCRB,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'pings_per_gridcell_DCRB.rds'))
 ```
