@@ -318,8 +318,8 @@ dat_targets_other <- rawdat.w.targets %>%
   mutate(is_other=gear_name %in% gear_codes) %>% 
   
   # sum the other category for each ticket
-  mutate(all_species_rev=sum(spp_lbs[is_other]),
-         all_species_lbs=sum(spp_revenue[is_other])) %>% 
+  mutate(all_species_rev=sum(spp_revenue[is_other]),
+         all_species_lbs=sum(spp_lbs[is_other])) %>% 
   ungroup()
 ```
 
