@@ -305,6 +305,13 @@ rawdat.w.targets %<>%
 rawdat.w.targets %<>%
   left_join(all.species,by = join_by(Rec_ID)) %>% 
   left_join(gear.info,by = join_by(Rec_ID))
+
+# CAUTION: this subsection will subset all fish tix just to groundfish bottom trawl
+rawdat.w.targets %<>% # <- rawdat.targets %>%
+  filter(gear_group == "TWL",
+                !gear_name %in% c("MIDWATER TRAWL", "BEAM TRAWL"),
+                !TARGET_lbs %in% c("CHLB", "PHLB", "UHLB", "BSRM", "PSHP", "OSRM", "USRM", "RPRW", "SPRW", "GPRW", "LOBS", "OCRB", "RCRB", "OMSK", "OURC", "USCU", "RURC", "SHAD", "SHPD",  "WBAS", "WCRK"),
+                  !TARGET_rev %in% c("CHLB", "PHLB", "UHLB", "BSRM", "PSHP", "OSRM", "USRM", "RPRW", "SPRW", "GPRW", "LOBS", "OCRB", "RCRB", "OMSK", "OURC", "USCU", "RURC", "SHAD", "SHPD",  "WBAS", "WCRK"))
 ```
 
 ## Calculate "Other" Category
