@@ -60,7 +60,7 @@ Did the join work? How many unique 5km, 25km, and 50km cells are represented in 
 
 ```{r checks}
 names(vms_grd_match)
-length(unique(vms_grd_match$GRID5KM_ID)) # TODO check 8742 is reasonable number of grid cells
+length(unique(vms_grd_match$GRID5KM_ID))
 ```
 
 ## All Data
@@ -72,7 +72,6 @@ We now match all of the VMS points from all years. We process each year just as 
 ```{r import all}
 # clear workspace of everything but 5km grid
 rm(list=setdiff(ls(),'grd'))
-# TODO put in a loop using paste, e.g. for y in years paste(y,'_matched_filtered_withFTID_length.rds', sep='')
 
 # load 2014-2023 fish ticket and VMS data
 vms_all <- read_rds(here('Confidential', 'data', 'interim', '2014_matched_filtered_withFTID_length.rds')) %>%
@@ -150,7 +149,7 @@ state_agency_code = "C" # filter for landings brought to California ports
 target_rev <- "DCRB"
 target_lbs <- "DCRB"
 winter_months <- c("November", "December", "January", "February", "March") # used to set season as Winter or Spring-Summer
-removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN") # TODO does unknown cover much?
+removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
 max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
 min_speed <- 0 # units = m/s
 
@@ -159,8 +158,9 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
   filter(agency_code == state_agency_code) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   filter(removal_type_name %in% removal_types) %>%
+  # filter(DEPTH_CATM == "0-100m" | DEPTH_CATM == "100-150m") %>% # TODO add back in, after making output with this field
+  filter(NGDC_M <= 0 & NGDC_M >= -150) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
-  # TODO confirm ok to remove DEPTH_CATM and NGDC_M filters?
   mutate(
     year = lubridate::year(westcoastdate_notime),
     year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime),6,7)),
@@ -168,7 +168,9 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
     month = lubridate::month(westcoastdate_notime, label=TRUE, abbr = FALSE),
     month_as_numeric = month(westcoastdate_notime),
     season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-    crab_year = ifelse(month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)) # crab season starts in Nov.
+    crab_year = ifelse(
+      month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
+    )
   ) %>%
   dplyr::select(
       GRID5KM_ID, # grid cell ID
@@ -238,12 +240,11 @@ Distribute rev and lbs to grid cells.
 # based on proportion of pings related to each ticket in each grid cell
 
 # total records per trip (total number of VMS records associated with each fish ticket)
-# one record = one fish ticket # TODO ...right? confirm
+# one record = one fish ticket
 VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
   group_by(Rec_ID) %>%
   summarise(trip_VMSrecords = n(),
-            .groups = 'drop') # %>%
-  # filter(trip_VMSrecords > 1) # TODO why filter here?
+            .groups = 'drop')
 
 # join total records per trip to VMS and fish ticket data and calculate vessels, lbs, and $ per VMS ping
 dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_analysis, by="Rec_ID") %>%
@@ -253,16 +254,19 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
     DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
   )
 glimpse(dcrb_vms_tix_analysis_TripInfo)
-# TODO visualize distribution of these 4 new variables
 
 # save interim output
 write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'data', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
 
-# TODO map
+# set baseline and implementation years
+baseline_2014_2018_crab_years <- c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019")
+baseline_2017_2018_crab_years <- c("2017_2018", "2018_2019")
+realtime_2019_2023_crab_years <- c("2019_2020", "2020_2021", "2021_2022", "2022_2023", "2023_2024")
 
 # summarize baseline data (2014-2018) at monthly temporal grain and grid cell ID spatial grain
 baseline_2014_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
-  filter(year >= 2014 & year <= 2018) %>%
+  filter(crab_year %in% baseline_2014_2018_crab_years) %>%
+  # filter(year >= 2014 & year <= 2018) %>%
   group_by(GRID5KM_ID, month, month_as_numeric) %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
@@ -273,12 +277,14 @@ baseline_2014_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
     .groups = 'drop'
   )
 glimpse(baseline_2014_2018)
-sort(unique(baseline_2014_2018$month_as_numeric)) # TODO check completeness here, and # grid cells per month
+summary(baseline_2014_2018$DCRB_VMS_pings)
+sort(unique(baseline_2014_2018$month_as_numeric))
 write_rds(baseline_2014_2018, here::here('Confidential', 'data', 'processed', 'baseline_2014_2018.rds'))
 
 # summarize baseline data (2017-2018) at monthly temporal grain and grid cell ID spatial grain
 baseline_2017_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
-  filter(year >= 2017 & year <= 2018) %>%
+  filter(crab_year %in% baseline_2017_2018_crab_years) %>%
+  # filter(year >= 2017 & year <= 2018) %>%
   group_by(GRID5KM_ID, month, month_as_numeric) %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
@@ -289,12 +295,14 @@ baseline_2017_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
     .groups = 'drop'
   )
 glimpse(baseline_2017_2018)
-sort(unique(baseline_2017_2018$month_as_numeric)) # TODO check completeness here, and # grid cells per month
+summary(baseline_2017_2018$DCRB_VMS_pings)
+sort(unique(baseline_2017_2018$month_as_numeric))
 write_rds(baseline_2017_2018, here::here('Confidential', 'data', 'processed', 'baseline_2017_2018.rds'))
 
 # summarize real-time data (2019-2023) at yearly and monthly temporal grain and grid cell ID spatial grain
 realtime_2019_2023 <- dcrb_vms_tix_analysis_TripInfo %>%
-  filter(year >= 2019 & year <= 2023) %>%
+  filter(crab_year %in% realtime_2019_2023_crab_years) %>%
+  # filter(year >= 2019 & year <= 2023) %>%
   group_by(GRID5KM_ID, year_month, year, month, month_as_numeric) %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
@@ -305,7 +313,8 @@ realtime_2019_2023 <- dcrb_vms_tix_analysis_TripInfo %>%
     .groups = 'drop'
   )
 glimpse(realtime_2019_2023)
-sort(unique(realtime_2019_2023$year_month)) # TODO check completeness here, and # grid cells per year_month
+summary(realtime_2019_2023$DCRB_VMS_pings)
+sort(unique(realtime_2019_2023$year_month))
 write_rds(realtime_2019_2023, here::here('Confidential', 'data', 'processed', 'realtime_2019_2023.rds'))
 ```
 
