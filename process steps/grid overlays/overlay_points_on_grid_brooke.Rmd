@@ -86,10 +86,10 @@ vms_all <- read_rds(here('Confidential', 'data', 'interim', '2014_matched_filter
   bind_rows(read_rds(here('Confidential', 'data', 'interim', '2022_matched_filtered_withFTID_length.rds'))) %>%
   bind_rows(read_rds(here('Confidential', 'data', 'interim', '2023_matched_filtered_withFTID_length.rds')))
 
+# take a look at imported data
 glimpse(vms_all)
-
-# TODO put the # years check back, add some other checks like # grid cells and year_month as well
-
+# check all years are present
+unique(year(vms_all$date))
 ```
 
 ### Match
@@ -136,7 +136,7 @@ Start by choosing which variables to use to filter to fishing locations only.
 
 ```{r fishing data prep 1}
 
-# TODO possibly delete this line, not needed since vms_all_grd_match was just generated?
+# load non-spatial version written above
 vms_all_grd_match <- read_rds(here('Confidential', 'data', 'interim', 'vms_all_w_grd_5km.rds'))
 glimpse(vms_all_grd_match)
 ```
@@ -146,7 +146,7 @@ Now filter the data based on control variables above: California, DCRB trips onl
 ```{r filter fishing data}
 
 # set filter parameters
-state_agency_code = "C" # TODO check if this is correct way to filter for California data, or if should be done by grid cell or coordinates instead
+state_agency_code = "C" # filter for landings brought to California ports
 target_rev <- "DCRB"
 target_lbs <- "DCRB"
 winter_months <- c("November", "December", "January", "February", "March") # used to set season as Winter or Spring-Summer
@@ -160,10 +160,7 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   filter(removal_type_name %in% removal_types) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
-  # TODO confirm removed filters that were commented out is ok
-    # TODO confirm ok to remove DEPTH)CATM and NGDC_M filters? 
-    # TODO confirm ok to remove in_port = NA filter?
-    # TODO need any filter for port_group_code?
+  # TODO confirm ok to remove DEPTH_CATM and NGDC_M filters?
   mutate(
     year = lubridate::year(westcoastdate_notime),
     year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime),6,7)),
@@ -171,14 +168,13 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
     month = lubridate::month(westcoastdate_notime, label=TRUE, abbr = FALSE),
     month_as_numeric = month(westcoastdate_notime),
     season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-    crab_year = ifelse(month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year))
-    # e.g. for Nov. 2014, crab_year is 2014_2015. for Oct. 2014, crab_year is 2013_2014
+    crab_year = ifelse(month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)) # crab season starts in Nov.
   ) %>%
   dplyr::select(
-      GRID5KM_ID, 
-      Rec_ID,
-      VMS_RECNO,
-      drvid,
+      GRID5KM_ID, # grid cell ID
+      Rec_ID, # fish ticket ID
+      VMS_RECNO, # VMS ping ID
+      drvid, # vessel ID
       westcoastdate_notime,
       year,
       crab_year, 
@@ -188,14 +184,50 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
       season,
       pacfin_port_code, 
       port_group_code, 
-      NGDC_M,
-      TARGET_lbs, 
-      TARGET_rev, 
-      DCRB_lbs, 
-      DCRB_revenue
-    ) 
+      NGDC_M, # depth
+      TARGET_lbs, # target species by weight (filtered to "DCRB")
+      TARGET_rev, # target species by revenue (filtered to "DCRB")
+      DCRB_lbs, # dungeness crab catch weight
+      DCRB_revenue # dungeness crab catch revenue
+    )
 
+# take a look at transformed data
 glimpse(dcrb_vms_tix_analysis)
+
+# check all crab years present
+unique(dcrb_vms_tix_analysis$crab_year)
+
+# summarize # vms pings, # fish tickets, # vessels, and # grid cells by season
+summary_vis_data <- dcrb_vms_tix_analysis %>%
+  group_by(crab_year, year, year_month, month) %>% 
+  summarize(vms_pings = n(),
+            fish_tickets = n_distinct(Rec_ID),
+            vessels = n_distinct(drvid),
+            grid_cells = n_distinct(GRID5KM_ID),
+            .groups = "drop")
+
+# visualize # vms pings
+vis <- ggplot(summary_vis_data, aes(month, vms_pings, fill = crab_year)) + geom_col() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
+ggsave(here('Confidential', 'figures', 'vms_pings.png'), height = 4, width = 18, plot = vis)
+
+# visualize # fish tickets
+vis <- ggplot(summary_vis_data, aes(month, fish_tickets, fill = crab_year)) + geom_col() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
+ggsave(here('Confidential', 'figures', 'fish_tickets.png'), height = 4, width = 18, plot = vis)
+
+# visualize # vessels
+vis <- ggplot(summary_vis_data, aes(month, vessels, fill = crab_year)) + geom_col() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
+ggsave(here('Confidential', 'figures', 'vessels.png'), height = 4, width = 18, plot = vis)
+
+# visualize # grid cells
+vis <- ggplot(summary_vis_data, aes(month, grid_cells, fill = crab_year)) + geom_col() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
+ggsave(here('Confidential', 'figures', 'grid_cells.png'), height = 4, width = 18, plot = vis)
+
+# remove visualization after it's saved
+rm(vis)
 ```
 
 Distribute rev and lbs to grid cells. 
@@ -221,11 +253,12 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
     DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
   )
 glimpse(dcrb_vms_tix_analysis_TripInfo)
+# TODO visualize distribution of these 4 new variables
 
 # save interim output
 write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'data', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
 
-# TODO is this the right number of records generated each time? not sure how many grid cells there are, or where to expect 0's
+# TODO map
 
 # summarize baseline data (2014-2018) at monthly temporal grain and grid cell ID spatial grain
 baseline_2014_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
@@ -259,8 +292,6 @@ glimpse(baseline_2017_2018)
 sort(unique(baseline_2017_2018$month_as_numeric)) # TODO check completeness here, and # grid cells per month
 write_rds(baseline_2017_2018, here::here('Confidential', 'data', 'processed', 'baseline_2017_2018.rds'))
 
-# TODO join baselines into one dataframe, joined on grid ID and month
-
 # summarize real-time data (2019-2023) at yearly and monthly temporal grain and grid cell ID spatial grain
 realtime_2019_2023 <- dcrb_vms_tix_analysis_TripInfo %>%
   filter(year >= 2019 & year <= 2023) %>%
@@ -276,9 +307,6 @@ realtime_2019_2023 <- dcrb_vms_tix_analysis_TripInfo %>%
 glimpse(realtime_2019_2023)
 sort(unique(realtime_2019_2023$year_month)) # TODO check completeness here, and # grid cells per year_month
 write_rds(realtime_2019_2023, here::here('Confidential', 'data', 'processed', 'realtime_2019_2023.rds'))
-
-# TODO does this now need to be normalized? how so?
-# TODO which metric should Heather be using for fishing effort? I assume normalized # pings...
 ```
 
 ## Old note from Jameal: Did not yet, but could summarise by yr, yr_month, etc
