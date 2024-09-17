@@ -31,7 +31,7 @@ Import files for an example year to match. We use the matched, filtered with FTI
 
 ```{r}
 # matched and filteredVMS Pipeline data from 2009 produced by Blake Feist 28 May 2024
-vms2014 <- read_rds(here('Confidential', 'data', 'interim', '2014_matched_filtered_withFTID_length.rds'))
+vms2014 <- read_rds(here('Confidential','processed','matched','filtering','2014_matched_filtered_withFTID_length.rds'))
 
 # 5x5 grid shapefile
 grd <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp')) 
