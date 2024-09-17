@@ -322,6 +322,64 @@ write_rds(realtime_2019_2023, here::here('Confidential', 'data', 'processed', 'r
 
 ```{r visualize on map}
 
+# based on Owen's compare_hw_bh.R
+
+library(rnaturalearth) # for mapping states
+library(viridis) # for good color scales
+
+# shapefile with grid info
+# gr <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
+# commented out, read in already as grd
+
+# should be able to just join this by GRID5KM_ID
+# all of the spatial data is stored in the special sf package 'geometry' column
+baseline_2014_2018_with_grid <- baseline_2014_2018 %>% 
+  left_join(grd, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+# hw <- hw %>% left_join(plot_grid, by = join_by(GRID5KM_ID)) %>% st_as_sf()
+# commented out, not comparing yet
+
+# West coast, using the rnaturalearth package (for a background map)
+coaststates <- ne_states(country='United States of America',returnclass = 'sf') %>% 
+  filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
+  # spatially tranform to the same coordinate ref system as the 5k grid
+  st_transform(st_crs(grd))
+
+# plot, e.g., pings from February 2019
+#bh_feb19 <-  bh %>% 
+#  filter(year==2019,month_as_numeric==2)
+# commented out, want to see full baseline to start
+
+# bounding box 
+#(so we aren't to zoomed out. also can futz with this to change what area you want to plot)
+bbox <- st_bbox(baseline_2014_2018_with_grid)
+
+# plot pings on a map
+map_pings_baseline_2014_2018 <- ggplot()+
+  # background map
+  geom_sf(data = coaststates, fill = 'gray80')+
+  # 5KM grid with pings. Scale fill color by number of pings
+  geom_sf(data = baseline_2014_2018_with_grid, aes(fill = DCRB_VMS_pings), color = NA)+
+  scale_fill_viridis()+
+  # set manual bounding box
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="Pings") +
+  theme_minimal()
+map_pings_baseline_2014_2018
+
+# plot log pings on a map
+map_log_pings_baseline_2014_2018 <- ggplot()+
+  # background map
+  geom_sf(data = coaststates, fill = 'gray80')+
+  # 5KM grid with pings. Scale fill color by number of pings
+  geom_sf(data = baseline_2014_2018_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA)+
+  scale_fill_viridis()+
+  # set manual bounding box
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Pings)") +
+  theme_minimal()
+map_log_pings_baseline_2014_2018
+
 ```
 
 ```{r compare to 2019 output}
