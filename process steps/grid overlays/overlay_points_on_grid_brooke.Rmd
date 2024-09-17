@@ -199,37 +199,6 @@ glimpse(dcrb_vms_tix_analysis)
 # check all crab years present
 unique(dcrb_vms_tix_analysis$crab_year)
 
-# summarize # vms pings, # fish tickets, # vessels, and # grid cells by season
-summary_vis_data <- dcrb_vms_tix_analysis %>%
-  group_by(crab_year, year, year_month, month) %>% 
-  summarize(vms_pings = n(),
-            fish_tickets = n_distinct(Rec_ID),
-            vessels = n_distinct(drvid),
-            grid_cells = n_distinct(GRID5KM_ID),
-            .groups = "drop")
-
-# visualize # vms pings
-vis <- ggplot(summary_vis_data, aes(month, vms_pings, fill = crab_year)) + geom_col() + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
-ggsave(here('Confidential', 'figures', 'vms_pings.png'), height = 4, width = 18, plot = vis)
-
-# visualize # fish tickets
-vis <- ggplot(summary_vis_data, aes(month, fish_tickets, fill = crab_year)) + geom_col() + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
-ggsave(here('Confidential', 'figures', 'fish_tickets.png'), height = 4, width = 18, plot = vis)
-
-# visualize # vessels
-vis <- ggplot(summary_vis_data, aes(month, vessels, fill = crab_year)) + geom_col() + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
-ggsave(here('Confidential', 'figures', 'vessels.png'), height = 4, width = 18, plot = vis)
-
-# visualize # grid cells
-vis <- ggplot(summary_vis_data, aes(month, grid_cells, fill = crab_year)) + geom_col() + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + facet_grid(. ~ year)
-ggsave(here('Confidential', 'figures', 'grid_cells.png'), height = 4, width = 18, plot = vis)
-
-# remove visualization after it's saved
-rm(vis)
 ```
 
 Distribute rev and lbs to grid cells. 
