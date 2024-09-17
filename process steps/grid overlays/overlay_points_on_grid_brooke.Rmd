@@ -257,7 +257,9 @@ glimpse(dcrb_vms_tix_analysis_TripInfo)
 
 # save interim output
 write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'data', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
+```
 
+```{r create summaries}
 # set baseline and implementation years
 baseline_2014_2018_crab_years <- c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019")
 baseline_2017_2018_crab_years <- c("2017_2018", "2018_2019")
@@ -318,39 +320,10 @@ sort(unique(realtime_2019_2023$year_month))
 write_rds(realtime_2019_2023, here::here('Confidential', 'data', 'processed', 'realtime_2019_2023.rds'))
 ```
 
-## Old note from Jameal: Did not yet, but could summarise by yr, yr_month, etc
+```{r visualize on map}
 
-```{r}
-#TODO explore these two summaries, I didn't touch this section
+```
 
-## code from Kelly for creating dfs for 1) drvid confidentiality (vessels_SPECIES) and 2) pings/grid cell/year with lbs and rev
-#unique vessel ids by year
-# load raw DCRB pings 2009-2023 (sub CHNK for chinook)
-DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/processed/pipeline output/DCRB and CHNK 28May2024/DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter.rds")
+```{r compare to 2019 output}
 
-vessels_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter %>%
-dplyr::select(GRID5KM_ID, year, drvid) %>%
-distinct()
-
-# save the df (sub CHNK for chinook_)
-write_rds(vessels_DCRB,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vessels_4_confidentiality_DCRB.rds'))
-
-
-## figuring out whether unique vessel ids are summed per year?
-# load DCRB pings overlaid on 5km grid (sub CHNK for chinook)
-DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/processed/pipeline output/DCRB and CHNK 28May2024/DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter.rds")
-
-test_sum_DCRB <- DCRB_vms_tix_daily_2009_2023_lbs_rev_per_5kmgrid_nodepthfilter 
-
-## create output table with unique vessels, target rev/lba and other rev/lbs, by year (sub CHNK for chinook)
-pings_per_gridcell_DCRB <- test_sum_DCRB %>%
-  group_by(GRID5KM_ID, year) %>%
-  summarise(
-    DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
-    DCRB_rev = sum(DCRB_rev, na.rm = TRUE),
-    Num_DCRB_VMS_pings = n()
-  )
-    
-# save the df
-write_rds(pings_per_gridcell_DCRB,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'pings_per_gridcell_DCRB.rds'))
 ```
