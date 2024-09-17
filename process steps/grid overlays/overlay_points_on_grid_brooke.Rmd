@@ -23,44 +23,8 @@ library(knitr)
 library(lubridate)
 library(glue)
 library(readr)
-```
-
-## Sample Year
-
-Import files for an example year to match. We use the matched, filtered with FTID VMS data
-
-```{r}
-# matched and filteredVMS Pipeline data from 2009 produced by Blake Feist 28 May 2024
-vms2014 <- read_rds(here('Confidential','processed','matched','filtering','2014_matched_filtered_withFTID_length.rds'))
-
-# 5x5 grid shapefile
-grd <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp')) 
-names(grd)
-```
-
-## Match Points
-
-```{r}
-# convert vms to spatial object (longitude/latitude)
-vms_sf <- vms2014 %>%
-  st_as_sf(coords=c('LON','LAT'),crs=4326) %>% 
-  # then, convert to planar projection to match the grid
-  st_transform(st_crs(grd))
-
-# do the join
-pt <- proc.time()
-vms_grd_match <- vms_sf %>%
-  st_join(grd)
-proc.time() - pt
-```
-
-## Check
-
-Did the join work? How many unique 5km, 25km, and 50km cells are represented in the 2014 data?
-
-```{r checks}
-names(vms_grd_match)
-length(unique(vms_grd_match$GRID5KM_ID))
+library(rnaturalearth) # for mapping states
+library(viridis) # for good color scales
 ```
 
 ## All Data
@@ -291,9 +255,6 @@ write_rds(realtime_2019_2023, here::here('Confidential', 'data', 'processed', 'r
 ```{r visualize on map}
 
 # based on Owen's compare_hw_bh.R
-
-library(rnaturalearth) # for mapping states
-library(viridis) # for good color scales
 
 # shapefile with grid info
 # gr <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
