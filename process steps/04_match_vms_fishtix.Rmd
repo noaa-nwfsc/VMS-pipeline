@@ -27,7 +27,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.minor = element_blank())
 theme_set(plot_theme)
 
-keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin')
+keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin')
 
 rm(list=setdiff(ls(),keepers))
 options(dplyr.summarise.inform=F)
@@ -46,7 +46,7 @@ Load fish ticket data (processed), including the last month of the previous year
 fishtix <- read_rds(here::here('Confidential','processed','fish tickets',paste0(process_year,'fishtix_vlengths_withFTID.rds')))
 
 #Note tho that atm some of the previous years don't have length and FTID as I haven't run that
-if(process_year>2009){
+if(process_year > first_process_year){
   fishtix_prev <- read_rds(here::here('Confidential','processed','fish tickets',paste0(process_year-1,'fishtix_withFTID.rds'))) %>% 
     filter(month(date)==max(month(date)))
   fishtix <- bind_rows(fishtix_prev,fishtix)
@@ -60,7 +60,7 @@ Load VMS data, including the last month of the previous year (for handling trips
 ```{r load vms}
 vms <- read_rds(here::here('Confidential','processed','vms',paste0(process_year,'_vms_clean.rds')))
 
-if(process_year>2009){
+if(process_year > first_process_year){
   vms_prev <- read_rds(here::here('Confidential','processed','vms',paste0(process_year-1,'_vms_clean.rds'))) %>% 
     filter(month(UTCDATETIME)==max(month(UTCDATETIME)))
   vms <- bind_rows(vms_prev,vms)
