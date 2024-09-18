@@ -463,3 +463,63 @@ dcrb_vms_tix_analysis_2023 %>%
 # excluding 2023_2024 from this analysis, since 2024 data not ready
 ```
 
+### Visualize ping rate
+
+At some point, the VMS ping rate increased from ~1/hour to ~1/15 minutes. As a result, in the time frame with the increased ping rate, fishing effort will look ~4x higher (when it's really just a change in sampling rate), and DCRB_lbs and DCRB_rev are spread over a higher resolution track (4x as many pings to attribute a single fish ticket to).
+
+```{r check when ping rate increased}
+
+# look at average pings per ticket over years in table
+avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
+  group_by(year, Rec_ID) %>%
+  summarise(trip_VMSrecords = n()) %>%
+  ungroup() %>%
+  group_by(year) %>%
+  summarise(avg_pings_per_ticket = mean(trip_VMSrecords))
+
+# look at average pings per ticket over years in scatterplot
+avg_pings_per_ticket_over_time %>% 
+  ggplot(aes(x = year, y = avg_pings_per_ticket)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
+
+# so it was 2021, now find out which month...
+
+# look at average pings per ticket over time in table
+avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
+  filter(year == 2021) %>%
+  group_by(month, Rec_ID) %>%
+  summarise(trip_VMSrecords = n()) %>%
+  ungroup() %>%
+  group_by(month) %>%
+  summarise(avg_pings_per_ticket = mean(trip_VMSrecords))
+
+# look at average pings per ticket over time in scatterplot
+avg_pings_per_ticket_over_time %>% 
+  ggplot(aes(x = month, y = avg_pings_per_ticket)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
+
+# so it was January, now look for which day...
+
+# look at average pings per ticket over time in table
+avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
+  filter(year == 2021 & month == 'January') %>%
+  group_by(westcoastdate_notime, Rec_ID) %>%
+  summarise(trip_VMSrecords = n()) %>%
+  ungroup() %>%
+  group_by(westcoastdate_notime) %>%
+  summarise(avg_pings_per_ticket = mean(trip_VMSrecords))
+
+# look at average pings per ticket over time in scatterplot
+avg_pings_per_ticket_over_time %>% 
+  ggplot(aes(x = westcoastdate_notime, y = avg_pings_per_ticket)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
+
+# look at dates
+avg_pings_per_ticket_over_time
+
+# possibly Jan. 7? but want to see side by side with # tickets
+
+```
