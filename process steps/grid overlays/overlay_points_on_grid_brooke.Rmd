@@ -38,16 +38,16 @@ We now match all of the VMS points from all years. We process each year just as 
 rm(list=setdiff(ls(),'grd'))
 
 # load 2014-2023 fish ticket and VMS data
-vms_all <- read_rds(here('Confidential', 'data', 'interim', '2014_matched_filtered_withFTID_length.rds')) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2015_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2016_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2017_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2018_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2019_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2020_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2021_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2022_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'data', 'interim', '2023_matched_filtered_withFTID_length.rds')))
+vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2014_matched_filtered_withFTID_length.rds')) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2015_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2016_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2017_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2018_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2019_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2020_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2021_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
 
 # take a look at imported data
 glimpse(vms_all)
@@ -58,6 +58,10 @@ unique(year(vms_all$date))
 ### Match
 
 ```{r}
+
+# load 5x5 grid shapefile
+grd <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
+
 # convert VMS to spatial object
 pt <- proc.time()
 vms_all_sf <- vms_all %>%
@@ -121,7 +125,7 @@ min_speed <- 0 # units = m/s
 dcrb_vms_tix_analysis <- vms_all_grd_match %>%
   filter(agency_code == state_agency_code) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  filter(removal_type_name %in% removal_types) %>%
+  # filter(removal_type_name %in% removal_types) %>% # TODO check if this needed after issue #19 fix
   filter(NGDC_M <= 0 & NGDC_M >= -150) %>% # filter for 0-150 M depth
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
   mutate(
