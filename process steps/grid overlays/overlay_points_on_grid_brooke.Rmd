@@ -8,7 +8,7 @@ output:
 
 ## Purpose
 
-Matching the output VMS data to a multi-region grid to use for summarizing fishing effort. Then, filtering data for crab fishing events and assigning revenue and pounds of DCRB to each geolocation.
+Attribute the VMS and fish ticket pipeline output for dungeness crab to each grid cell, then summarize for two baseline periods and one implementation period. Created for CDFW data request by Oct. 1, 2024.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -29,9 +29,9 @@ library(viridis) # for good color scales
 
 ## All Data
 
-We now match all of the VMS points from all years. We process each year just as one above.
-
 ### Import
+
+Load VMS pings with fish tickets for all years. Output is from Blake, run for dungeness crab on Sept. 17, 2024.
 
 ```{r import all}
 # clear workspace of everything but 5km grid
@@ -49,13 +49,16 @@ vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2
   bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
   bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
 
-# take a look at imported data
-glimpse(vms_all)
+# take a look at imported features
+# can change back to glimpse for example records
+names(vms_all)
 # check all years are present
 unique(year(vms_all$date))
 ```
 
 ### Match
+
+Load 5km grid.
 
 ```{r}
 
@@ -78,16 +81,20 @@ Took `r round(x[3]/60,2)` minutes to do the conversion. Now for the join...
 pt <- proc.time()
 vms_all_grd_match <- vms_all_sf %>%
   st_join(grd)
+
+# explore output
+names(vms_all_grd_match)
+
+# check timing
 x <- proc.time() - pt
 ```
 
-The join took`r round(x[3]/60,2)` minutes.
+The join took `r round(x[3]/60,2)` minutes.
 
 ### Save and Write
 
 ```{r}
-# non-spatial version
-glimpse(vms_all_grd_match)
+# save without geometry while still including grid cell ID
 vms_all_grd_match %>% 
   st_set_geometry(NULL) %>% 
   write_rds(here('Confidential', 'data', 'interim', 'vms_all_w_grd_5km.rds'))
@@ -95,20 +102,16 @@ vms_all_grd_match %>%
 
 ## Prep data for DCRB focused analysis
 
-The VMS data is now on the 5km grid,and I need to prepare it for Heather's CDFW data request, with a focus on DCRB fishing effort.
-
-The code below is based on prep_data_for_scenario_df_function.R
-
-Start by choosing which variables to use to filter to fishing locations only.
-
 ```{r fishing data prep 1}
 
-# load non-spatial version written above
+# load version without geometry with grid cell ID written above
 vms_all_grd_match <- read_rds(here('Confidential', 'data', 'interim', 'vms_all_w_grd_5km.rds'))
-glimpse(vms_all_grd_match)
+names(vms_all_grd_match)
 ```
 
-Now filter the data based on control variables above: California, DCRB trips only, commercial removal types only, slow vessel speeds. Need to add DEPTH_CATM, but for now ask Blake to filter based on NGDC_M or the depth of each grid cell.
+Now filter the data based on control variables below: California, depth <= 150m, slow vessel speeds.
+
+Also add date columns and select subset of features from dataset.
 
 ```{r filter fishing data}
 
@@ -117,7 +120,7 @@ state_agency_code = "C" # filter for landings brought to California ports
 target_rev <- "DCRB"
 target_lbs <- "DCRB"
 winter_months <- c("November", "December", "January", "February", "March") # used to set season as Winter or Spring-Summer
-removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
+# removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
 max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
 min_speed <- 0 # units = m/s
 
@@ -161,13 +164,13 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
     )
 
 # take a look at transformed data
-glimpse(dcrb_vms_tix_analysis)
+names(dcrb_vms_tix_analysis)
 
 # check all crab years present
 unique(dcrb_vms_tix_analysis$crab_year)
 ```
 
-Distribute rev and lbs to grid cells. 
+Distribute rev and lbs to grid cells. Normalize VMS pings by year-month and grid cell.
 
 ```{r distribute $ and lbs to cells}
 
@@ -188,7 +191,7 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
     DCRB_rev_per_VMSlocation = DCRB_revenue/trip_VMSrecords,
     DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
   )
-glimpse(dcrb_vms_tix_analysis_TripInfo)
+names(dcrb_vms_tix_analysis_TripInfo)
 
 # summarize and normalize fishery effort at year, month and grid cell level
 # based on Jameal's prep_data_for_scenario_df_function.R
@@ -227,6 +230,16 @@ dcrb_year_month_5km_df %>%
   ggplot(aes(normalized_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
 print(range(dcrb_year_month_5km_df$normalized_DCRB_VMS_pings))
 ```
+
+Create outputs for Heather.
+
+* *Baseline 2014-2018* includes the 2014-15 to 2018-19 fishing seasons.
+* *Baseline 2017-2018* includes the 2017-18 and 2018-19 fishing seasons.
+* *Implementation 2019-2023* includes the 2019-20 to the end of the 2023 calendar year.
+
+For baseline periods, each record represents one grid cell for one month, across all years. Crab data is averaged across years for a given month. Note that the # of unique vessels is the minimum for that grid cell and month in any year, let me know if I should update this.
+
+For implementation period, each record represents one grid cell for one month in one year. 
 
 ```{r create summaries}
 # set baseline and implementation years
@@ -293,6 +306,8 @@ summary(implementation_2019_2023$normalized_DCRB_VMS_pings)
 # write output
 write_rds(implementation_2019_2023, here::here('Confidential', 'processed', 'summaries', 'implementation_2019_2023.rds'))
 ```
+
+For a common sense check, see how the baseline periods and implementation period fishing effort look on a map. Visualize average # of pings for baseline periods, and # of pings for implementation period.
 
 ```{r visualize on map}
 
