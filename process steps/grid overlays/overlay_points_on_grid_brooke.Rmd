@@ -165,7 +165,6 @@ glimpse(dcrb_vms_tix_analysis)
 
 # check all crab years present
 unique(dcrb_vms_tix_analysis$crab_year)
-
 ```
 
 Distribute rev and lbs to grid cells. 
@@ -191,86 +190,113 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
   )
 glimpse(dcrb_vms_tix_analysis_TripInfo)
 
-# save interim output
+# summarize and normalize fishery effort at year, month and grid cell level
+# based on Jameal's prep_data_for_scenario_df_function.R
+dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
+  group_by(crab_year, year, year_month, month_as_numeric, month, GRID5KM_ID) %>%
+  summarise(
+    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
+    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
+    DCRB_VMS_pings = n(),
+    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
+    Unique_DCRB_Vessels = length(unique(as.character(drvid)))
+  ) %>%
+  ungroup() %>%
+  mutate(
+    # rescale pings to 0-1
+    normalized_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings, center = min(DCRB_VMS_pings), scale = diff(range(DCRB_VMS_pings)))),
+    # above rescaling converts 1 ping to 0, so change it so that 1 ping, after re-scaling, has a scaled value equal to one half of the rescaled value of 2 pings
+    normalized_DCRB_VMS_pings = ifelse(
+      normalized_DCRB_VMS_pings == 0, 
+      0.5 * min(normalized_DCRB_VMS_pings[normalized_DCRB_VMS_pings != min(normalized_DCRB_VMS_pings)]),
+      normalized_DCRB_VMS_pings
+    )
+  )
+
+# save interim outputs
 write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'data', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
+write_rds(dcrb_year_month_5km_df, here::here('Confidential', 'data', 'interim', 'dcrb_year_month_5km_df.rds'))
+
+# visualize # vms pings
+dcrb_year_month_5km_df %>%
+  ggplot(aes(DCRB_VMS_pings)) + geom_histogram(binwidth=5)
+print(range(dcrb_year_month_5km_df$DCRB_VMS_pings))
+
+# visualize normalized # vms pings
+dcrb_year_month_5km_df %>%
+  ggplot(aes(normalized_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
+print(range(dcrb_year_month_5km_df$normalized_DCRB_VMS_pings))
 ```
 
 ```{r create summaries}
 # set baseline and implementation years
 baseline_2014_2018_crab_years <- c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019")
 baseline_2017_2018_crab_years <- c("2017_2018", "2018_2019")
-realtime_2019_2023_crab_years <- c("2019_2020", "2020_2021", "2021_2022", "2022_2023", "2023_2024")
+implementation_2019_2023_crab_years <- c("2019_2020", "2020_2021", "2021_2022", "2022_2023", "2023_2024")
 
 # summarize baseline data (2014-2018) at monthly temporal grain and grid cell ID spatial grain
-baseline_2014_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
+baseline_2014_2018 <- dcrb_year_month_5km_df %>%
   filter(crab_year %in% baseline_2014_2018_crab_years) %>%
-  # filter(year >= 2014 & year <= 2018) %>%
   group_by(GRID5KM_ID, month, month_as_numeric) %>%
   summarise(
-    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
-    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
-    DCRB_VMS_pings = n(),
-    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
-    Unique_DCRB_Vessels = length(unique(as.character(drvid))),
+    # take average by summing across years and dividing by # years
+    # use sum / length instead of mean, because grid cells with 0 pings have no records, rather than a record with '0'
+    avg_DCRB_lbs = sum(DCRB_lbs) / length(baseline_2014_2018_crab_years),
+    avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2014_2018_crab_years),
+    avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2014_2018_crab_years),
+    avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2014_2018_crab_years),
+    avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2014_2018_crab_years),
+    # take minimum unique DCRB vessels across years
+    min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
     .groups = 'drop'
   )
-glimpse(baseline_2014_2018)
-summary(baseline_2014_2018$DCRB_VMS_pings)
+# explore output
+names(baseline_2014_2018)
+summary(baseline_2014_2018$avg_DCRB_VMS_pings)
+summary(baseline_2014_2018$avg_normalized_DCRB_VMS_pings)
 sort(unique(baseline_2014_2018$month_as_numeric))
-write_rds(baseline_2014_2018, here::here('Confidential', 'data', 'processed', 'baseline_2014_2018.rds'))
+# write output
+write_rds(baseline_2014_2018, here::here('Confidential', 'processed', 'summaries', 'baseline_2014_2018.rds'))
 
 # summarize baseline data (2017-2018) at monthly temporal grain and grid cell ID spatial grain
-baseline_2017_2018 <- dcrb_vms_tix_analysis_TripInfo %>%
+baseline_2017_2018 <- dcrb_year_month_5km_df %>%
   filter(crab_year %in% baseline_2017_2018_crab_years) %>%
-  # filter(year >= 2017 & year <= 2018) %>%
   group_by(GRID5KM_ID, month, month_as_numeric) %>%
   summarise(
-    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
-    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
-    DCRB_VMS_pings = n(),
-    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
-    Unique_DCRB_Vessels = length(unique(as.character(drvid))),
+    # take average by summing across years and dividing by # years
+    # use sum / length instead of mean, because grid cells with 0 pings have no records, rather than a record with '0'
+    avg_DCRB_lbs = sum(DCRB_lbs) / length(baseline_2017_2018_crab_years),
+    avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2017_2018_crab_years),
+    avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2017_2018_crab_years),
+    avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2017_2018_crab_years),
+    avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2017_2018_crab_years),
+    # take minimum unique DCRB vessels across years
+    min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
     .groups = 'drop'
   )
-glimpse(baseline_2017_2018)
-summary(baseline_2017_2018$DCRB_VMS_pings)
+# explore output
+names(baseline_2017_2018)
 sort(unique(baseline_2017_2018$month_as_numeric))
-write_rds(baseline_2017_2018, here::here('Confidential', 'data', 'processed', 'baseline_2017_2018.rds'))
+summary(baseline_2017_2018$avg_DCRB_VMS_pings)
+summary(baseline_2017_2018$avg_normalized_DCRB_VMS_pings)
+# write output
+write_rds(baseline_2017_2018, here::here('Confidential', 'processed', 'summaries', 'baseline_2017_2018.rds'))
 
-# summarize real-time data (2019-2023) at yearly and monthly temporal grain and grid cell ID spatial grain
-realtime_2019_2023 <- dcrb_vms_tix_analysis_TripInfo %>%
-  filter(crab_year %in% realtime_2019_2023_crab_years) %>%
-  # filter(year >= 2019 & year <= 2023) %>%
-  group_by(GRID5KM_ID, year_month, year, month, month_as_numeric) %>%
-  summarise(
-    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
-    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
-    DCRB_VMS_pings = n(),
-    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
-    Unique_DCRB_Vessels = length(unique(as.character(drvid))),
-    .groups = 'drop'
-  )
-glimpse(realtime_2019_2023)
-summary(realtime_2019_2023$DCRB_VMS_pings)
-sort(unique(realtime_2019_2023$year_month))
-write_rds(realtime_2019_2023, here::here('Confidential', 'data', 'processed', 'realtime_2019_2023.rds'))
+# write real-time data (2019-2023) at yearly and monthly temporal grain and grid cell ID spatial grain
+implementation_2019_2023 <- dcrb_year_month_5km_df %>%
+  filter(crab_year %in% implementation_2019_2023_crab_years)
+# explore output
+names(implementation_2019_2023)
+sort(unique(implementation_2019_2023$month_as_numeric))
+summary(implementation_2019_2023$DCRB_VMS_pings)
+summary(implementation_2019_2023$normalized_DCRB_VMS_pings)
+# write output
+write_rds(implementation_2019_2023, here::here('Confidential', 'processed', 'summaries', 'implementation_2019_2023.rds'))
 ```
 
 ```{r visualize on map}
 
 # based on Owen's compare_hw_bh.R
-
-# shapefile with grid info
-# gr <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
-# commented out, read in already as grd
-
-# should be able to just join this by GRID5KM_ID
-# all of the spatial data is stored in the special sf package 'geometry' column
-baseline_2014_2018_with_grid <- baseline_2014_2018 %>% 
-  left_join(grd, by = join_by(GRID5KM_ID)) %>%
-  st_as_sf()
-# hw <- hw %>% left_join(plot_grid, by = join_by(GRID5KM_ID)) %>% st_as_sf()
-# commented out, not comparing yet
 
 # West coast, using the rnaturalearth package (for a background map)
 coaststates <- ne_states(country='United States of America',returnclass = 'sf') %>% 
@@ -278,43 +304,64 @@ coaststates <- ne_states(country='United States of America',returnclass = 'sf') 
   # spatially tranform to the same coordinate ref system as the 5k grid
   st_transform(st_crs(grd))
 
-# plot, e.g., pings from February 2019
-#bh_feb19 <-  bh %>% 
-#  filter(year==2019,month_as_numeric==2)
-# commented out, want to see full baseline to start
-
-# bounding box 
-#(so we aren't to zoomed out. also can futz with this to change what area you want to plot)
+# visualize 2014-2018 baseline
+# join summary back to geometry by GRID5KM_ID
+baseline_2014_2018_with_grid <- baseline_2014_2018 %>% 
+  left_join(grd, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+# set bounding box 
 bbox <- st_bbox(baseline_2014_2018_with_grid)
-
-# plot pings on a map
-map_pings_baseline_2014_2018 <- ggplot()+
-  # background map
-  geom_sf(data = coaststates, fill = 'gray80')+
-  # 5KM grid with pings. Scale fill color by number of pings
-  geom_sf(data = baseline_2014_2018_with_grid, aes(fill = DCRB_VMS_pings), color = NA)+
-  scale_fill_viridis()+
-  # set manual bounding box
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="Pings") +
-  theme_minimal()
-map_pings_baseline_2014_2018
-
-# plot log pings on a map
+# plot log of avg. pings on a map
 map_log_pings_baseline_2014_2018 <- ggplot()+
   # background map
   geom_sf(data = coaststates, fill = 'gray80')+
   # 5KM grid with pings. Scale fill color by number of pings
-  geom_sf(data = baseline_2014_2018_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA)+
-  scale_fill_viridis()+
+  geom_sf(data = baseline_2014_2018_with_grid, aes(fill = log10(avg_DCRB_VMS_pings)), color = NA) +
+  scale_fill_viridis() +
+  # set manual bounding box
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Avg. Pings)") +
+  theme_minimal()
+map_log_pings_baseline_2014_2018
+
+# visualize 2017-2018 baseline
+# join summary back to geometry by GRID5KM_ID
+baseline_2017_2018_with_grid <- baseline_2017_2018 %>% 
+  left_join(grd, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+# set bounding box
+bbox <- st_bbox(baseline_2017_2018_with_grid)
+# plot log of avg. pings on a map
+map_log_pings_baseline_2017_2018 <- ggplot()+
+  # background map
+  geom_sf(data = coaststates, fill = 'gray80')+
+  # 5KM grid with pings. Scale fill color by number of pings
+  geom_sf(data = baseline_2017_2018_with_grid, aes(fill = log10(avg_DCRB_VMS_pings)), color = NA) +
+  scale_fill_viridis() +
+  # set manual bounding box
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Avg. Pings)") +
+  theme_minimal()
+map_log_pings_baseline_2017_2018
+
+# visualize 2019-2023 implementation period
+# join summary back to geometry by GRID5KM_ID
+implementation_2019_2023_with_grid <- implementation_2019_2023 %>% 
+  left_join(grd, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+# set bounding box
+bbox <- st_bbox(implementation_2019_2023_with_grid)
+# plot log of avg. pings on a map
+map_log_pings_implementation_2019_2023 <- ggplot()+
+  # background map
+  geom_sf(data = coaststates, fill = 'gray80')+
+  # 5KM grid with pings. Scale fill color by number of pings
+  geom_sf(data = implementation_2019_2023_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA) +
+  facet_grid(. ~ crab_year) +
+  scale_fill_viridis() +
   # set manual bounding box
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
   labs(fill="log10(Pings)") +
   theme_minimal()
-map_log_pings_baseline_2014_2018
-
-```
-
-```{r compare to 2019 output}
-
+map_log_pings_implementation_2019_2023
 ```
