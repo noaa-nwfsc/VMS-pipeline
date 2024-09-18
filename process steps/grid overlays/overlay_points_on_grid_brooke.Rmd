@@ -397,17 +397,6 @@ vms_2023_all_grd_match <- vms_2023_sf %>%
   st_join(grd) %>%
   st_set_geometry(NULL)
 
-# check # records vs. year, crab_year, and month before transformation
-vms_2023 %>% 
-  mutate(year = lubridate::year(westcoastdate_notime),
-         month_as_numeric = month(westcoastdate_notime),
-         crab_year = ifelse(
-           month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
-         )
-      ) %>%
-  group_by(year, crab_year, month_as_numeric) %>%
-  summarize(record_count = n())
-
 # set filter parameters
 state_agency_code = "C" # filter for landings brought to California ports
 target_rev <- "DCRB"
@@ -418,13 +407,16 @@ max_depth <- -150  # filter for 0-150 M depth
 max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
 min_speed <- 0 # units = m/s
 
-# filter same as earlier in script
+# look into which filter leads to biggest drop
 dcrb_vms_tix_analysis_2023 <- vms_2023_all_grd_match %>%
-  filter(agency_code == state_agency_code) %>%
-  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
-  filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
   mutate(
+    # if a record would be filtered out, then filter_ columns have value of 1
+    # if a record would not be filtered out, then filter_ columns have value of 0
+    filter_agency = case_when(agency_code == state_agency_code ~ 0, .default = 1),
+    filter_target = case_when((TARGET_rev == target_rev | TARGET_lbs == target_lbs) ~ 0, .default = 1),
+    filter_speed = case_when((avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) ~ 0, .default = 1),
+    filter_depth = case_when(NGDC_M <= min_depth & NGDC_M >= max_depth ~ 0, .default = 1),
+    filter_any = case_when(filter_agency + filter_target + filter_depth + filter_speed > 0 ~ 1, .default = 0),
     year = lubridate::year(westcoastdate_notime),
     year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime),6,7)),
     # substr() ensures month is a 2 digit value, e.g. February is "02" not "2"
@@ -434,32 +426,32 @@ dcrb_vms_tix_analysis_2023 <- vms_2023_all_grd_match %>%
     crab_year = ifelse(
       month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
     )
-  ) %>%
-  dplyr::select(
-    GRID5KM_ID, # grid cell ID
-    Rec_ID, # fish ticket ID
-    VMS_RECNO, # VMS ping ID
-    drvid, # vessel ID
-    westcoastdate_notime,
-    year,
-    crab_year, 
-    year_month,
-    month, 
-    month_as_numeric,
-    season,
-    pacfin_port_code, 
-    port_group_code, 
-    NGDC_M, # depth
-    TARGET_lbs, # target species by weight (filtered to "DCRB")
-    TARGET_rev, # target species by revenue (filtered to "DCRB")
-    DCRB_lbs, # dungeness crab catch weight
-    DCRB_revenue # dungeness crab catch revenue
   )
 
 # check # records vs. crab_year and month after transformation
 dcrb_vms_tix_analysis_2023 %>% 
-  group_by(year, crab_year, month_as_numeric) %>%
-  summarize(record_count = n())
+  group_by(month_as_numeric) %>%
+  summarize(
+    n_records = n(),
+    n_filter_agency = sum(filter_agency),
+    n_filter_target = sum(filter_target),
+    n_filter_speed = sum(filter_speed),
+    n_filter_depth = sum(filter_depth),
+    n_filter_any = sum(filter_any)
+  )
 
+# check % records vs. crab_year and month after transformation
+dcrb_vms_tix_analysis_2023 %>% 
+  group_by(month_as_numeric) %>%
+  summarize(
+    percent_filter_agency = sum(filter_agency) / n() * 100,
+    percent_filter_target = sum(filter_target) / n() * 100,
+    percent_filter_speed = sum(filter_speed) / n() * 100,
+    percent_filter_depth = sum(filter_depth) / n() * 100,
+    percent_filter_any = sum(filter_any) / n() * 100
+  )
+
+# after conversation with Blake and Owen, seems reasonable there's hardly any data for Nov./Dec. 2023
+# excluding 2023_2024 from this analysis, since 2024 data not ready
 ```
 
