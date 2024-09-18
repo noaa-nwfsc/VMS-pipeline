@@ -109,9 +109,14 @@ vms_all_grd_match <- read_rds(here('Confidential', 'data', 'interim', 'vms_all_w
 names(vms_all_grd_match)
 ```
 
-Now filter the data based on control variables below: California, depth <= 150m, slow vessel speeds.
+Now filter the data based on control variables below: dungeness crab target, landed in California, depth <= 150m, and vessel speeds <= 4 knots.
+Then add date columns and select subset of columns.
 
-Also add date columns and select subset of features from dataset.
+Notes:
+
+* *crab_year* is Nov.-Oct. (e.g. Nov. 2019 to Oct. 2020 for 2019_2020), rather than the precise dates of the crab fishing season.
+* *agency_code* filters for VMS pings joined to fish tickets that were landed in California. You can see in the map at the end of the file this means some pings extend beyond California.
+* *removal_type* to filter for commercial landings is not included here, so personal take is included in *DCRB_lbs*. This does not impact *DCRB_VMS_pings* or *DCRB_rev*.
 
 ```{r filter fishing data}
 
@@ -120,7 +125,8 @@ state_agency_code = "C" # filter for landings brought to California ports
 target_rev <- "DCRB"
 target_lbs <- "DCRB"
 winter_months <- c("November", "December", "January", "February", "March") # used to set season as Winter or Spring-Summer
-# removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
+min_depth <- 0
+max_depth <- -150  # filter for 0-150 M depth
 max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
 min_speed <- 0 # units = m/s
 
@@ -128,8 +134,7 @@ min_speed <- 0 # units = m/s
 dcrb_vms_tix_analysis <- vms_all_grd_match %>%
   filter(agency_code == state_agency_code) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  # filter(removal_type_name %in% removal_types) %>% # TODO check if this needed after issue #19 fix
-  filter(NGDC_M <= 0 & NGDC_M >= -150) %>% # filter for 0-150 M depth
+  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
   mutate(
     year = lubridate::year(westcoastdate_notime),
