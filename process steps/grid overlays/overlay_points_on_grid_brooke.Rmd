@@ -338,7 +338,7 @@ map_log_pings_baseline_2014_2018 <- ggplot()+
   scale_fill_viridis() +
   # set manual bounding box
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Avg. Pings)") +
+  labs(fill="log10(Avg. Pings) per 5x5 cell") +
   theme_minimal()
 map_log_pings_baseline_2014_2018
 
@@ -358,7 +358,7 @@ map_log_pings_baseline_2017_2018 <- ggplot()+
   scale_fill_viridis() +
   # set manual bounding box
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Avg. Pings)") +
+  labs(fill="log10(Avg. Pings) per 5x5 cell") +
   theme_minimal()
 map_log_pings_baseline_2017_2018
 
@@ -379,7 +379,7 @@ map_log_pings_implementation_2019_2023 <- ggplot()+
   scale_fill_viridis() +
   # set manual bounding box
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Pings)") +
+  labs(fill="log10(Pings) per 5x5 cell") +
   theme_minimal()
 map_log_pings_implementation_2019_2023
 ```
