@@ -469,21 +469,20 @@ At some point, the VMS ping rate increased from ~1/hour to ~1/15 minutes. As a r
 
 ```{r check when ping rate increased}
 
-# look at average pings per ticket over years in table
+# visualize at average pings per ticket over time
 avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
-  group_by(year, Rec_ID) %>%
+  group_by(westcoastdate_notime, Rec_ID) %>%
   summarise(trip_VMSrecords = n()) %>%
   ungroup() %>%
-  group_by(year) %>%
-  summarise(avg_pings_per_ticket = mean(trip_VMSrecords))
-
-# look at average pings per ticket over years in scatterplot
+  group_by(westcoastdate_notime) %>%
+  summarise(n_tickets = n(),
+            avg_pings_per_ticket = mean(trip_VMSrecords))
 avg_pings_per_ticket_over_time %>% 
-  ggplot(aes(x = year, y = avg_pings_per_ticket)) +
+  ggplot(aes(x = westcoastdate_notime, y = avg_pings_per_ticket)) +
   geom_point() +
   theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
 
-# so it was 2021, now find out which month...
+# looks like the increase was in 2021, now find out which month...
 
 # look at average pings per ticket over time in table
 avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
@@ -492,15 +491,14 @@ avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
   summarise(trip_VMSrecords = n()) %>%
   ungroup() %>%
   group_by(month) %>%
-  summarise(avg_pings_per_ticket = mean(trip_VMSrecords))
-
-# look at average pings per ticket over time in scatterplot
+  summarise(n_tickets = n(),
+            avg_pings_per_ticket = mean(trip_VMSrecords))
 avg_pings_per_ticket_over_time %>% 
   ggplot(aes(x = month, y = avg_pings_per_ticket)) +
   geom_point() +
   theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
 
-# so it was January, now look for which day...
+# looks like the increase in January, look for a specific day...
 
 # look at average pings per ticket over time in table
 avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
@@ -509,7 +507,9 @@ avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
   summarise(trip_VMSrecords = n()) %>%
   ungroup() %>%
   group_by(westcoastdate_notime) %>%
-  summarise(avg_pings_per_ticket = mean(trip_VMSrecords))
+  summarise(n_tickets = n(),
+            avg_pings_per_ticket = mean(trip_VMSrecords))
+avg_pings_per_ticket_over_time
 
 # look at average pings per ticket over time in scatterplot
 avg_pings_per_ticket_over_time %>% 
