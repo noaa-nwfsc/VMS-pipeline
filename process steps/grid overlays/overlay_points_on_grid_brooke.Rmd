@@ -477,10 +477,12 @@ avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
   group_by(westcoastdate_notime) %>%
   summarise(n_tickets = n(),
             avg_pings_per_ticket = mean(trip_VMSrecords))
+# plot # pings and avg. pings per ticket vs. time, each point is one day
 avg_pings_per_ticket_over_time %>% 
-  ggplot(aes(x = westcoastdate_notime, y = avg_pings_per_ticket)) +
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
+  pivot_longer(-westcoastdate_notime) %>%
+  ggplot(aes(x = westcoastdate_notime, y = value)) +
+    geom_point() +
+    facet_grid(name ~ .)
 
 # looks like the increase was in 2021, now find out which month...
 
@@ -493,12 +495,17 @@ avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
   group_by(month) %>%
   summarise(n_tickets = n(),
             avg_pings_per_ticket = mean(trip_VMSrecords))
+# avg_pings_per_ticket_over_time %>% 
+#   ggplot(aes(x = month, y = avg_pings_per_ticket)) +
+#     geom_point()
+# plot # pings and avg. pings per ticket vs. time, each point is one month
 avg_pings_per_ticket_over_time %>% 
-  ggplot(aes(x = month, y = avg_pings_per_ticket)) +
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
+  pivot_longer(-month) %>%
+  ggplot(aes(x = month, y = value, color = name)) +
+    geom_point() + 
+    facet_grid(name ~ .)
 
-# looks like the increase in January, look for a specific day...
+# looks like the increase was in January, look for a specific day...
 
 # look at average pings per ticket over time in table
 avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
@@ -509,17 +516,13 @@ avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
   group_by(westcoastdate_notime) %>%
   summarise(n_tickets = n(),
             avg_pings_per_ticket = mean(trip_VMSrecords))
-avg_pings_per_ticket_over_time
-
-# look at average pings per ticket over time in scatterplot
+# plot # pings and avg. pings per ticket vs. time, each point is one day in Jan. 2021
 avg_pings_per_ticket_over_time %>% 
-  ggplot(aes(x = westcoastdate_notime, y = avg_pings_per_ticket)) +
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1))
+  pivot_longer(-westcoastdate_notime) %>%
+  ggplot(aes(x = westcoastdate_notime, y = value, color = name)) +
+    geom_point() + geom_line() +
+    facet_grid(name ~ .)
 
-# look at dates
-avg_pings_per_ticket_over_time
-
-# possibly Jan. 7? but want to see side by side with # tickets
+# looks like the increase was at the start of January 2021
 
 ```
