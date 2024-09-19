@@ -323,6 +323,55 @@ coaststates <- ne_states(country='United States of America',returnclass = 'sf') 
   # spatially tranform to the same coordinate ref system as the 5k grid
   st_transform(st_crs(grd))
 
+# visualize all years
+# join summary back to geometry by GRID5KM_ID
+dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
+  left_join(grd, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+# set bounding box 
+bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
+# plot log of avg. pings on a map
+map_log_pings_dcrb_year_month_5km_df <- ggplot() +
+  # background map
+  geom_sf(data = coaststates, fill = 'gray80') +
+  # 5KM grid with pings. Scale fill color by number of pings
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA) +
+  facet_grid(. ~ year) + # just added this TODO check it
+  scale_fill_viridis() +
+  # set manual bounding box
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Pings) per 5x5 cell") +
+  theme_minimal()
+map_log_pings_dcrb_year_month_5km_df
+
+# visualize distribution of pings in violin plot
+# 1 record = sum of pings per grid cell per year-month
+dcrb_year_month_5km_df %>%
+  ggplot(aes(x = factor(year), y = DCRB_VMS_pings)) + 
+  geom_boxplot() #geom_violin()
+
+# see summary of pings by year
+# 1 record = sum of pings per grid cell per year-month
+dcrb_year_month_5km_df %>%
+  group_by(year) %>%
+  summarise(
+    min_DCRB_VMS_pings = min(DCRB_VMS_pings),
+    median_DCRB_VMS_pings = median(DCRB_VMS_pings),
+    mean_DCRB_VMS_pings = mean(DCRB_VMS_pings),
+    max_DCRB_VMS_pings = max(DCRB_VMS_pings)
+  )
+
+# see summary of normalized pings by year
+# 1 record = sum of pings per grid cell per year-month
+dcrb_year_month_5km_df %>%
+  group_by(year) %>%
+  summarise(
+    min_normalized_DCRB_VMS_pings = min(normalized_DCRB_VMS_pings),
+    median_normalized_DCRB_VMS_pings = median(normalized_DCRB_VMS_pings),
+    mean_normalized_DCRB_VMS_pings = mean(normalized_DCRB_VMS_pings),
+    max_normalized_DCRB_VMS_pings = max(normalized_DCRB_VMS_pings)
+  )
+
 # visualize 2014-2018 baseline
 # join summary back to geometry by GRID5KM_ID
 baseline_2014_2019_with_grid <- baseline_2014_2019 %>% 
@@ -331,9 +380,9 @@ baseline_2014_2019_with_grid <- baseline_2014_2019 %>%
 # set bounding box 
 bbox <- st_bbox(baseline_2014_2019_with_grid)
 # plot log of avg. pings on a map
-map_log_pings_baseline_2014_2019 <- ggplot()+
+map_log_pings_baseline_2014_2019 <- ggplot() +
   # background map
-  geom_sf(data = coaststates, fill = 'gray80')+
+  geom_sf(data = coaststates, fill = 'gray80') +
   # 5KM grid with pings. Scale fill color by number of pings
   geom_sf(data = baseline_2014_2019_with_grid, aes(fill = log10(avg_DCRB_VMS_pings)), color = NA) +
   scale_fill_viridis() +
@@ -351,9 +400,9 @@ baseline_2017_2019_with_grid <- baseline_2017_2019 %>%
 # set bounding box
 bbox <- st_bbox(baseline_2017_2019_with_grid)
 # plot log of avg. pings on a map
-map_log_pings_baseline_2017_2019 <- ggplot()+
+map_log_pings_baseline_2017_2019 <- ggplot() +
   # background map
-  geom_sf(data = coaststates, fill = 'gray80')+
+  geom_sf(data = coaststates, fill = 'gray80') +
   # 5KM grid with pings. Scale fill color by number of pings
   geom_sf(data = baseline_2017_2019_with_grid, aes(fill = log10(avg_DCRB_VMS_pings)), color = NA) +
   scale_fill_viridis() +
@@ -371,9 +420,9 @@ implementation_2019_2023_with_grid <- implementation_2019_2023 %>%
 # set bounding box
 bbox <- st_bbox(implementation_2019_2023_with_grid)
 # plot log of avg. pings on a map
-map_log_pings_implementation_2019_2023 <- ggplot()+
+map_log_pings_implementation_2019_2023 <- ggplot() +
   # background map
-  geom_sf(data = coaststates, fill = 'gray80')+
+  geom_sf(data = coaststates, fill = 'gray80') +
   # 5KM grid with pings. Scale fill color by number of pings
   geom_sf(data = implementation_2019_2023_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA) +
   facet_grid(. ~ crab_year) +
