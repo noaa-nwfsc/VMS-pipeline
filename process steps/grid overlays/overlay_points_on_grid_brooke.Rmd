@@ -344,34 +344,6 @@ map_log_pings_dcrb_year_month_5km_df <- ggplot() +
   theme_minimal()
 map_log_pings_dcrb_year_month_5km_df
 
-# visualize distribution of pings in violin plot
-# 1 record = sum of pings per grid cell per year-month
-dcrb_year_month_5km_df %>%
-  ggplot(aes(x = factor(year), y = DCRB_VMS_pings)) + 
-  geom_boxplot() #geom_violin()
-
-# see summary of pings by year
-# 1 record = sum of pings per grid cell per year-month
-dcrb_year_month_5km_df %>%
-  group_by(year) %>%
-  summarise(
-    min_DCRB_VMS_pings = min(DCRB_VMS_pings),
-    median_DCRB_VMS_pings = median(DCRB_VMS_pings),
-    mean_DCRB_VMS_pings = mean(DCRB_VMS_pings),
-    max_DCRB_VMS_pings = max(DCRB_VMS_pings)
-  )
-
-# see summary of normalized pings by year
-# 1 record = sum of pings per grid cell per year-month
-dcrb_year_month_5km_df %>%
-  group_by(year) %>%
-  summarise(
-    min_normalized_DCRB_VMS_pings = min(normalized_DCRB_VMS_pings),
-    median_normalized_DCRB_VMS_pings = median(normalized_DCRB_VMS_pings),
-    mean_normalized_DCRB_VMS_pings = mean(normalized_DCRB_VMS_pings),
-    max_normalized_DCRB_VMS_pings = max(normalized_DCRB_VMS_pings)
-  )
-
 # visualize 2014-2018 baseline
 # join summary back to geometry by GRID5KM_ID
 baseline_2014_2019_with_grid <- baseline_2014_2019 %>% 
@@ -516,9 +488,16 @@ dcrb_vms_tix_analysis_2023 %>%
 
 At some point, the VMS ping rate increased from ~1/hour to ~1/15 minutes. As a result, in the time frame with the increased ping rate, fishing effort will look ~4x higher (when it's really just a change in sampling rate), and DCRB_lbs and DCRB_rev are spread over a higher resolution track (4x as many pings to attribute a single fish ticket to).
 
+I'm visualizing this in two ways. 
+
+1. Visualize time series of avg. pings per ticket tickets over time. I'm looking for an increase at a particular point in time, after which I will apply a correction for the increased ping rate. I also visualized number of tickets, just to explore for my own learning.
+2. Visualize distribution of total and normalized pings per grid cell over time. Again, I'm lookign for an increase at a particular point in time.
+
 ```{r check when ping rate increased}
 
-# visualize at average pings per ticket over time
+# approach 1: look at avg. pings per ticket over time
+
+# visualize average pings per ticket over time
 avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
   group_by(westcoastdate_notime, Rec_ID) %>%
   summarise(trip_VMSrecords = n()) %>%
@@ -544,9 +523,6 @@ avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
   group_by(month) %>%
   summarise(n_tickets = n(),
             avg_pings_per_ticket = mean(trip_VMSrecords))
-# avg_pings_per_ticket_over_time %>% 
-#   ggplot(aes(x = month, y = avg_pings_per_ticket)) +
-#     geom_point()
 # plot # pings and avg. pings per ticket vs. time, each point is one month
 avg_pings_per_ticket_over_time %>% 
   pivot_longer(-month) %>%
@@ -572,6 +548,34 @@ avg_pings_per_ticket_over_time %>%
     geom_point() + geom_line() +
     facet_grid(name ~ .)
 
-# looks like the increase was at the start of January 2021
+# looks like the increase was at the start of January 2021.
+
+# approach 2: look at # pings and normalized # pings per grid cell over time
+# 1 record = sum of pings per grid cell per year-month
+
+# visualize distribution of pings in violin plot
+dcrb_year_month_5km_df %>%
+  ggplot(aes(x = factor(year), y = DCRB_VMS_pings)) + 
+  geom_boxplot() #geom_violin()
+
+# see summary of pings by year
+dcrb_year_month_5km_df %>%
+  group_by(year) %>%
+  summarise(
+    min_DCRB_VMS_pings = min(DCRB_VMS_pings),
+    median_DCRB_VMS_pings = median(DCRB_VMS_pings),
+    mean_DCRB_VMS_pings = mean(DCRB_VMS_pings),
+    max_DCRB_VMS_pings = max(DCRB_VMS_pings)
+  )
+
+# see summary of normalized pings by year
+dcrb_year_month_5km_df %>%
+  group_by(year) %>%
+  summarise(
+    min_normalized_DCRB_VMS_pings = min(normalized_DCRB_VMS_pings),
+    median_normalized_DCRB_VMS_pings = median(normalized_DCRB_VMS_pings),
+    mean_normalized_DCRB_VMS_pings = mean(normalized_DCRB_VMS_pings),
+    max_normalized_DCRB_VMS_pings = max(normalized_DCRB_VMS_pings)
+  )
 
 ```
