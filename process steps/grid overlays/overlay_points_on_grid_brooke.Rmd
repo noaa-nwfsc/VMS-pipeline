@@ -649,3 +649,33 @@ monthly_df %>%
 
 ```
 
+```{r calculate monthly correction for before and after ping rate increase}
+# set the start date for ping rate increase to April 1, 2020
+ping_rate_increase_date <- ymd(20200401)
+
+# calculate the monthly ping rate per unique vessel before and after April 1, 2020
+pre_post_ping_rate_increase <- dcrb_vms_tix_analysis_TripInfo %>%
+  mutate(ping_rate_period = if_else(westcoastdate_notime < ping_rate_increase_date,
+                                    "pre_ping_rate_increase",
+                                    "post_ping_rate_increase")) %>% 
+  group_by(ping_rate_period, month) %>%
+  summarise(pings_per_vessel = n() / n_distinct(drvid)) # (# of pings) / (# of unique vessels)
+# I'm not sure if month comes from fish ticket or from VMS ping time
+# for this use case, I don't want fish tickets split across months, so I want the month of the fish ticket or of the trip start
+# that may mean the variable in group_by needs to change
+
+# plot the rates
+pre_post_ping_rate_increase %>%
+  ggplot(aes(x=month, y=pings_per_vessel, fill = ping_rate_period)) + 
+  geom_col(position='dodge') +
+  theme(axis.text.x = element_text(angle = 300))
+
+# calculate the correction factor by dividing post period / pre period
+#ping_rate_correction_factor <- 
+pre_post_ping_rate_increase %>% 
+  pivot_wider(names_from = ping_rate_period, values_from = pings_per_vessel) %>%
+  mutate(ping_rate_correction = post_ping_rate_increase / pre_ping_rate_increase) %>%
+  arrange(month)
+
+```
+
