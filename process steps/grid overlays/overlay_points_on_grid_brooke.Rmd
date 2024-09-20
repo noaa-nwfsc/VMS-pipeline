@@ -556,7 +556,7 @@ avg_pings_per_ticket_over_time %>%
 # visualize distribution of pings in violin plot
 dcrb_year_month_5km_df %>%
   ggplot(aes(x = factor(year), y = DCRB_VMS_pings)) + 
-  geom_boxplot() #geom_violin()
+  geom_boxplot()
 
 # see summary of pings by year
 dcrb_year_month_5km_df %>%
@@ -577,5 +577,48 @@ dcrb_year_month_5km_df %>%
     mean_normalized_DCRB_VMS_pings = mean(normalized_DCRB_VMS_pings),
     max_normalized_DCRB_VMS_pings = max(normalized_DCRB_VMS_pings)
   )
-
 ```
+
+Jameal shared that the ping rate increased 4x in April 2020 for 900/1200 vessels.
+
+Look for a monthly factor to correct vessel ping rate. This is a rough/fast fix, and it is worth checking how sensitive cooccurrence metrics are based on this correction factor.
+
+```{r}
+# is fishing effort (as # fish tickets / # days fishery open) consistent in the post-April 2020 period?
+
+crab_years_to_vis = c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019",
+                      "2019_2020", "2020_2021", "2021_2022", "2022_2023")
+
+# how many days was the fishery open each season? how many fish tickets for each season
+# -"open" means there were VMS pings with fish tickets matched to them
+# - crab_year represents a season and is defined earlier in this script as Nov. - Oct., it is not based on closures
+
+# season length by year
+n_fish_tickets_per_day_by_crab_year <- dcrb_vms_tix_analysis %>%
+  filter(crab_year %in% crab_years_to_vis) %>%
+  group_by(crab_year) %>%
+  summarise(season_start_day = min(westcoastdate_notime),
+            season_end_day = max(westcoastdate_notime),
+            season_length = season_end_day - season_start_day,
+            season_length_numeric = as.numeric(season_length, unit = 'days'),
+            n_fish_tickets = n_distinct(Rec_ID),
+            n_fish_tickets_per_season_day = n_fish_tickets / season_length_numeric)
+# see table
+n_fish_tickets_per_day_by_crab_year
+
+# plot separately over time
+plot_n_fish_tickets <- ggplot(n_fish_tickets_per_day_by_crab_year, aes(x = crab_year, y = n_fish_tickets, group = 1)) +
+    geom_point() + geom_line() + ylim(0, max(n_fish_tickets_per_day_by_crab_year$n_fish_tickets))
+plot_season_length <- ggplot(n_fish_tickets_per_day_by_crab_year, aes(x = crab_year, y = season_length, group = 1)) +
+    geom_point() + geom_line() + ylim(0, max(n_fish_tickets_per_day_by_crab_year$season_length))
+plot_n_fish_tickets_per_season_day <- ggplot(n_fish_tickets_per_day_by_crab_year, aes(x = crab_year, y = n_fish_tickets_per_season_day, group = 1)) +
+    geom_point() + geom_line() + ylim(0, max(n_fish_tickets_per_day_by_crab_year$n_fish_tickets_per_season_day))
+# give up and look at them individually...
+plot_n_fish_tickets
+plot_season_length
+plot_n_fish_tickets_per_season_day
+
+# TODO need to add month next
+# if so, then look for month-wise correction in post-April 2020 period to apply to pings
+```
+
