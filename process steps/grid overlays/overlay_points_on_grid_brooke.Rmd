@@ -125,6 +125,10 @@ max_depth <- -150  # filter for 0-150 M depth
 max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
 min_speed <- 0 # units = m/s
 
+# set fishing seasons to include
+crab_years_to_vis = c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019",
+                      "2019_2020", "2020_2021", "2021_2022", "2022_2023")
+
 # filter data, add year/season columns, and select columns for analysis
 dcrb_vms_tix_analysis <- vms_all_grd_match %>%
   filter(agency_code == state_agency_code) %>%
@@ -142,6 +146,7 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
       month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
     )
   ) %>%
+  filter(crab_year %in% crab_years_to_vis) %>%
   dplyr::select(
       GRID5KM_ID, # grid cell ID
       Rec_ID, # fish ticket ID
