@@ -297,7 +297,6 @@ For baseline periods, each record represents one grid cell for one month, across
 For implementation period, each record represents one grid cell for one month in one year. 
 
 ```{r create summaries}
-# TODO add adjusted and normalized adjusted pings to output RDS
 
 # set baseline and implementation years
 baseline_2014_2019_crab_years <- c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019")
@@ -315,6 +314,8 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2014_2019_crab_years),
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
+    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2014_2019_crab_years),
+    avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2014_2019_crab_years),
     # take minimum unique DCRB vessels across years
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
@@ -324,6 +325,8 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
 names(baseline_2014_2019)
 summary(baseline_2014_2019$avg_DCRB_VMS_pings)
 summary(baseline_2014_2019$avg_normalized_DCRB_VMS_pings)
+summary(baseline_2014_2019$avg_DCRB_VMS_pings_adjusted)
+summary(baseline_2014_2019$avg_normalized_adjusted_DCRB_VMS_pings)
 sort(unique(baseline_2014_2019$month_as_numeric))
 # write output
 write_rds(baseline_2014_2019, here::here('Confidential', 'processed', 'summaries', 'baseline_2014_2019.rds'))
@@ -340,6 +343,8 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2017_2019_crab_years),
+    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2017_2019_crab_years),
+    avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     # take minimum unique DCRB vessels across years
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
     .groups = 'drop'
@@ -349,6 +354,8 @@ names(baseline_2017_2019)
 sort(unique(baseline_2017_2019$month_as_numeric))
 summary(baseline_2017_2019$avg_DCRB_VMS_pings)
 summary(baseline_2017_2019$avg_normalized_DCRB_VMS_pings)
+summary(baseline_2017_2019$avg_DCRB_VMS_pings_adjusted)
+summary(baseline_2017_2019$avg_normalized_adjusted_DCRB_VMS_pings)
 # write output
 write_rds(baseline_2017_2019, here::here('Confidential', 'processed', 'summaries', 'baseline_2017_2019.rds'))
 
@@ -360,6 +367,8 @@ names(implementation_2019_2023)
 sort(unique(implementation_2019_2023$month_as_numeric))
 summary(implementation_2019_2023$DCRB_VMS_pings)
 summary(implementation_2019_2023$normalized_DCRB_VMS_pings)
+summary(implementation_2019_2023$DCRB_VMS_pings_adjusted)
+summary(implementation_2019_2023$normalized_adjusted_DCRB_VMS_pings)
 # write output
 write_rds(implementation_2019_2023, here::here('Confidential', 'processed', 'summaries', 'implementation_2019_2023.rds'))
 ```
@@ -370,8 +379,6 @@ For a common sense check, see how the baseline periods and implementation period
 
 ```{r visualize on map}
 
-# TODO add adjusted and normalized adjusted pings to output maps
-
 # based on Owen's compare_hw_bh.R
 
 # West coast, using the rnaturalearth package (for a background map)
@@ -380,7 +387,9 @@ coaststates <- ne_states(country='United States of America',returnclass = 'sf') 
   # spatially tranform to the same coordinate ref system as the 5k grid
   st_transform(st_crs(grd))
 
-# visualize all years
+# TODO write a function to visualize maps, with baseline or yearly data, with adjusted or not pings
+
+# visualize all years (non-adjusted ping rate)
 # join summary back to geometry by GRID5KM_ID
 dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
   left_join(grd, by = join_by(GRID5KM_ID)) %>%
@@ -400,6 +409,27 @@ map_log_pings_dcrb_year_month_5km_df <- ggplot() +
   labs(fill="log10(Pings) per 5x5 cell") +
   theme_minimal()
 map_log_pings_dcrb_year_month_5km_df
+
+# visualize all years (adjusted ping rate)
+# join summary back to geometry by GRID5KM_ID
+dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
+  left_join(grd, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+# set bounding box 
+bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
+# plot log of avg. pings on a map
+map_log_pings_dcrb_year_month_5km_df_adjusted <- ggplot() +
+  # background map
+  geom_sf(data = coaststates, fill = 'gray80') +
+  # 5KM grid with pings. Scale fill color by number of pings
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted)), color = NA) +
+  facet_grid(. ~ year) +
+  scale_fill_viridis() +
+  # set manual bounding box
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Adjusted Pings) per 5x5 cell") +
+  theme_minimal()
+map_log_pings_dcrb_year_month_5km_df_adjusted
 
 # visualize 2014-2018 baseline
 # join summary back to geometry by GRID5KM_ID
