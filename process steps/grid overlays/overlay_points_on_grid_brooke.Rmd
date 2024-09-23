@@ -152,6 +152,7 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
       Rec_ID, # fish ticket ID
       VMS_RECNO, # VMS ping ID
       drvid, # vessel ID
+      westcoastdate,
       westcoastdate_notime,
       year,
       crab_year, 
@@ -210,6 +211,12 @@ ping_rate_adjustment_factor <- pre_post_ping_rate_increase %>%
 VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
   group_by(Rec_ID) %>%
   summarise(trip_VMSrecords = n(),
+            trip_start = min(westcoastdate),
+            trip_end = max(westcoastdate),
+            trip_duration_hours = if_else(as.numeric(trip_end - trip_start, units = 'hours') > 0,
+                                          as.numeric(trip_end - trip_start, units = 'hours'),
+                                          1),
+            avg_trip_ping_rate = trip_VMSrecords / trip_duration_hours,
             .groups = 'drop')
 
 # join total records per trip to VMS and fish ticket data; adjust ping rate; calculate vessels, lbs, and $ per VMS ping
@@ -223,6 +230,7 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
     ),
     trip_VMSrecords_adjusted = trip_VMSrecords / ping_rate_adjustment_factor, # adjusted trip-level pings
     VMSrecords_adjusted = 1 / ping_rate_adjustment_factor, # adjusted ping-level pings (e.g. for 1 ping with ping_rate_adjustment_factor = 2, this value is 0.5; count it as a half of a ping)
+    VMSrecords_adjusted_trip = 1 / avg_trip_ping_rate, # adjusted record-level pings (e.g. for 1 ping from trip with 4 pings per hour, this value is 0.25)
     DCRB_lbs_per_VMSlocation = DCRB_lbs / trip_VMSrecords,
     DCRB_rev_per_VMSlocation = DCRB_revenue / trip_VMSrecords,
     DCRB_Vessels_per_VMSlocation = 1 / trip_VMSrecords
@@ -236,8 +244,9 @@ dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
     DCRB_rev = sum(DCRB_rev_per_VMSlocation),
-    DCRB_VMS_pings = n(), 
+    DCRB_VMS_pings = n(),
     DCRB_VMS_pings_adjusted = sum(VMSrecords_adjusted),
+    DCRB_VMS_pings_adjusted_trip = sum(VMSrecords_adjusted_trip),
     DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
     Unique_DCRB_Vessels = length(unique(as.character(drvid)))
   ) %>%
@@ -258,6 +267,14 @@ dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
       normalized_adjusted_DCRB_VMS_pings == 0, 
       0.5 * min(normalized_adjusted_DCRB_VMS_pings[normalized_adjusted_DCRB_VMS_pings != min(normalized_adjusted_DCRB_VMS_pings)]),
       normalized_adjusted_DCRB_VMS_pings
+    ),
+    # rescale adjusted trip pings to 0-1
+    normalized_adjusted_trip_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings_adjusted_trip, center = min(DCRB_VMS_pings_adjusted_trip), scale = diff(range(DCRB_VMS_pings_adjusted_trip)))),
+    # above rescaling converts mininmum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
+    normalized_adjusted_trip_DCRB_VMS_pings = ifelse(
+      normalized_adjusted_trip_DCRB_VMS_pings == 0, 
+      0.5 * min(normalized_adjusted_trip_DCRB_VMS_pings[normalized_adjusted_trip_DCRB_VMS_pings != min(normalized_adjusted_trip_DCRB_VMS_pings)]),
+      normalized_adjusted_trip_DCRB_VMS_pings
     )
   )
 
@@ -275,6 +292,11 @@ dcrb_year_month_5km_df %>%
   ggplot(aes(DCRB_VMS_pings_adjusted)) + geom_histogram(binwidth=5)
 print(range(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted))
 
+# visualize distribution of adjusted trip VMS pings
+dcrb_year_month_5km_df %>%
+  ggplot(aes(DCRB_VMS_pings_adjusted_trip)) + geom_histogram(binwidth=5)
+print(range(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted_trip))
+
 # visualize distribution of normalized VMS pings
 dcrb_year_month_5km_df %>%
   ggplot(aes(normalized_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
@@ -284,6 +306,11 @@ print(range(dcrb_year_month_5km_df$normalized_DCRB_VMS_pings))
 dcrb_year_month_5km_df %>%
   ggplot(aes(normalized_adjusted_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
 print(range(dcrb_year_month_5km_df$normalized_adjusted_DCRB_VMS_pings))
+
+# visualize distribution of normalized adjusted trip VMS pings
+dcrb_year_month_5km_df %>%
+  ggplot(aes(normalized_adjusted_trip_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
+print(range(dcrb_year_month_5km_df$normalized_adjusted_trip_DCRB_VMS_pings))
 ```
 
 ### Create summaries for Heather
@@ -316,6 +343,8 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
     avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2014_2019_crab_years),
     avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
+    avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2014_2019_crab_years),
+    avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2014_2019_crab_years),
     # take minimum unique DCRB vessels across years
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
@@ -327,6 +356,8 @@ summary(baseline_2014_2019$avg_DCRB_VMS_pings)
 summary(baseline_2014_2019$avg_normalized_DCRB_VMS_pings)
 summary(baseline_2014_2019$avg_DCRB_VMS_pings_adjusted)
 summary(baseline_2014_2019$avg_normalized_adjusted_DCRB_VMS_pings)
+summary(baseline_2014_2019$avg_DCRB_VMS_pings_adjusted_trip)
+summary(baseline_2014_2019$avg_normalized_adjusted_trip_DCRB_VMS_pings)
 sort(unique(baseline_2014_2019$month_as_numeric))
 # write output
 write_rds(baseline_2014_2019, here::here('Confidential', 'processed', 'summaries', 'baseline_2014_2019.rds'))
@@ -345,6 +376,8 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2017_2019_crab_years),
     avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2017_2019_crab_years),
     avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
+    avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2017_2019_crab_years),
+    avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     # take minimum unique DCRB vessels across years
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
     .groups = 'drop'
@@ -354,8 +387,8 @@ names(baseline_2017_2019)
 sort(unique(baseline_2017_2019$month_as_numeric))
 summary(baseline_2017_2019$avg_DCRB_VMS_pings)
 summary(baseline_2017_2019$avg_normalized_DCRB_VMS_pings)
-summary(baseline_2017_2019$avg_DCRB_VMS_pings_adjusted)
-summary(baseline_2017_2019$avg_normalized_adjusted_DCRB_VMS_pings)
+summary(baseline_2017_2019$avg_DCRB_VMS_pings_adjusted_trip)
+summary(baseline_2017_2019$avg_normalized_adjusted_trip_DCRB_VMS_pings)
 # write output
 write_rds(baseline_2017_2019, here::here('Confidential', 'processed', 'summaries', 'baseline_2017_2019.rds'))
 
@@ -369,6 +402,8 @@ summary(implementation_2019_2023$DCRB_VMS_pings)
 summary(implementation_2019_2023$normalized_DCRB_VMS_pings)
 summary(implementation_2019_2023$DCRB_VMS_pings_adjusted)
 summary(implementation_2019_2023$normalized_adjusted_DCRB_VMS_pings)
+summary(implementation_2019_2023$DCRB_VMS_pings_adjusted_trip)
+summary(implementation_2019_2023$normalized_adjusted_trip_DCRB_VMS_pings)
 # write output
 write_rds(implementation_2019_2023, here::here('Confidential', 'processed', 'summaries', 'implementation_2019_2023.rds'))
 ```
@@ -410,7 +445,7 @@ map_log_pings_dcrb_year_month_5km_df <- ggplot() +
   theme_minimal()
 map_log_pings_dcrb_year_month_5km_df
 
-# visualize all years (adjusted ping rate)
+# visualize all years (adjusted ping rate with monthly adjustment)
 # join summary back to geometry by GRID5KM_ID
 dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
   left_join(grd, by = join_by(GRID5KM_ID)) %>%
@@ -428,6 +463,27 @@ map_log_pings_dcrb_year_month_5km_df_adjusted <- ggplot() +
   # set manual bounding box
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
   labs(fill="log10(Adjusted Pings) per 5x5 cell") +
+  theme_minimal()
+map_log_pings_dcrb_year_month_5km_df_adjusted
+
+# visualize all years (adjusted ping rate with trip-wise adjustment)
+# join summary back to geometry by GRID5KM_ID
+dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
+  left_join(grd, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+# set bounding box 
+bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
+# plot log of avg. pings on a map
+map_log_pings_dcrb_year_month_5km_df_adjusted <- ggplot() +
+  # background map
+  geom_sf(data = coaststates, fill = 'gray80') +
+  # 5KM grid with pings. Scale fill color by number of pings
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted_trip)), color = NA) +
+  facet_grid(. ~ year) +
+  scale_fill_viridis() +
+  # set manual bounding box
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Adjusted Tripwise Pings) per 5x5 cell") +
   theme_minimal()
 map_log_pings_dcrb_year_month_5km_df_adjusted
 
