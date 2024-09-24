@@ -834,3 +834,29 @@ ping_rate_adjustment_factor
 
 ```
 
+```{r plot ping interval}
+# each point = 1 VMS ping
+ping_interval_df <- dcrb_vms_tix_analysis %>%
+  group_by(Rec_ID) %>%
+  arrange(westcoastdate) %>%
+  mutate(
+    next_time = lag(westcoastdate, 1),
+    ping_interval_min = as.numeric(difftime(westcoastdate, next_time, units = 'mins')),
+    ping_interval_hours = as.numeric(difftime(westcoastdate, next_time, units = 'hours'))
+  )
+
+ping_interval_df %>%
+  group_by(year) %>%
+  summarise(min(ping_interval_hours, na.rm=TRUE),
+            median(ping_interval_hours, na.rm=TRUE),
+            mean(ping_interval_hours, na.rm=TRUE),
+            max(ping_interval_hours, na.rm=TRUE))
+
+ping_interval_df %>%
+  ggplot(aes(x = as.factor(year), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2))
+```
+
+```{r plot avg. ping rate per ticket}
+
+```
+
