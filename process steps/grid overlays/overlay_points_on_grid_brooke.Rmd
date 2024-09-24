@@ -95,10 +95,10 @@ The join took `r round(x[3]/60,2)` minutes.
 # save without geometry while still including grid cell ID
 vms_all_grd_match %>% 
   st_set_geometry(NULL) %>% 
-  write_rds(here('Confidential', 'data', 'interim', 'vms_all_w_grd_5km.rds'))
+  write_rds(here('Confidential', 'processed', 'interim', 'vms_all_w_grd_5km.rds'))
 
 # load version without geometry with grid cell ID written above
-vms_all_grd_match <- read_rds(here('Confidential', 'data', 'interim', 'vms_all_w_grd_5km.rds'))
+vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'interim', 'vms_all_w_grd_5km.rds'))
 names(vms_all_grd_match)
 ```
 
@@ -279,8 +279,8 @@ dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
   )
 
 # save interim outputs
-write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'data', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
-write_rds(dcrb_year_month_5km_df, here::here('Confidential', 'data', 'interim', 'dcrb_year_month_5km_df.rds'))
+write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'processed', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
+write_rds(dcrb_year_month_5km_df, here::here('Confidential', 'processed', 'interim', 'dcrb_year_month_5km_df.rds'))
 
 # visualize distribution of VMS pings
 dcrb_year_month_5km_df %>%
@@ -444,6 +444,9 @@ map_log_pings_dcrb_year_month_5km_df <- ggplot() +
   labs(fill="log10(Pings) per 5x5 cell") +
   theme_minimal()
 map_log_pings_dcrb_year_month_5km_df
+ggsave(filename = here::here("Confidential", "figures", "map_unadjusted_pings.png"), 
+       plot = map_log_pings_dcrb_year_month_5km_df,
+       width = 10, height = 5)
 
 # visualize all years (adjusted ping rate with monthly adjustment)
 # join summary back to geometry by GRID5KM_ID
@@ -486,6 +489,9 @@ map_log_pings_dcrb_year_month_5km_df_adjusted <- ggplot() +
   labs(fill="log10(Adjusted Tripwise Pings) per 5x5 cell") +
   theme_minimal()
 map_log_pings_dcrb_year_month_5km_df_adjusted
+ggsave(filename = here("Confidential", "figures", "map_trip_adjusted_pings.png"), 
+       plot = map_log_pings_dcrb_year_month_5km_df_adjusted,
+       width = 10, height = 5)
 
 # visualize 2014-2018 baseline
 # join summary back to geometry by GRID5KM_ID
