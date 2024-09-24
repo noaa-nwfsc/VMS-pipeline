@@ -834,7 +834,7 @@ ping_rate_adjustment_factor
 
 ```
 
-```{r plot ping interval}
+```{r quick plot - ping interval}
 # each point = 1 VMS ping
 ping_interval_df <- dcrb_vms_tix_analysis %>%
   group_by(Rec_ID) %>%
@@ -846,17 +846,60 @@ ping_interval_df <- dcrb_vms_tix_analysis %>%
   )
 
 ping_interval_df %>%
-  group_by(year) %>%
-  summarise(min(ping_interval_hours, na.rm=TRUE),
-            median(ping_interval_hours, na.rm=TRUE),
-            mean(ping_interval_hours, na.rm=TRUE),
-            max(ping_interval_hours, na.rm=TRUE))
+  group_by(crab_year) %>%
+  summarise(min = min(ping_interval_hours, na.rm=TRUE),
+            median = median(ping_interval_hours, na.rm=TRUE),
+            mean = mean(ping_interval_hours, na.rm=TRUE),
+            max = max(ping_interval_hours, na.rm=TRUE))
 
+# look by year
 ping_interval_df %>%
-  ggplot(aes(x = as.factor(year), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2))
+  ggplot(aes(x = as.factor(crab_year), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2))
+
+# look by month (expect shift in Sept. 2020 based on what Blake saw in a quick check in the raw VMS data)
+ping_interval_df %>%
+  filter(crab_year %in% c("2019_2020", "2020_2021")) %>%
+  ggplot(aes(x = as.factor(year_month), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# look by day
+ping_interval_df %>%
+  filter(year_month %in% c("2020_12", "2021_01")) %>%
+  ggplot(aes(x = as.factor(westcoastdate_notime), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# I'm seeing the shift in ping rates between Dec. 30, 2020 and Jan. 7, 2021
 ```
 
-```{r plot avg. ping rate per ticket}
+```{r quick plot - pings / hour by trip and vessel hours}
+# avg. ping rate summary
+VMSrecords_per_trip %>%
+  group_by(year(trip_start)) %>%
+  summarise(min = min(avg_trip_ping_rate, na.rm=TRUE),
+            median = median(avg_trip_ping_rate, na.rm=TRUE),
+            mean = mean(avg_trip_ping_rate, na.rm=TRUE),
+            max = max(avg_trip_ping_rate, na.rm=TRUE))
+
+# avg. ping rate  boxplot
+VMSrecords_per_trip %>%
+  ggplot(aes(x=as.factor(year(trip_start)), y=avg_trip_ping_rate)) + geom_boxplot() + ylim(c(0,10))
+
+# consistency in hours fishing across vessels from year to year?
+VMSrecords_per_trip %>%
+  group_by(trip_year = year(trip_start)) %>%
+  summarise(total_vessel_hours = sum(trip_duration_hours))
+
+# avg. ping rate boxplot for before and after ping rate increase
+ping_rate_increase_date <- ymd(20210101) # set to Jan. 1, 2021 based on plots above
+VMSrecords_per_trip %>%
+  mutate(ping_rate_period = if_else(
+    trip_start >= ping_rate_increase_date, 
+    "post ping rate increase", 
+    "pre ping rate increase")
+  ) %>%
+  ggplot(aes(x = avg_trip_ping_rate, fill = ping_rate_period)) + 
+  geom_histogram() + 
+  xlim(c(0, 5)) + # limit to interesting data, ignoring a long tail here
+  facet_grid(ping_rate_period ~ ., scales = "free_y")
 
 ```
-
