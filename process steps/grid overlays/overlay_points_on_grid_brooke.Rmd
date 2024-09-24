@@ -562,7 +562,7 @@ At some point, the VMS ping rate increased from ~1/hour to ~1/15 minutes. As a r
 I'm visualizing this in two ways. 
 
 1. Visualize time series of avg. pings per ticket tickets over time. I'm looking for an increase at a particular point in time, after which I will apply a correction for the increased ping rate. I also visualized number of tickets, just to explore for my own learning.
-2. Visualize distribution of total and normalized pings per grid cell over time. Again, I'm lookign for an increase at a particular point in time.
+2. Visualize distribution of total and normalized pings per grid cell over time. Again, I'm looking for an increase at a particular point in time.
 
 ```{r check when ping rate increased}
 
@@ -817,7 +817,7 @@ VMSrecords_per_trip %>%
   group_by(trip_year = year(trip_start)) %>%
   summarise(total_vessel_hours = sum(trip_duration_hours))
 
-# avg. ping rate boxplot for before and after ping rate increase
+# avg. ping rate histogram for before and after ping rate increase
 ping_rate_increase_date <- ymd(20210101) # set to Jan. 1, 2021 based on plots above
 VMSrecords_per_trip %>%
   mutate(ping_rate_period = if_else(
@@ -830,4 +830,21 @@ VMSrecords_per_trip %>%
   xlim(c(0, 5)) + # limit to interesting data, ignoring a long tail here
   facet_grid(ping_rate_period ~ ., scales = "free_y")
 
+# avg. adjusted ping rate histogram for before and after ping rate increase
+ping_rate_increase_date <- ymd(20210101) # set to Jan. 1, 2021 based on plots above
+dcrb_vms_tix_analysis_TripInfo %>% 
+  select(Rec_ID, trip_VMSrecords, trip_start, trip_end, trip_duration_hours,
+         avg_trip_ping_rate, VMSrecords_adjusted_trip) %>%
+  distinct() %>%
+  mutate(ping_rate_period = if_else(
+    trip_start >= ping_rate_increase_date, 
+      "post ping rate increase", 
+      "pre ping rate increase"
+    ),
+    adjusted_ping_rate = VMSrecords_adjusted_trip * trip_VMSrecords / trip_duration_hours
+  ) %>%
+  ggplot(aes(x = adjusted_ping_rate, fill = ping_rate_period)) + 
+  geom_histogram() + 
+  facet_grid(ping_rate_period ~ ., scales = "free_y")
+# the most boring histogram, every value is 1
 ```
