@@ -419,140 +419,72 @@ For a common sense check, see how the baseline periods and implementation period
 # West coast, using the rnaturalearth package (for a background map)
 coaststates <- ne_states(country='United States of America',returnclass = 'sf') %>% 
   filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
-  # spatially tranform to the same coordinate ref system as the 5k grid
+  # spatially transform to the same coordinate ref system as the 5k grid
   st_transform(st_crs(grd))
 
-# TODO write a function to visualize maps, with baseline or yearly data, with adjusted or not pings
-
-# visualize all years (non-adjusted ping rate)
 # join summary back to geometry by GRID5KM_ID
 dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
   left_join(grd, by = join_by(GRID5KM_ID)) %>%
   st_as_sf()
+
 # set bounding box 
 bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
-# plot log of avg. pings on a map
-map_log_pings_dcrb_year_month_5km_df <- ggplot() +
-  # background map
+
+# visualize VMS pings (no adjustment, no normalization) across all crab years
+map_unadjusted_pings <- ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
-  # 5KM grid with pings. Scale fill color by number of pings
   geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA) +
-  facet_grid(. ~ year) +
-  scale_fill_viridis() +
-  # set manual bounding box
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Pings) per 5x5 cell") +
-  theme_minimal()
-map_log_pings_dcrb_year_month_5km_df
-ggsave(filename = here::here("Confidential", "figures", "map_unadjusted_pings.png"), 
-       plot = map_log_pings_dcrb_year_month_5km_df,
-       width = 10, height = 5)
-
-# visualize all years (adjusted ping rate with monthly adjustment)
-# join summary back to geometry by GRID5KM_ID
-dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
-  left_join(grd, by = join_by(GRID5KM_ID)) %>%
-  st_as_sf()
-# set bounding box 
-bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
-# plot log of avg. pings on a map
-map_log_pings_dcrb_year_month_5km_df_adjusted <- ggplot() +
-  # background map
-  geom_sf(data = coaststates, fill = 'gray80') +
-  # 5KM grid with pings. Scale fill color by number of pings
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted)), color = NA) +
-  facet_grid(. ~ year) +
-  scale_fill_viridis() +
-  # set manual bounding box
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Adjusted Pings) per 5x5 cell") +
-  theme_minimal()
-map_log_pings_dcrb_year_month_5km_df_adjusted
-
-# visualize all years (adjusted ping rate with trip-wise adjustment)
-# join summary back to geometry by GRID5KM_ID
-dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
-  left_join(grd, by = join_by(GRID5KM_ID)) %>%
-  st_as_sf()
-# set bounding box 
-bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
-# plot log of avg. pings on a map
-map_log_pings_dcrb_year_month_5km_df_adjusted <- ggplot() +
-  # background map
-  geom_sf(data = coaststates, fill = 'gray80') +
-  # 5KM grid with pings. Scale fill color by number of pings
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted_trip)), color = NA) +
-  facet_grid(. ~ year) +
-  scale_fill_viridis() +
-  # set manual bounding box
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Adjusted Tripwise Pings) per 5x5 cell") +
-  theme_minimal()
-map_log_pings_dcrb_year_month_5km_df_adjusted
-ggsave(filename = here("Confidential", "figures", "map_trip_adjusted_pings.png"), 
-       plot = map_log_pings_dcrb_year_month_5km_df_adjusted,
-       width = 10, height = 5)
-
-# visualize 2014-2018 baseline
-# join summary back to geometry by GRID5KM_ID
-baseline_2014_2019_with_grid <- baseline_2014_2019 %>% 
-  left_join(grd, by = join_by(GRID5KM_ID)) %>%
-  st_as_sf()
-# set bounding box 
-bbox <- st_bbox(baseline_2014_2019_with_grid)
-# plot log of avg. pings on a map
-map_log_pings_baseline_2014_2019 <- ggplot() +
-  # background map
-  geom_sf(data = coaststates, fill = 'gray80') +
-  # 5KM grid with pings. Scale fill color by number of pings
-  geom_sf(data = baseline_2014_2019_with_grid, aes(fill = log10(avg_DCRB_VMS_pings)), color = NA) +
-  scale_fill_viridis() +
-  # set manual bounding box
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Avg. Pings) per 5x5 cell") +
-  theme_minimal()
-map_log_pings_baseline_2014_2019
-
-# visualize 2017-2018 baseline
-# join summary back to geometry by GRID5KM_ID
-baseline_2017_2019_with_grid <- baseline_2017_2019 %>% 
-  left_join(grd, by = join_by(GRID5KM_ID)) %>%
-  st_as_sf()
-# set bounding box
-bbox <- st_bbox(baseline_2017_2019_with_grid)
-# plot log of avg. pings on a map
-map_log_pings_baseline_2017_2019 <- ggplot() +
-  # background map
-  geom_sf(data = coaststates, fill = 'gray80') +
-  # 5KM grid with pings. Scale fill color by number of pings
-  geom_sf(data = baseline_2017_2019_with_grid, aes(fill = log10(avg_DCRB_VMS_pings)), color = NA) +
-  scale_fill_viridis() +
-  # set manual bounding box
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Avg. Pings) per 5x5 cell") +
-  theme_minimal()
-map_log_pings_baseline_2017_2019
-
-# visualize 2019-2023 implementation period
-# join summary back to geometry by GRID5KM_ID
-implementation_2019_2023_with_grid <- implementation_2019_2023 %>% 
-  left_join(grd, by = join_by(GRID5KM_ID)) %>%
-  st_as_sf()
-# set bounding box
-bbox <- st_bbox(implementation_2019_2023_with_grid)
-# plot log of avg. pings on a map
-map_log_pings_implementation_2019_2023 <- ggplot() +
-  # background map
-  geom_sf(data = coaststates, fill = 'gray80') +
-  # 5KM grid with pings. Scale fill color by number of pings
-  geom_sf(data = implementation_2019_2023_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA) +
   facet_grid(. ~ crab_year) +
   scale_fill_viridis() +
-  # set manual bounding box
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
   labs(fill="log10(Pings) per 5x5 cell") +
-  theme_minimal()
-map_log_pings_implementation_2019_2023
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position="bottom")
+map_unadjusted_pings
+ggsave(filename = here::here("Confidential", "figures", "map_unadjusted_pings.png"),
+       width = 10, height = 5)
+
+# visualize VMS pings (tripwise adjustment, no normalization) across all crab years
+map_adjusted_pings <- ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted_trip)), color = NA) +
+  facet_grid(. ~ crab_year) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Adjusted Pings) per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position="bottom")
+map_adjusted_pings
+ggsave(filename = here::here("Confidential", "figures", "map_adjusted_pings.png"),
+       width = 10, height = 5)
+
+# visualize VMS pings (no adjustment, with normalization) across all crab years
+map_unadjusted_normalized_pings <- ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(normalized_DCRB_VMS_pings)), color = NA) +
+  facet_grid(. ~ crab_year) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Normalized Pings) per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position="bottom")
+map_unadjusted_normalized_pings
+ggsave(filename = here::here("Confidential", "figures", "map_unadjusted_normalized_pings.png"),
+       width = 10, height = 5)
+
+# visualize VMS pings (tripwise adjustment, with normalization) across all crab years
+map_adjusted_normalized_pings <- ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(normalized_adjusted_trip_DCRB_VMS_pings)), color = NA) +
+  facet_grid(. ~ crab_year) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10(Normalized Adjusted Pings) per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position="bottom")
+map_adjusted_normalized_pings
+ggsave(filename = here::here("Confidential", "figures", "map_adjusted_normalized_pings.png"),
+       width = 10, height = 5)
 ```
 
 ### Visualize ping rate
