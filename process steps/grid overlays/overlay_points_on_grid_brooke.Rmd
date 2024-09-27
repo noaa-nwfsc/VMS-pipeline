@@ -850,18 +850,36 @@ dcrb_vms_rec_ids <- dcrb_vms_tix_analysis %>%
 dcrb_vms_representation_df <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = "Rec_ID", keep = TRUE) %>%
   mutate(represented_in_vms = !is.na(Rec_ID.y)) %>% # if ticket ID is NA in dcrb_vms_rec_ids, then the landings are not represented by VMS data
   select(-Rec_ID.y) %>%
-  rename(Rec_ID = Rec_ID.x)
-
-# count total 
-dcrb_vms_representation_df %>% 
-  group_by(month_as_date, represented_in_vms) %>%
+  rename(Rec_ID = Rec_ID.x) %>% 
+  group_by(month_as_date) %>%
+  mutate(total_unique_vessels = n_distinct(drvid),
+         total_landings = sum(DCRB_lbs),
+         total_revenue = sum(DCRB_revenue)) %>%
+  group_by(month_as_date, represented_in_vms, total_unique_vessels, total_landings, total_revenue) %>%
   summarise(unique_vessels = n_distinct(drvid),
-            total_landings = sum(DCRB_lbs),
-            total_revenue = sum(DCRB_revenue)) %>% # TODO need to update for inflation?
-  ggplot(aes(x = month_as_date, y = unique_vessels, color = represented_in_vms, fill = represented_in_vms)) +
-  geom_col() + facet_grid(represented_in_vms ~ .)
-# TODO reshape and facet by variable
-# TODO calculate %'s
+            landings = sum(DCRB_lbs),
+            revenue = sum(DCRB_revenue)) %>%
+  mutate(percent_unique_vessels = unique_vessels / total_unique_vessels * 100,
+         percent_landings = landings / total_landings * 100,
+         percent_revenue = revenue / total_revenue * 100)
+
+# visualize count represented vs. not represented for vessels, landings, and revenue
+dcrb_vms_representation_df %>% 
+  pivot_longer(cols = unique_vessels:revenue, names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = month_as_date, y = value, color = represented_in_vms, fill = represented_in_vms)) +
+  geom_col(position = "dodge") + 
+  facet_grid(variable ~ ., scales = "free_y") +
+  expand_limits(y = 0)
+
+# visualize % represented for vessels, landing, and revenue
+dcrb_vms_representation_df %>%
+  filter(represented_in_vms == TRUE) %>%
+  select(percent_unique_vessels:percent_revenue) %>%
+  pivot_longer(cols = percent_unique_vessels:percent_revenue, names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = month_as_date, y = value)) +
+  geom_col() + 
+  facet_grid(variable ~ ., scales = "free_y") +
+  expand_limits(y = 0)
 ```
 
 
