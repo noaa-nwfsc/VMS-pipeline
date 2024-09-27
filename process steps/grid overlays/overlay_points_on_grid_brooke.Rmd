@@ -152,6 +152,7 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
       Rec_ID, # fish ticket ID
       VMS_RECNO, # VMS ping ID
       drvid, # vessel ID
+      FINAL_LENGTH,
       westcoastdate,
       westcoastdate_notime,
       year,
@@ -780,3 +781,87 @@ dcrb_vms_tix_analysis_TripInfo %>%
   facet_grid(ping_rate_period ~ ., scales = "free_y")
 # the most boring histogram, every value is 1
 ```
+
+```{r check vessel, revenue, and landings representation by VMS data}
+# clear most of environment of everything except filtered VMS records and filters to apply to tickets data
+keep_variables <- c(dcrb_vms_tix_analysis,
+                    state_agency_code, target_rev, target_lbs, crab_years_to_vis)
+
+rm(list = setdiff(ls(), keep_variables))
+
+# load all fish tickets
+fish_ticket_df <- read_rds(here('Confidential', 'processed', 'fish tickets', '2014fishtix_vlengths_withFTID.rds')) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2015fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2016fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2017fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2018fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2019fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2020fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2021fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2022fishtix_vlengths_withFTID.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'fish tickets', '2023fishtix_vlengths_withFTID.rds')))
+
+# apply same filters as dcrb_vms_tix_analysis, except for depth and speed which are from VMS
+dcrb_ticket_df <- fish_ticket_df %>%
+  filter(agency_code == state_agency_code) %>%
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  mutate(
+    year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date),6,7)),
+    month_as_numeric = month(date),
+    month_as_date = round_date(date, unit='month'),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    crab_year = ifelse(
+      month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
+    )
+  ) %>%
+  filter(crab_year %in% crab_years_to_vis) %>%
+  dplyr::select(
+      Rec_ID, # fish ticket ID
+      drvid, # vessel ID
+      FINAL_LENGTH,
+      date,
+      year,
+      crab_year,
+      year_month,
+      month,
+      month_as_numeric,
+      month_as_date,
+      season,
+      pacfin_port_code,
+      port_group_code,
+      TARGET_lbs, # target species by weight (filtered to "DCRB")
+      TARGET_rev, # target species by revenue (filtered to "DCRB") # TODO - check do I need to adjust revenue?
+      DCRB_lbs, # dungeness crab catch weight
+      DCRB_revenue # dungeness crab catch revenue
+    )
+
+# TODO need to update for inflation?
+# code snippet from 04_match_vms_fishtix.Rmd, commented out there as well?
+# adjust for inflation based on reference year using Fred deflators (added 8May2024)
+# left_join(gdp_defl, by = YEAR) %>% #left_join(gdp_defl, by = c("year in fishtix_vms name" = "YEAR")
+#   mutate(AFI_REVENUE = EXVESSEL_REVENUE / DEFL)
+
+# select distinct ticket IDs from filtered VMS dataframe
+dcrb_vms_rec_ids <- dcrb_vms_tix_analysis %>%
+  select(Rec_ID) %>%
+  distinct()
+
+# add column to ticket dataframe for whether that ticket was represented in filtered VMS dataframe
+dcrb_vms_representation_df <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = "Rec_ID", keep = TRUE) %>%
+  mutate(represented_in_vms = !is.na(Rec_ID.y)) %>% # if ticket ID is NA in dcrb_vms_rec_ids, then the landings are not represented by VMS data
+  select(-Rec_ID.y) %>%
+  rename(Rec_ID = Rec_ID.x)
+
+# count total 
+dcrb_vms_representation_df %>% 
+  group_by(month_as_date, represented_in_vms) %>%
+  summarise(unique_vessels = n_distinct(drvid),
+            total_landings = sum(DCRB_lbs),
+            total_revenue = sum(DCRB_revenue)) %>% # TODO need to update for inflation?
+  ggplot(aes(x = month_as_date, y = unique_vessels, color = represented_in_vms, fill = represented_in_vms)) +
+  geom_col() + facet_grid(represented_in_vms ~ .)
+# TODO reshape and facet by variable
+# TODO calculate %'s
+```
+
+
