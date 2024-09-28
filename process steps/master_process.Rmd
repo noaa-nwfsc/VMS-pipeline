@@ -83,6 +83,14 @@ if(process_year == first_process_year){
 }
 ```
 
+## Interpolation
+
+Optionally, interpolate between geocoordinates for a consistent interval between VMS pings.
+
+```{r interpolate}
+interpolate_flag <- TRUE
+```
+
 # Step 1: Process Raw Fish Ticket Data
 
 ```{r step1,message=F,warning=F,child=here::here('process steps','01_process_fish_tickets.Rmd')}
@@ -133,3 +141,13 @@ x<-proc.time()-alltime
 ```
 
 **So far, this pipeline for `r process_year` VMS data has taken `r round(x[3]/60,2)` minutes to run.**
+
+# Step 6: Optional: Interpolate VMS Pings
+
+```{r step6, message=F,warning=F,child=if (interpolate_flag) here::here('process steps','optional_06_interpolate.Rmd')}
+```
+```{r}
+x<-proc.time()-alltime
+```
+
+**This pipeline for `r process_year` VMS data took `r round(x[3]/60,2)` minutes to run.**
