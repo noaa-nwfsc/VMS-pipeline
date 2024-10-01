@@ -164,29 +164,18 @@ Interpolation took taken `r round(tm[3]/60,2)` minutes to run.
 Rename columns from interpolation so we can re-join the rest of the VMS trip information. For original (non-interpolated) data, we can re-join with times and coordinates. For newly-interpolated data, we define the new time and coordinates and then join the trip-level information.
 
 ```{r}
-# original:
-# orig_vms <- interpolated_data %>%
-#   filter(sensor=="unknown") %>% 
-#   dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
-#   rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
-#   left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIME", "X_COORD", "Y_COORD"))
-
-#use this instead
 orig_vms <- interpolated_data %>%
-  filter(sensor=="unknown") %>% 
-  left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIME", "X_COORD", "Y_COORD")) %>% 
+  filter(sensor=="unknown") %>% # non-interpolated points
+  left_join(vms_move, by = c("Rec_ID", "drvid", "UTCDATETIME", "X_COORD", "Y_COORD")) %>% 
   dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
   rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2)
 
-
-
 vms_trip_info <- vms_move %>% 
-  dplyr::select(-VMS_RECNO,-UTCDATETIME,-LATITUDE,-LONGITUDE,-NGDC_M,-X_COORD,-Y_COORD,-AVG_SPEED,-AVG_COURSE,-westcoastdate,-westcoastdate_notime,-segment_dur,-avg_speed_recalc,-in_port,-recnum,-keep_remove_timelag,-longest_seg,-last_seg_longest,-is_last_seg) %>%
+  dplyr::select(-VMS_RECNO,-UTCDATETIME,-LAT,-LON,-NGDC_M,-X_COORD,-Y_COORD,-AVG_SPEED,-AVG_COURSE,-westcoastdate,-westcoastdate_notime,-segment_dur,-avg_speed_recalc,-in_port,-recnum,-keep_remove_timelag,-longest_seg,-last_seg_longest,-is_last_seg) %>%
   distinct()
 
-
 new_vms <- interpolated_data %>% 
-  filter(sensor=="interpolateTime")%>% 
+  filter(sensor=="interpolateTime")%>% # interpolated points
   dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
   rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
   left_join(vms_trip_info,by = c("Rec_ID", "drvid"))
@@ -206,7 +195,7 @@ new_vms_coords <- new_vms %>%
   st_transform(4326) %>% 
   st_coordinates() %>% 
   as_tibble() %>% 
-  set_colnames(c('LONGITUDE','LATITUDE'))
+  set_colnames(c('LON','LAT'))
 
 # add the new lat/lon into the dataset
 new_vms %<>%
@@ -222,6 +211,7 @@ new_vms %<>% mutate(VMS_RECNO = new_recnos)
 
 Recombine
 ```{r}
+# vms_regular includes original (non-interpolated) points from orig_vms, and new (interpolated) points from new_vms
 vms_regular <- bind_rows(orig_vms, new_vms)
 
 # check record numbers to make sure they're unique
@@ -237,7 +227,7 @@ vms_regular <- vms_regular %>%
   ungroup() %>% 
   group_by(Rec_ID) %>% 
   # lag latitude and longitude by 1 time step
-  mutate(laglon=lag(LONGITUDE,1,order_by=westcoastdate),laglat=lag(LATITUDE,1,order_by=westcoastdate)) %>% 
+  mutate(laglon=lag(LON,1,order_by=westcoastdate),laglat=lag(LAT,1,order_by=westcoastdate)) %>% 
   # lag time by 1 time step
   mutate(lagdate=lag(westcoastdate,1,order_by=westcoastdate)) %>% 
   # calculate duration since last ping, in seconds
@@ -245,7 +235,7 @@ vms_regular <- vms_regular %>%
   ungroup()
 
 # Calculate distance (Note: geosphere seems much faster than doing this with sf())
-segment_dists <- geosphere::distHaversine(p1=cbind(vms_regular$LONGITUDE, vms_regular$LATITUDE),
+segment_dists <- geosphere::distHaversine(p1=cbind(vms_regular$LON, vms_regular$LAT),
                                     p2=cbind(vms_regular$laglon, vms_regular$laglat))
 
 vms_regular %<>% 
@@ -275,7 +265,7 @@ Get bathymetry at VMS data points
 ```{r}
 # tm <- proc.time()
 vms_sp <- vms_regular
-coordinates(vms_sp) <- c("LONGITUDE", "LATITUDE") 
+coordinates(vms_sp) <- c("LON", "LAT") 
 proj4string(vms_sp)<-proj4string(bathy.grid) <- CRS("+init=epsg:4326") # WGS 84
 bathy.points <- over(vms_sp, bathy.grid)$vms_composite_bath
 # proc.time()-tm
