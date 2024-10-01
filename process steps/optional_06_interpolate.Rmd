@@ -105,7 +105,7 @@ vms_move <- vms_gapfiltered %>%
   ungroup() %>% 
   arrange(Rec_ID, UTCDATETIME) %>% 
   distinct(VMS_RECNO,UTCDATETIME,.keep_all = T) %>% 
-  mutate(DECLARATIO=na_if(DECLARATIO,'N/A')) %>% 
+  # mutate(DECLARATION_CODE=na_if(DECLARATION_CODE,'N/A')) %>% # removed, seems like N/A already converted to NA
   #remove_rownames %>%
   as.data.frame()
 ```
