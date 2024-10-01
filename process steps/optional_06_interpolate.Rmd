@@ -25,7 +25,7 @@ library(here)
 library(lubridate)
 library(sf)
 library(move)
-library(rgdal)
+# library(rgdal)
 
 # ggplot theme
 plot_theme <-   theme_minimal()+
