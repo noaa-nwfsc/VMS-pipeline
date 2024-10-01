@@ -838,14 +838,14 @@ dcrb_ticket_df <- fish_ticket_df %>%
 
 # select distinct ticket IDs from filtered VMS dataframe
 dcrb_vms_rec_ids <- dcrb_vms_tix_analysis %>%
-  select(Rec_ID) %>%
+  dplyr::select(Rec_ID) %>%
   distinct()
 
 # add column to ticket dataframe for whether that ticket was represented in filtered VMS dataframe
 dcrb_vms_representation_df <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = "Rec_ID", keep = TRUE) %>%
    # if ticket ID is NA in dcrb_vms_rec_ids, then the ticket is not represented by VMS data
   mutate(represented_in_vms = !is.na(Rec_ID.y)) %>%
-  select(-Rec_ID.y) %>%
+  dplyr::select(-Rec_ID.y) %>%
   rename(Rec_ID = Rec_ID.x) %>%
   # calculate monthly counts
   group_by(month_as_date) %>% 
@@ -854,7 +854,7 @@ dcrb_vms_representation_df <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = "
          total_revenue = sum(DCRB_revenue)) %>%
   group_by(month_as_date, represented_in_vms, total_unique_vessels, total_landings, total_revenue) %>%
    # calculate counts represented by VMS
-  summarise(unique_vessels = n_distinct(drvid),
+  summarise(unique_vessels = n_distinct(drvid), # if a vessel has a ticket with and without VMS data, it will be double counted
             landings = sum(DCRB_lbs),
             revenue = sum(DCRB_revenue)) %>%
   # calculate percentages represented by VMS
@@ -873,7 +873,7 @@ dcrb_vms_representation_df %>%
 # visualize % represented for vessels, landing, and revenue
 dcrb_vms_representation_df %>%
   filter(represented_in_vms == TRUE) %>%
-  select(percent_unique_vessels:percent_revenue) %>%
+  dplyr::select(percent_unique_vessels:percent_revenue) %>%
   pivot_longer(cols = percent_unique_vessels:percent_revenue, names_to = "variable", values_to = "value") %>%
   ggplot(aes(x = month_as_date, y = value)) +
   geom_col() + 
@@ -884,7 +884,7 @@ dcrb_vms_representation_df %>%
 # calculate totals across timeframe
 timeframe_totals <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = "Rec_ID", keep = TRUE) %>%
   mutate(represented_in_vms = !is.na(Rec_ID.y)) %>% # if ticket ID is NA in dcrb_vms_rec_ids, then the landings are not represented by VMS data
-  select(-Rec_ID.y) %>%
+  dplyr::select(-Rec_ID.y) %>%
   rename(Rec_ID = Rec_ID.x) %>% 
   summarise(total_timeframe_vessels = n_distinct(drvid),
             total_timeframe_landings = sum(DCRB_lbs),
@@ -893,7 +893,7 @@ timeframe_totals
 # calculate totals for VMS representation across timeframe
 timeframe_vms_represented_totals <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = "Rec_ID", keep = TRUE) %>%
   mutate(represented_in_vms = !is.na(Rec_ID.y)) %>% # if ticket ID is NA in dcrb_vms_rec_ids, then the landings are not represented by VMS data
-  select(-Rec_ID.y) %>%
+  dplyr::select(-Rec_ID.y) %>%
   rename(Rec_ID = Rec_ID.x) %>% 
   filter(represented_in_vms == TRUE) %>%
   summarise(total_timeframe_vms_vessels = n_distinct(drvid),
@@ -903,6 +903,43 @@ timeframe_vms_represented_totals
 # divide totals with VMS representation by totals to get percentage of representation
 timeframe_vms_percent_representation <- timeframe_vms_represented_totals / timeframe_totals * 100
 timeframe_vms_percent_representation
+
+# create representation dataframe grouped by vessel
+dcrb_vms_representation_vessel_size_df <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = "Rec_ID", keep = TRUE) %>%
+   # if ticket ID is NA in dcrb_vms_rec_ids, then the ticket is not represented by VMS data
+  mutate(represented_in_vms = !is.na(Rec_ID.y)) %>%
+  dplyr::select(-Rec_ID.y) %>%
+  rename(Rec_ID = Rec_ID.x) %>%
+  # select vessel and ticket related columns
+  dplyr::select(drvid, FINAL_LENGTH, Rec_ID, represented_in_vms, DCRB_lbs, DCRB_revenue) %>%
+  distinct() %>% # now, each row represents one ticket
+  # calculate vessel summaries
+  group_by(drvid) %>% # now, each row represents one vessel
+  summarise(
+    vessel_length = max(FINAL_LENGTH), # this just selects one length, since lengths are consistent
+    tickets_represented_in_vms = sum(represented_in_vms),
+    tickets_not_represented_in_vms = sum(!represented_in_vms),
+    total_tickets = n_distinct(Rec_ID),
+    percent_tickets_represented_in_vms = tickets_represented_in_vms / total_tickets * 100,
+    represented_in_vms_max = max(represented_in_vms),
+    represented_in_vms_majority = percent_tickets_represented_in_vms > 50, # true if over 50% of tickets have VMS data
+    total_landings = sum(DCRB_lbs),
+    total_revenue = sum(DCRB_revenue)
+  )
+
+# visualize vessels with VMS by vessel size
+# if any ticket has VMS data, consider the vessel as represented in VMS data
+dcrb_vms_representation_vessel_size_df %>%
+  ggplot(aes(x = vessel_length, color = as.factor(represented_in_vms_max), fill = as.factor(represented_in_vms_max))) +
+  geom_histogram(position='dodge') +
+  theme(legend.position = "bottom")
+
+# visualize vessels with VMS by vessel size
+# if >50% of vessel tickets have VMS data, consider the vessel as represented in VMS data
+dcrb_vms_representation_vessel_size_df %>%
+  ggplot(aes(x = vessel_length, color = as.factor(represented_in_vms_majority), fill = as.factor(represented_in_vms_majority))) +
+  geom_histogram(position='dodge') +
+  theme(legend.position = "bottom")
 ```
 
 
