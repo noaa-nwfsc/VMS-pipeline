@@ -105,8 +105,8 @@ Arrange by trip and ascending in time.
 ```{r}
 vms_move <- vms_gapfiltered %>% 
   ungroup() %>% 
-  arrange(Rec_ID, UTCDATETIM) %>% 
-  distinct(VMS_RECNO,UTCDATETIM,.keep_all = T) %>% 
+  arrange(Rec_ID, UTCDATETIME) %>% 
+  distinct(VMS_RECNO,UTCDATETIME,.keep_all = T) %>% 
   mutate(DECLARATIO=na_if(DECLARATIO,'N/A')) %>% 
   #remove_rownames %>%
   as.data.frame()
@@ -123,7 +123,7 @@ vms_move <- vms_gapfiltered %>%
 # start.time <- Sys.time()
 # movedat <- move(x=vms_move$X_COORD,
 #                 y=vms_move$Y_COORD,
-#                 time=vms_move$UTCDATETIM,
+#                 time=vms_move$UTCDATETIME,
 #                 data=vms_move,
 #                 proj=sp::CRS("+proj=utm +north +zone=10 +ellps=WGS84 +datum=WGS84"), #though note that e.g. 2010 HTML doesn't have the '+datum=WGS84' part in this call
 #                 animal=vms_move$Rec_ID)
@@ -136,7 +136,7 @@ vms_move <- vms_gapfiltered %>%
 start.time <- Sys.time()
 movedat <- move(x=vms_move$LONGITUDE,
                 y=vms_move$LATITUDE,
-                time=vms_move$UTCDATETIM,
+                time=vms_move$UTCDATETIME,
                 data=vms_move,
                 proj=sp::CRS("+proj=longlat +datum=WGS84 +no_defs +type=crs"),
                 animal=vms_move$Rec_ID)
@@ -163,7 +163,7 @@ interpolated_data <- purrr::map_df(1:ntrips,function(i){
   inter_df <- as.data.frame(inter_movedat)
   #clean up the data frame
   inter_df <- inter_df %>%
-    dplyr::select(Rec_ID, drvid, UTCDATETIM, X_COORD, Y_COORD, timestamps, coords.x1, coords.x2, sensor) %>% 
+    dplyr::select(Rec_ID, drvid, UTCDATETIME, X_COORD, Y_COORD, timestamps, coords.x1, coords.x2, sensor) %>% 
     mutate_if(is.factor,as.character)
   if(i%%500==0){
     message("completed interpolation for ", i, " out of ", ntrips, " trips.")
@@ -183,28 +183,28 @@ Rename columns from interpolation so we can re-join the rest of the VMS trip inf
 # original:
 # orig_vms <- interpolated_data %>%
 #   filter(sensor=="unknown") %>% 
-#   dplyr::select(-UTCDATETIM,-X_COORD,-Y_COORD) %>% 
-#   rename(UTCDATETIM=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
-#   left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIM", "X_COORD", "Y_COORD"))
+#   dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
+#   rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
+#   left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIME", "X_COORD", "Y_COORD"))
 
 #use this instead
 orig_vms <- interpolated_data %>%
   filter(sensor=="unknown") %>% 
-  left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIM", "X_COORD", "Y_COORD")) %>% 
-  dplyr::select(-UTCDATETIM,-X_COORD,-Y_COORD) %>% 
-  rename(UTCDATETIM=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2)
+  left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIME", "X_COORD", "Y_COORD")) %>% 
+  dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
+  rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2)
 
 
 
 vms_trip_info <- vms_move %>% 
-  dplyr::select(-VMS_RECNO,-UTCDATETIM,-LATITUDE,-LONGITUDE,-NGDC_M,-X_COORD,-Y_COORD,-AVG_SPEED,-AVG_COURSE,-westcoastdate,-westcoastdate_notime,-segment_dur,-avg_speed_recalc,-in_port,-recnum,-keep_remove_timelag,-longest_seg,-last_seg_longest,-is_last_seg) %>%
+  dplyr::select(-VMS_RECNO,-UTCDATETIME,-LATITUDE,-LONGITUDE,-NGDC_M,-X_COORD,-Y_COORD,-AVG_SPEED,-AVG_COURSE,-westcoastdate,-westcoastdate_notime,-segment_dur,-avg_speed_recalc,-in_port,-recnum,-keep_remove_timelag,-longest_seg,-last_seg_longest,-is_last_seg) %>%
   distinct()
 
 
 new_vms <- interpolated_data %>% 
   filter(sensor=="interpolateTime")%>% 
-  dplyr::select(-UTCDATETIM,-X_COORD,-Y_COORD) %>% 
-  rename(UTCDATETIM=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
+  dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
+  rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
   left_join(vms_trip_info,by = c("Rec_ID", "drvid"))
 ```
 
@@ -213,7 +213,7 @@ Create calculable missing columns: west coast dates, latitude, longitude.
 ```{r}
 # west coast dates
 new_vms %<>%
-  mutate(westcoastdate = with_tz(UTCDATETIM, tzone = "America/Los_Angeles"),
+  mutate(westcoastdate = with_tz(UTCDATETIME, tzone = "America/Los_Angeles"),
          westcoastdate_notime = as_date(westcoastdate))
 
 # convert UTM x/y coordinates to lat/lon
