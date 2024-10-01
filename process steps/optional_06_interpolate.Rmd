@@ -116,28 +116,14 @@ vms_move <- vms_gapfiltered %>%
 # install.packages("proj4")
 # library("proj4")
 
-#some update in the proj_string caused this section to break
-#This was the original code
-# start.time <- Sys.time()
-# movedat <- move(x=vms_move$X_COORD,
-#                 y=vms_move$Y_COORD,
-#                 time=vms_move$UTCDATETIME,
-#                 data=vms_move,
-#                 proj=sp::CRS("+proj=utm +north +zone=10 +ellps=WGS84 +datum=WGS84"), #though note that e.g. 2010 HTML doesn't have the '+datum=WGS84' part in this call
-#                 animal=vms_move$Rec_ID)
-# Sys.time() - start.time
-
-
-
-
-#After various tests, this works now
+# create move object
 start.time <- Sys.time()
-movedat <- move(x=vms_move$LONGITUDE,
-                y=vms_move$LATITUDE,
-                time=vms_move$UTCDATETIME,
-                data=vms_move,
-                proj=sp::CRS("+proj=longlat +datum=WGS84 +no_defs +type=crs"),
-                animal=vms_move$Rec_ID)
+movedat <- move(x=vms_move$LON, # x coordinates
+                y=vms_move$LAT, # y coordinates
+                time=vms_move$UTCDATETIME, # time stamps
+                data=vms_move, # optional, additional data associated with coordinates and timestamps
+                proj=sp::CRS("+proj=longlat +datum=WGS84 +no_defs +type=crs"), # projection method
+                animal=vms_move$Rec_ID) # individual identifier, usually an animal, but in this application, the VMS pings from a vessel for a given fish ticket 
 Sys.time() - start.time
 
 movedatProj <- spTransform(movedat, CRSobj="+proj=utm +zone=10 +datum=WGS84 +units=m +no_defs +type=crs")
