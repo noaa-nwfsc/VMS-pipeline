@@ -46,9 +46,7 @@ rm(list=setdiff(ls(),c('process_year','alltime')))
 Read in the filtered VMS data set from the previous step
 
 ```{r rawdat}
-vms_filtered <- read_rds(here::here('data','processed','matched','filtering',paste0(process_year,'matched_filtered.rds')))
-
-#vms_filtered <- read_rds(paste0("/Users/jameal.samhouri/Documents/RAIMBOW/Processed Data/VMS/",process_year,'matched_filtered.rds'))
+vms_filtered <- read_rds(here::here('Confidential','processed','matched','filtering',paste0(process_year,'_matched_filtered_withFTID_length.rds')))
 ```
 
 ## Remove Trips with Large Time Gaps
@@ -306,6 +304,6 @@ Add a final indicator for whether a point was interpolated or not, then save
 ```{r}
 vms_regular %<>% mutate(is_interpolated=ifelse(sensor=="interpolateTime",1,0)) %>% dplyr::select(-sensor)
 
-write_rds(vms_regular,here::here('data','processed','matched','interpolation',paste0(process_year,'interpolated.rds')))
+write_rds(vms_regular,here::here('Confidential','processed','matched','interpolation',paste0(process_year,'_interpolated.rds')))
 ```
 
