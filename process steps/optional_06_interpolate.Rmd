@@ -25,7 +25,6 @@ library(here)
 library(lubridate)
 library(sf)
 library(move)
-# library(rgdal)
 
 # ggplot theme
 plot_theme <-   theme_minimal()+
@@ -257,20 +256,20 @@ We re-match to the bathymetry layer but do NO FILTERING for now.
 Read in the bathymetry SpatialGridDataFrame object
 
 ```{r}
-bathy.grid <- read_rds(here::here('data','raw','vms_composite_bath_spGrid.RDS'))
+# commented out
+# bathy.grid <- read_rds(here::here('data','raw','vms_composite_bath_spGrid.RDS'))
+
+# copied / pasted from 03_process_vms.Rmd
+bathy.grid <- rast(here::here('data','bathymetry','composite_bath.tif'))
 ```
 
 Get bathymetry at VMS data points
 
 ```{r}
-# tm <- proc.time()
-vms_sp <- vms_regular
-coordinates(vms_sp) <- c("LON", "LAT") 
-proj4string(vms_sp)<-proj4string(bathy.grid) <- CRS("+init=epsg:4326") # WGS 84
-bathy.points <- over(vms_sp, bathy.grid)$vms_composite_bath
-# proc.time()-tm
-
-vms_regular %<>% mutate(NGDC_M = bathy.points)
+vms_sp <- vms_regular %>% st_as_sf(coords=c("LON","LAT"), crs=4326) # make non-spatial object to spatial (sf) object
+vms_lat_lon_matrix <- st_coordinates(vms_sp) # extracts X Y coordinates as 2 column matrix instead of dataframe
+bathy.points <- terra::extract(bathy.grid, vms_lat_lon_matrix) / 10 # extract bathymetry values at VMS points, and convert to meters from decimeters
+vms_regular %<>% mutate(NGDC_M = bathy.points) # put depth into tbl
 ```
 
 ## Save Results
@@ -278,8 +277,9 @@ vms_regular %<>% mutate(NGDC_M = bathy.points)
 Add a final indicator for whether a point was interpolated or not, then save
 
 ```{r}
+# create is_interpolated column based on sensor column, then drop sensor column
 vms_regular %<>% mutate(is_interpolated=ifelse(sensor=="interpolateTime",1,0)) %>% dplyr::select(-sensor)
-
-write_rds(vms_regular,here::here('Confidential','processed','matched','interpolation',paste0(process_year,'_interpolated.rds')))
+# write output
+write_rds(vms_regular, here::here('Confidential','processed','matched','interpolation',paste0(process_year,'_interpolated.rds')))
 ```
 
