@@ -121,6 +121,11 @@ fishtix_YEAR_by_VMS <- matched_alltix_withFTID_YEAR %>%
   group_by(FTID, has_vms) %>%
   summarize(Freq=n())
 
+# create summary freq table for all the fish tickets by PACFIN_SPECIES_CODE, NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE, PACFIN_SPECIES_COMMON_NAME
+COMBO_freq <- rawdat %>%
+  group_by(PACFIN_SPECIES_CODE, NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE, PACFIN_SPECIES_COMMON_NAME) %>%
+  summarize(Freq=n())
+
 ## create summary freq table for all the fish tickets in a VMS Pipeline run that had VMS or didn't and include fish ticket date
 # append all of the YEAR_matched_alltix_withFTID files together and create summary freq table for all the fish tickets in a given year that had VMS or didn't
 vms2009 <- read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 06Sep2024', '2009_matched_alltix_withFTID.rds'))
