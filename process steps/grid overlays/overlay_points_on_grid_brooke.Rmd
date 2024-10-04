@@ -50,8 +50,6 @@ vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2
 
 ### Match VMS pings and fish tickets to grid cells
 
-Load 5km grid. I suspect there's some redundancy here in loading and joining the grid, but I've left it as is for now.
-
 ```{r}
 
 # load 5x5 grid shapefile
@@ -79,8 +77,6 @@ x <- proc.time() - pt
 ```
 
 The join took `r round(x[3]/60,2)` minutes.
-
-### Write joined data
 
 ```{r}
 # save without geometry while still including grid cell ID
@@ -383,7 +379,7 @@ ggsave(filename = here::here("Confidential", "figures", "map_adjusted_normalized
        width = 10, height = 5)
 ```
 
-### Visualize ping rate
+### Visualize basic time series
 
 ```{r quick plot - fish tickets and season length over years}
 # is fishing effort (as # fish tickets / # days fishery open) consistent in the post-April 2020 period?
@@ -447,6 +443,8 @@ monthly_df %>%
 
 ```
 
+### Visualize ping interval and rate
+
 ```{r plot ping interval}
 # each point = 1 VMS ping
 ping_interval_df <- dcrb_vms_tix_analysis %>%
@@ -502,6 +500,7 @@ VMSrecords_per_trip %>%
   group_by(trip_year = year(trip_start)) %>%
   summarise(total_vessel_hours = sum(trip_duration_hours))
 ```
+### Visualize VMS representativeness
 
 ```{r plot vessel, revenue, and landings representation by VMS data}
 
