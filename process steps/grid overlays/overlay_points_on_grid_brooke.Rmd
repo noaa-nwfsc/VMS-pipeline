@@ -27,30 +27,72 @@ library(rnaturalearth) # for mapping states
 library(viridis) # for good color scales
 ```
 
+```{r}
+# set boolean flag for whether to use interpolated or non-interpolated VMS pings
+use_interpolated = TRUE
+```
+
+
 ### Import data
 
-Load VMS pings with fish tickets for all years. Output is from Blake, run for dungeness crab on Sept. 17, 2024.
+Load VMS pings with fish tickets for all years.
 
-```{r import all}
-# clear workspace of everything but 5km grid
-rm(list=setdiff(ls(),'grd'))
+```{r import data}
+# clear workspace of everything but interpolation flag
+rm(list = setdiff(ls(), 'use_interpolated'))
 
-# load 2014-2023 fish ticket and VMS data
-vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2014_matched_filtered_withFTID_length.rds')) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2015_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2016_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2017_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2018_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2019_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2020_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2021_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
+# load 2014-2023 VMS data
+if (use_interpolated) {
+  # load interpolated data
+  vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2014_interpolated.rds')) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2015_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2016_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2017_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2018_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2019_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2020_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2021_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2022_interpolated.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2023_interpolated.rds')))
+} else {
+  # load non-interpolated data
+  vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2014_matched_filtered_withFTID_length.rds')) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2015_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2016_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2017_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2018_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2019_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2020_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2021_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
+    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
+}
 ```
+
+``` {r basic counts}
+# count records, trips and years
+n_records <- nrow(vms_all)
+n_trips <- n_distinct(vms_all$Rec_ID)
+n_years <- n_distinct(lubridate::year(vms_all$westcoastdate_notime))
+
+# count interpolated records and trips
+if (use_interpolated) {
+  n_interpolated_records <- vms_all %>% filter(is_interpolated == 1) %>% select(VMS_RECNO) %>% n_distinct()
+  n_interpolated_trips <- vms_all %>% filter(is_interpolated == 1) %>% select(Rec_ID) %>% n_distinct()
+} else {
+  n_interpolated_records <- 0
+  n_interpolated_trips <- 0
+}
+```
+
+Before post-processing filtering, VMS data includes `n_records` records (VMS pings), `n_trips` trips (fish tickets), across `n_years` years.
+`n_interpolated_records` records (`round(n_interpolated_records / n_records * 100, 0)`%) are interpolated, and `n_interpolated_trips` trips (`round(n_interpolated_trips / n_trips * 100, 0)`%) have at least one interpolated record.
 
 ### Match VMS pings and fish tickets to grid cells
 
 ```{r}
+# remove counts from above
+rm(n_records, n_trips, n_years, n_interpolated_records, n_interpolated_trips)
 
 # load 5x5 grid shapefile
 grd <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
@@ -155,10 +197,16 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
       DCRB_lbs, # dungeness crab catch weight
       DCRB_revenue # dungeness crab catch revenue
     )
-
-# take a look at transformed data
-names(dcrb_vms_tix_analysis)
 ```
+
+``` {r basic counts}
+# count records, trips and years
+n_records <- nrow(dcrb_vms_tix_analysis)
+n_trips <- n_distinct(dcrb_vms_tix_analysis$Rec_ID)
+n_years <- n_distinct(dcrb_vms_tix_analysis$year)
+```
+
+After post-processing filtering, VMS data includes `n_records` records (VMS pings), `n_trips` trips (fish tickets), across `n_years` years.
 
 ### Normalize pings and attribute landings and revenue to grid cells
 
@@ -167,9 +215,12 @@ Adjust pings based on # of pings / # hours per trip.
 * For example, in a 38 hour trip with 38 pings, `avg_trip_ping_rate` = 38/38 = 1 ping/hour, and `VMSrecords_adjusted_trip` = 1/1 = 1 adjusted ping.
 * For example, in a 12 hour trip with 48 pings, `avg_trip_ping_rate` = 48/12 = 4 pings/hour, and `VMSrecords_adjusted_trip` = 1/4 = 0.25 adjusted pings.
 
- Then, normalize VMS pings by year-month and grid cell, and attribute landings and revenue across grid cells.
+ Then, normalize adjusted VMS pings by year-month and grid cell, and attribute landings and revenue across grid cells.
  
 ```{r distribute $ and lbs to cells, and adjust ping rate}
+
+# remove counts from above
+rm(n_records, n_trips, n_years, n_interpolated_records, n_interpolated_trips)
 
 # create new columns that attribute pings, lbs, and $ from each fish ticket 
 # across all VMS pings matched to that ticket
@@ -617,48 +668,3 @@ dcrb_vms_representation_vessel_size_df %>%
   geom_histogram(position='dodge') +
   theme(legend.position = "bottom")
 ```
-
-### Compare interpolated and non-interpolated data
-```{r load interpolated data}
-# load 2014-2023 interpolated VMS data
-vms_all_interpolated <- read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2014_interpolated.rds')) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2015_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2016_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2017_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2018_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2019_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2020_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2021_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2022_interpolated.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2023_interpolated.rds')))
-```
-
-These stats are not yet filtered on depth, state, or fishery.
-
-The non-interpolated dataset has `nrow(vms_all)` rows and `ncol(vms_all)` columns.
-The interpolated dataset has `nrow(vms_all_interpolated)` rows and `ncol(vms_all_interpolated)` columns.
-The interpolated dataset has these new columns: `setdiff(colnames(vms_all_interpolated), colnames(vms_all))`.
-In the interpolated dataset, `round(sum(vms_all_interpolated$is_interpolated) / length(vms_all_interpolated$is_interpolated) * 100, 0)` % of records (VMS pings) are interpolated.
-
-The non-interpolated dataset has `n_distinct(vms_all$Rec_ID)` trips.
-The interpolated dataset has `n_distinct(vms_all_interpolated$Rec_ID)` trips, a `round((n_distinct(vms_all_interpolated$Rec_ID) - n_distinct(vms_all$Rec_ID)) / n_distinct(vms_all$Rec_ID) * 100, 0)`% difference.
-
-```{r}
-# total fish ticket IDs
-n_trips <- n_distinct(vms_all_interpolated$Rec_ID)
-
-# fish ticket IDs with an interpolated point
-n_trips_with_interpolated_point <- vms_all_interpolated %>%
-  filter(is_interpolated == 0) %>%
-  select(Rec_ID) %>%
-  n_distinct()
-
-# fish ticket IDs with an original point
-n_trips_with_original_point <- vms_all_interpolated %>%
-  filter(is_interpolated == 1) %>%
-  select(Rec_ID) %>%
-  n_distinct()
-```
-
-In the interpolated dataset, `round(n_trips_with_interpolated_point / n_trips * 100, 0)`% trips (n = `n_trips_with_interpolated_point` trips) have at least one interpolated point.
-In the interpolated dataset, `round(n_trips_with_original_point / n_trips * 100, 0)`% trips (n = `n_trips_with_original_point` trips) have at least one original point.
