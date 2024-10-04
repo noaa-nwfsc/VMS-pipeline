@@ -69,7 +69,7 @@ if (use_interpolated) {
 }
 ```
 
-``` {r basic counts}
+``` {r basic counts before filter}
 # count records, trips and years
 n_records <- nrow(vms_all)
 n_trips <- n_distinct(vms_all$Rec_ID)
@@ -85,8 +85,8 @@ if (use_interpolated) {
 }
 ```
 
-Before post-processing filtering, VMS data includes `n_records` records (VMS pings), `n_trips` trips (fish tickets), across `n_years` years.
-`n_interpolated_records` records (`round(n_interpolated_records / n_records * 100, 0)`%) are interpolated, and `n_interpolated_trips` trips (`round(n_interpolated_trips / n_trips * 100, 0)`%) have at least one interpolated record.
+Before post-processing filtering, VMS data includes `r n_records` records (VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
+`r n_interpolated_records` records (`r round(n_interpolated_records / n_records * 100, 0)`%) are interpolated, and `r n_interpolated_trips` trips (`r round(n_interpolated_trips / n_trips * 100, 0)`%) have at least one interpolated record.
 
 ### Match VMS pings and fish tickets to grid cells
 
@@ -199,14 +199,14 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
     )
 ```
 
-``` {r basic counts}
+``` {r basic counts after filter}
 # count records, trips and years
 n_records <- nrow(dcrb_vms_tix_analysis)
 n_trips <- n_distinct(dcrb_vms_tix_analysis$Rec_ID)
 n_years <- n_distinct(dcrb_vms_tix_analysis$year)
 ```
 
-After post-processing filtering, VMS data includes `n_records` records (VMS pings), `n_trips` trips (fish tickets), across `n_years` years.
+After post-processing filtering, VMS data includes `r n_records` records (VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
 
 ### Normalize pings and attribute landings and revenue to grid cells
 
@@ -246,7 +246,6 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
     DCRB_rev_per_VMSlocation = DCRB_revenue / trip_VMSrecords,
     DCRB_Vessels_per_VMSlocation = 1 / trip_VMSrecords
   )
-names(dcrb_vms_tix_analysis_TripInfo)
 
 # summarize and normalize fishery effort at year, month and grid cell level
 # based on Jameal's prep_data_for_scenario_df_function.R
