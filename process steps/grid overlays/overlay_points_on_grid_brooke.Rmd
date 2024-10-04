@@ -617,3 +617,48 @@ dcrb_vms_representation_vessel_size_df %>%
   geom_histogram(position='dodge') +
   theme(legend.position = "bottom")
 ```
+
+### Compare interpolated and non-interpolated data
+```{r load interpolated data}
+# load 2014-2023 interpolated VMS data
+vms_all_interpolated <- read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2014_interpolated.rds')) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2015_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2016_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2017_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2018_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2019_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2020_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2021_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2022_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2023_interpolated.rds')))
+```
+
+These stats are not yet filtered on depth, state, or fishery.
+
+The non-interpolated dataset has `nrow(vms_all)` rows and `ncol(vms_all)` columns.
+The interpolated dataset has `nrow(vms_all_interpolated)` rows and `ncol(vms_all_interpolated)` columns.
+The interpolated dataset has these new columns: `setdiff(colnames(vms_all_interpolated), colnames(vms_all))`.
+In the interpolated dataset, `round(sum(vms_all_interpolated$is_interpolated) / length(vms_all_interpolated$is_interpolated) * 100, 0)` % of records (VMS pings) are interpolated.
+
+The non-interpolated dataset has `n_distinct(vms_all$Rec_ID)` trips.
+The interpolated dataset has `n_distinct(vms_all_interpolated$Rec_ID)` trips, a `round((n_distinct(vms_all_interpolated$Rec_ID) - n_distinct(vms_all$Rec_ID)) / n_distinct(vms_all$Rec_ID) * 100, 0)`% difference.
+
+```{r}
+# total fish ticket IDs
+n_trips <- n_distinct(vms_all_interpolated$Rec_ID)
+
+# fish ticket IDs with an interpolated point
+n_trips_with_interpolated_point <- vms_all_interpolated %>%
+  filter(is_interpolated == 0) %>%
+  select(Rec_ID) %>%
+  n_distinct()
+
+# fish ticket IDs with an original point
+n_trips_with_original_point <- vms_all_interpolated %>%
+  filter(is_interpolated == 1) %>%
+  select(Rec_ID) %>%
+  n_distinct()
+```
+
+In the interpolated dataset, `round(n_trips_with_interpolated_point / n_trips * 100, 0)`% trips (n = `n_trips_with_interpolated_point` trips) have at least one interpolated point.
+In the interpolated dataset, `round(n_trips_with_original_point / n_trips * 100, 0)`% trips (n = `n_trips_with_original_point` trips) have at least one original point.
