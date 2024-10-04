@@ -211,14 +211,6 @@ dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
   ) %>%
   ungroup() %>%
   mutate(
-    # rescale pings to 0-1
-    normalized_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings, center = min(DCRB_VMS_pings), scale = diff(range(DCRB_VMS_pings)))),
-    # above rescaling converts 1 ping to 0, so change it so that 1 ping, after re-scaling, has a scaled value equal to one half of the rescaled value of 2 pings
-    normalized_DCRB_VMS_pings = ifelse(
-      normalized_DCRB_VMS_pings == 0, 
-      0.5 * min(normalized_DCRB_VMS_pings[normalized_DCRB_VMS_pings != min(normalized_DCRB_VMS_pings)]),
-      normalized_DCRB_VMS_pings
-    ),
     # rescale adjusted trip pings to 0-1
     normalized_adjusted_trip_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings_adjusted_trip, center = min(DCRB_VMS_pings_adjusted_trip), scale = diff(range(DCRB_VMS_pings_adjusted_trip)))),
     # above rescaling converts mininmum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
@@ -261,7 +253,6 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_lbs = sum(DCRB_lbs) / length(baseline_2014_2019_crab_years),
     avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2014_2019_crab_years),
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
-    avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2014_2019_crab_years),
     avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2014_2019_crab_years),
@@ -282,7 +273,6 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_lbs = sum(DCRB_lbs) / length(baseline_2017_2019_crab_years),
     avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2017_2019_crab_years),
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
-    avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2017_2019_crab_years),
     avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2017_2019_crab_years),
     avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
@@ -322,20 +312,6 @@ dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>%
 # set bounding box 
 bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
 
-# visualize VMS pings (no adjustment, no normalization) across all crab years
-map_unadjusted_pings <- ggplot() +
-  geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings)), color = NA) +
-  facet_grid(. ~ crab_year) +
-  scale_fill_viridis() +
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Pings) per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        legend.position="bottom")
-map_unadjusted_pings
-ggsave(filename = here::here("Confidential", "figures", "map_unadjusted_pings.png"),
-       width = 10, height = 5)
-
 # visualize VMS pings (tripwise adjustment, no normalization) across all crab years
 map_adjusted_pings <- ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
@@ -348,20 +324,6 @@ map_adjusted_pings <- ggplot() +
         legend.position="bottom")
 map_adjusted_pings
 ggsave(filename = here::here("Confidential", "figures", "map_adjusted_pings.png"),
-       width = 10, height = 5)
-
-# visualize VMS pings (no adjustment, with normalization) across all crab years
-map_unadjusted_normalized_pings <- ggplot() +
-  geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(normalized_DCRB_VMS_pings)), color = NA) +
-  facet_grid(. ~ crab_year) +
-  scale_fill_viridis() +
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Normalized Pings) per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        legend.position="bottom")
-map_unadjusted_normalized_pings
-ggsave(filename = here::here("Confidential", "figures", "map_unadjusted_normalized_pings.png"),
        width = 10, height = 5)
 
 # visualize VMS pings (tripwise adjustment, with normalization) across all crab years
