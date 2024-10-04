@@ -702,12 +702,6 @@ dcrb_ticket_df <- fish_ticket_df %>%
       DCRB_revenue # dungeness crab catch revenue
     )
 
-# TODO need to update for inflation?
-# code snippet from 04_match_vms_fishtix.Rmd, commented out there as well?
-# adjust for inflation based on reference year using Fred deflators (added 8May2024)
-# left_join(gdp_defl, by = YEAR) %>% #left_join(gdp_defl, by = c("year in fishtix_vms name" = "YEAR")
-#   mutate(AFI_REVENUE = EXVESSEL_REVENUE / DEFL)
-
 # select distinct ticket IDs from filtered VMS dataframe
 dcrb_vms_rec_ids <- dcrb_vms_tix_analysis %>%
   dplyr::select(Rec_ID) %>%
