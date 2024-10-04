@@ -181,28 +181,12 @@ unique(dcrb_vms_tix_analysis$crab_year)
 
 Distribute rev and lbs to grid cells. Normalize VMS pings by year-month and grid cell.
 
-Adjust ping rate with a monthly factor for before and after April 1, 2020, when OLE increased ping rate from 1x/hour to 4x/hour.
+Adjust ping rate based on # of pings / # hours per trip.
+
+* For example, in a 38 hour trip with 38 pings, `avg_trip_ping_rate` = 38/38 = 1 ping/hour, and `VMSrecords_adjusted_trip` = 1/1 = 1 adjusted ping.
+* For example, in a 12 hour trip with 48 pings, `avg_trip_ping_rate` = 48/12 = 4 pings/hour, and `VMSrecords_adjusted_trip` = 1/4 = 0.25 adjusted pings.
 
 ```{r distribute $ and lbs to cells, and adjust ping rate}
-
-# set the start date for ping rate increase to April 1, 2020
-ping_rate_increase_date <- ymd(20200401)
-
-# calculate a monthly ping rate adjustment factor
-# 1. calculate avg. pings per vessel before and after ping rate increase date
-pre_post_ping_rate_increase <- dcrb_vms_tix_analysis %>% 
-  filter(crab_year %in% crab_years_to_vis) %>%
-  mutate(ping_rate_period = if_else(westcoastdate_notime < ping_rate_increase_date,
-                                    "pre_ping_rate_increase",
-                                    "post_ping_rate_increase")) %>% 
-  group_by(ping_rate_period, month) %>%
-  summarise(pings_per_vessel = n() / n_distinct(drvid))
-# 2. calculate adjustment factor by dividing post_ping_rate_increase by pre_ping_rate_increase
-# the result has one correction factor per month
-ping_rate_adjustment_factor <- pre_post_ping_rate_increase %>% 
-  pivot_wider(names_from = ping_rate_period, values_from = pings_per_vessel) %>%
-  mutate(ping_rate_adjustment = post_ping_rate_increase / pre_ping_rate_increase) %>%
-  arrange(month)
 
 # create new columns that attribute pings, lbs, and $ from each fish ticket 
 # across all VMS pings matched to that ticket
@@ -222,15 +206,8 @@ VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
 
 # join total records per trip to VMS and fish ticket data; adjust ping rate; calculate vessels, lbs, and $ per VMS ping
 dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_analysis, by="Rec_ID") %>%
-  left_join(ping_rate_adjustment_factor, by="month") %>%
+  # left_join(ping_rate_adjustment_factor, by="month") %>%
   mutate(
-    ping_rate_adjustment_factor = case_when(
-      is.na(ping_rate_adjustment) ~ 1, # if there are any NAs (e.g. Sept. and Oct. only have data in either pre- or post-ping-rate-increase), no adjustment
-      westcoastdate_notime < ping_rate_increase_date ~ 1, # for pre-ping-rate-increase, no adjustment
-      westcoastdate_notime >= ping_rate_increase_date ~ ping_rate_adjustment # for post-ping-rate-increase, adjust
-    ),
-    trip_VMSrecords_adjusted = trip_VMSrecords / ping_rate_adjustment_factor, # adjusted trip-level pings
-    VMSrecords_adjusted = 1 / ping_rate_adjustment_factor, # adjusted ping-level pings (e.g. for 1 ping with ping_rate_adjustment_factor = 2, this value is 0.5; count it as a half of a ping)
     VMSrecords_adjusted_trip = 1 / avg_trip_ping_rate, # adjusted record-level pings (e.g. for 1 ping from trip with 4 pings per hour, this value is 0.25)
     DCRB_lbs_per_VMSlocation = DCRB_lbs / trip_VMSrecords,
     DCRB_rev_per_VMSlocation = DCRB_revenue / trip_VMSrecords,
@@ -246,7 +223,6 @@ dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
     DCRB_rev = sum(DCRB_rev_per_VMSlocation),
     DCRB_VMS_pings = n(),
-    DCRB_VMS_pings_adjusted = sum(VMSrecords_adjusted),
     DCRB_VMS_pings_adjusted_trip = sum(VMSrecords_adjusted_trip),
     DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
     Unique_DCRB_Vessels = length(unique(as.character(drvid)))
@@ -260,14 +236,6 @@ dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
       normalized_DCRB_VMS_pings == 0, 
       0.5 * min(normalized_DCRB_VMS_pings[normalized_DCRB_VMS_pings != min(normalized_DCRB_VMS_pings)]),
       normalized_DCRB_VMS_pings
-    ),
-    # rescale adjusted pings to 0-1
-    normalized_adjusted_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings_adjusted, center = min(DCRB_VMS_pings_adjusted), scale = diff(range(DCRB_VMS_pings_adjusted)))),
-    # above rescaling converts mininmum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
-    normalized_adjusted_DCRB_VMS_pings = ifelse(
-      normalized_adjusted_DCRB_VMS_pings == 0, 
-      0.5 * min(normalized_adjusted_DCRB_VMS_pings[normalized_adjusted_DCRB_VMS_pings != min(normalized_adjusted_DCRB_VMS_pings)]),
-      normalized_adjusted_DCRB_VMS_pings
     ),
     # rescale adjusted trip pings to 0-1
     normalized_adjusted_trip_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings_adjusted_trip, center = min(DCRB_VMS_pings_adjusted_trip), scale = diff(range(DCRB_VMS_pings_adjusted_trip)))),
@@ -288,11 +256,6 @@ dcrb_year_month_5km_df %>%
   ggplot(aes(DCRB_VMS_pings)) + geom_histogram(binwidth=5)
 print(range(dcrb_year_month_5km_df$DCRB_VMS_pings))
 
-# visualize distribution of adjusted VMS pings
-dcrb_year_month_5km_df %>%
-  ggplot(aes(DCRB_VMS_pings_adjusted)) + geom_histogram(binwidth=5)
-print(range(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted))
-
 # visualize distribution of adjusted trip VMS pings
 dcrb_year_month_5km_df %>%
   ggplot(aes(DCRB_VMS_pings_adjusted_trip)) + geom_histogram(binwidth=5)
@@ -302,11 +265,6 @@ print(range(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted_trip))
 dcrb_year_month_5km_df %>%
   ggplot(aes(normalized_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
 print(range(dcrb_year_month_5km_df$normalized_DCRB_VMS_pings))
-
-# visualize distribution of normalized adjusted VMS pings
-dcrb_year_month_5km_df %>%
-  ggplot(aes(normalized_adjusted_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
-print(range(dcrb_year_month_5km_df$normalized_adjusted_DCRB_VMS_pings))
 
 # visualize distribution of normalized adjusted trip VMS pings
 dcrb_year_month_5km_df %>%
@@ -342,8 +300,6 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2014_2019_crab_years),
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
-    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2014_2019_crab_years),
-    avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2014_2019_crab_years),
     avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2014_2019_crab_years),
@@ -355,8 +311,6 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
 names(baseline_2014_2019)
 summary(baseline_2014_2019$avg_DCRB_VMS_pings)
 summary(baseline_2014_2019$avg_normalized_DCRB_VMS_pings)
-summary(baseline_2014_2019$avg_DCRB_VMS_pings_adjusted)
-summary(baseline_2014_2019$avg_normalized_adjusted_DCRB_VMS_pings)
 summary(baseline_2014_2019$avg_DCRB_VMS_pings_adjusted_trip)
 summary(baseline_2014_2019$avg_normalized_adjusted_trip_DCRB_VMS_pings)
 sort(unique(baseline_2014_2019$month_as_numeric))
@@ -375,8 +329,6 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     avg_normalized_DCRB_VMS_pings = sum(normalized_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2017_2019_crab_years),
-    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2017_2019_crab_years),
-    avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2017_2019_crab_years),
     avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     # take minimum unique DCRB vessels across years
@@ -387,7 +339,6 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
 names(baseline_2017_2019)
 sort(unique(baseline_2017_2019$month_as_numeric))
 summary(baseline_2017_2019$avg_DCRB_VMS_pings)
-summary(baseline_2017_2019$avg_normalized_DCRB_VMS_pings)
 summary(baseline_2017_2019$avg_DCRB_VMS_pings_adjusted_trip)
 summary(baseline_2017_2019$avg_normalized_adjusted_trip_DCRB_VMS_pings)
 # write output
@@ -401,8 +352,6 @@ names(implementation_2019_2023)
 sort(unique(implementation_2019_2023$month_as_numeric))
 summary(implementation_2019_2023$DCRB_VMS_pings)
 summary(implementation_2019_2023$normalized_DCRB_VMS_pings)
-summary(implementation_2019_2023$DCRB_VMS_pings_adjusted)
-summary(implementation_2019_2023$normalized_adjusted_DCRB_VMS_pings)
 summary(implementation_2019_2023$DCRB_VMS_pings_adjusted_trip)
 summary(implementation_2019_2023$normalized_adjusted_trip_DCRB_VMS_pings)
 # write output
@@ -649,52 +598,6 @@ monthly_df %>%
 
 ```
 
-```{r calculate monthly adjustment for before and after ping rate increase}
-# set the start date for ping rate increase to April 1, 2020
-ping_rate_increase_date <- ymd(20200401)
-
-# set fishing seasons to include
-crab_years_to_vis = c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019",
-                      "2019_2020", "2020_2021", "2021_2022", "2022_2023")
-
-# take a quick look at vessels, tickets, and pings per month across fishing seasons in analysis
-dcrb_vms_tix_analysis_TripInfo %>% 
-  filter(crab_year %in% crab_years_to_vis) %>%
-  group_by(month) %>%
-  summarise(n_vessels = n_distinct(drvid),
-            n_tickets = n_distinct(Rec_ID),
-            n_pings = n(),
-            n_years = n_distinct(year),
-            n_crab_years = n_distinct(crab_year))
-
-# calculate the monthly ping rate per unique vessel before and after April 1, 2020
-pre_post_ping_rate_increase <- dcrb_vms_tix_analysis_TripInfo %>%
-  filter(crab_year %in% crab_years_to_vis) %>%
-  mutate(ping_rate_period = if_else(westcoastdate_notime < ping_rate_increase_date,
-                                    "pre_ping_rate_increase",
-                                    "post_ping_rate_increase")) %>% 
-  group_by(ping_rate_period, month) %>%
-  summarise(pings_per_vessel = n() / n_distinct(drvid)) # (# of pings) / (# of unique vessels)
-# I'm not sure if month comes from fish ticket or from VMS ping time
-# for this use case, I don't want fish tickets split across months, so I want the month of the fish ticket or of the trip start
-# that may mean the variable in group_by needs to change
-
-# plot the rates
-pre_post_ping_rate_increase %>%
-  ggplot(aes(x=month, y=pings_per_vessel, fill = ping_rate_period)) + 
-  geom_col(position='dodge') +
-  theme(axis.text.x = element_text(angle = 300))
-
-# calculate the correction factor by dividing post period / pre period
-ping_rate_adjustment_factor <- pre_post_ping_rate_increase %>% 
-  pivot_wider(names_from = ping_rate_period, values_from = pings_per_vessel) %>%
-  mutate(ping_rate_correction = post_ping_rate_increase / pre_ping_rate_increase) %>%
-  arrange(month)
-# take a look
-ping_rate_adjustment_factor
-
-```
-
 ```{r quick plot - ping interval}
 # each point = 1 VMS ping
 ping_interval_df <- dcrb_vms_tix_analysis %>%
@@ -749,37 +652,6 @@ VMSrecords_per_trip %>%
 VMSrecords_per_trip %>%
   group_by(trip_year = year(trip_start)) %>%
   summarise(total_vessel_hours = sum(trip_duration_hours))
-
-# avg. ping rate histogram for before and after ping rate increase
-ping_rate_increase_date <- ymd(20210101) # set to Jan. 1, 2021 based on plots above
-VMSrecords_per_trip %>%
-  mutate(ping_rate_period = if_else(
-    trip_start >= ping_rate_increase_date, 
-    "post ping rate increase", 
-    "pre ping rate increase")
-  ) %>%
-  ggplot(aes(x = avg_trip_ping_rate, fill = ping_rate_period)) + 
-  geom_histogram() + 
-  xlim(c(0, 5)) + # limit to interesting data, ignoring a long tail here
-  facet_grid(ping_rate_period ~ ., scales = "free_y")
-
-# avg. adjusted ping rate histogram for before and after ping rate increase
-ping_rate_increase_date <- ymd(20210101) # set to Jan. 1, 2021 based on plots above
-dcrb_vms_tix_analysis_TripInfo %>% 
-  select(Rec_ID, trip_VMSrecords, trip_start, trip_end, trip_duration_hours,
-         avg_trip_ping_rate, VMSrecords_adjusted_trip) %>%
-  distinct() %>%
-  mutate(ping_rate_period = if_else(
-    trip_start >= ping_rate_increase_date, 
-      "post ping rate increase", 
-      "pre ping rate increase"
-    ),
-    adjusted_ping_rate = VMSrecords_adjusted_trip * trip_VMSrecords / trip_duration_hours
-  ) %>%
-  ggplot(aes(x = adjusted_ping_rate, fill = ping_rate_period)) + 
-  geom_histogram() + 
-  facet_grid(ping_rate_period ~ ., scales = "free_y")
-# the most boring histogram, every value is 1
 ```
 
 ```{r check vessel, revenue, and landings representation by VMS data}
