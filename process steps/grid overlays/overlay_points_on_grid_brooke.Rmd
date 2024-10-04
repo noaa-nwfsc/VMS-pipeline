@@ -46,12 +46,6 @@ vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2
   bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2021_matched_filtered_withFTID_length.rds'))) %>%
   bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
   bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
-
-# take a look at imported features
-# can change back to glimpse for example records
-names(vms_all)
-# check all years are present
-unique(year(vms_all$date))
 ```
 
 ### Match VMS pings and fish tickets to grid cells
@@ -80,9 +74,6 @@ pt <- proc.time()
 vms_all_grd_match <- vms_all_sf %>%
   st_join(grd)
 
-# explore output
-names(vms_all_grd_match)
-
 # check timing
 x <- proc.time() - pt
 ```
@@ -99,7 +90,6 @@ vms_all_grd_match %>%
 
 # load version without geometry with grid cell ID written above
 vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'interim', 'vms_all_w_grd_5km.rds'))
-names(vms_all_grd_match)
 ```
 
 ### Filter data and add date columns
@@ -172,20 +162,17 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
 
 # take a look at transformed data
 names(dcrb_vms_tix_analysis)
-
-# check all crab years present
-unique(dcrb_vms_tix_analysis$crab_year)
 ```
 
-### Distribute $ and lbs to grid cells and normalize pings
+### Normalize pings and attribute landings and revenue to grid cells
 
-Distribute rev and lbs to grid cells. Normalize VMS pings by year-month and grid cell.
-
-Adjust ping rate based on # of pings / # hours per trip.
+Adjust pings based on # of pings / # hours per trip.
 
 * For example, in a 38 hour trip with 38 pings, `avg_trip_ping_rate` = 38/38 = 1 ping/hour, and `VMSrecords_adjusted_trip` = 1/1 = 1 adjusted ping.
 * For example, in a 12 hour trip with 48 pings, `avg_trip_ping_rate` = 48/12 = 4 pings/hour, and `VMSrecords_adjusted_trip` = 1/4 = 0.25 adjusted pings.
 
+ Then, normalize VMS pings by year-month and grid cell, and attribute landings and revenue across grid cells.
+ 
 ```{r distribute $ and lbs to cells, and adjust ping rate}
 
 # create new columns that attribute pings, lbs, and $ from each fish ticket 
@@ -206,7 +193,6 @@ VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
 
 # join total records per trip to VMS and fish ticket data; adjust ping rate; calculate vessels, lbs, and $ per VMS ping
 dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_analysis, by="Rec_ID") %>%
-  # left_join(ping_rate_adjustment_factor, by="month") %>%
   mutate(
     VMSrecords_adjusted_trip = 1 / avg_trip_ping_rate, # adjusted record-level pings (e.g. for 1 ping from trip with 4 pings per hour, this value is 0.25)
     DCRB_lbs_per_VMSlocation = DCRB_lbs / trip_VMSrecords,
@@ -247,32 +233,12 @@ dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
     )
   )
 
-# save interim outputs
-write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'processed', 'interim', 'dcrb_vms_tix_analysis_TripInfo.rds'))
-write_rds(dcrb_year_month_5km_df, here::here('Confidential', 'processed', 'interim', 'dcrb_year_month_5km_df.rds'))
-
-# visualize distribution of VMS pings
-dcrb_year_month_5km_df %>%
-  ggplot(aes(DCRB_VMS_pings)) + geom_histogram(binwidth=5)
-print(range(dcrb_year_month_5km_df$DCRB_VMS_pings))
-
-# visualize distribution of adjusted trip VMS pings
-dcrb_year_month_5km_df %>%
-  ggplot(aes(DCRB_VMS_pings_adjusted_trip)) + geom_histogram(binwidth=5)
-print(range(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted_trip))
-
-# visualize distribution of normalized VMS pings
-dcrb_year_month_5km_df %>%
-  ggplot(aes(normalized_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
-print(range(dcrb_year_month_5km_df$normalized_DCRB_VMS_pings))
-
-# visualize distribution of normalized adjusted trip VMS pings
-dcrb_year_month_5km_df %>%
-  ggplot(aes(normalized_adjusted_trip_DCRB_VMS_pings)) + geom_histogram(binwidth=0.01)
-print(range(dcrb_year_month_5km_df$normalized_adjusted_trip_DCRB_VMS_pings))
+# save outputs before splitting into baseline vs. implementation periods
+write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'processed', 'summaries', 'dcrb_vms_tix_analysis_TripInfo.rds'))
+write_rds(dcrb_year_month_5km_df, here::here('Confidential', 'processed', 'summaries', 'dcrb_year_month_5km_df.rds'))
 ```
 
-### Create summaries for Heather
+### Summarize fishing effort in baseline and implementation periods
 
 * *Baseline 2014-2019* includes the start of Nov. 2014 to the end of Oct. 2019.
 * *Baseline 2017-2019* includes the start of Nov. 2017 to the end of Oct. 2019.
@@ -307,13 +273,6 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
     .groups = 'drop'
   )
-# explore output
-names(baseline_2014_2019)
-summary(baseline_2014_2019$avg_DCRB_VMS_pings)
-summary(baseline_2014_2019$avg_normalized_DCRB_VMS_pings)
-summary(baseline_2014_2019$avg_DCRB_VMS_pings_adjusted_trip)
-summary(baseline_2014_2019$avg_normalized_adjusted_trip_DCRB_VMS_pings)
-sort(unique(baseline_2014_2019$month_as_numeric))
 # write output
 write_rds(baseline_2014_2019, here::here('Confidential', 'processed', 'summaries', 'baseline_2014_2019.rds'))
 
@@ -335,34 +294,21 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
     .groups = 'drop'
   )
-# explore output
-names(baseline_2017_2019)
-sort(unique(baseline_2017_2019$month_as_numeric))
-summary(baseline_2017_2019$avg_DCRB_VMS_pings)
-summary(baseline_2017_2019$avg_DCRB_VMS_pings_adjusted_trip)
-summary(baseline_2017_2019$avg_normalized_adjusted_trip_DCRB_VMS_pings)
 # write output
 write_rds(baseline_2017_2019, here::here('Confidential', 'processed', 'summaries', 'baseline_2017_2019.rds'))
 
 # write real-time data (2019-2023) at yearly and monthly temporal grain and grid cell ID spatial grain
 implementation_2019_2023 <- dcrb_year_month_5km_df %>%
   filter(crab_year %in% implementation_2019_2023_crab_years)
-# explore output
-names(implementation_2019_2023)
-sort(unique(implementation_2019_2023$month_as_numeric))
-summary(implementation_2019_2023$DCRB_VMS_pings)
-summary(implementation_2019_2023$normalized_DCRB_VMS_pings)
-summary(implementation_2019_2023$DCRB_VMS_pings_adjusted_trip)
-summary(implementation_2019_2023$normalized_adjusted_trip_DCRB_VMS_pings)
 # write output
 write_rds(implementation_2019_2023, here::here('Confidential', 'processed', 'summaries', 'implementation_2019_2023.rds'))
 ```
 
-### Map pings
+### Visualize fishing effort
 
 For a common sense check, see how the baseline periods and implementation period fishing effort look on a map. Visualize average # of pings for baseline periods, and # of pings for implementation period.
 
-```{r visualize on map}
+```{r map fishing effort}
 
 # based on Owen's compare_hw_bh.R
 
@@ -439,103 +385,6 @@ ggsave(filename = here::here("Confidential", "figures", "map_adjusted_normalized
 
 ### Visualize ping rate
 
-At some point, the VMS ping rate increased from ~1/hour to ~1/15 minutes. As a result, in the time frame with the increased ping rate, fishing effort will look ~4x higher (when it's really just a change in sampling rate), and DCRB_lbs and DCRB_rev are spread over a higher resolution track (4x as many pings to attribute a single fish ticket to).
-
-I'm visualizing this in two ways. 
-
-1. Visualize time series of avg. pings per ticket tickets over time. I'm looking for an increase at a particular point in time, after which I will apply a correction for the increased ping rate. I also visualized number of tickets, just to explore for my own learning.
-2. Visualize distribution of total and normalized pings per grid cell over time. Again, I'm looking for an increase at a particular point in time.
-
-```{r check when ping rate increased}
-
-# approach 1: look at avg. pings per ticket over time
-
-# visualize average pings per ticket over time
-avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
-  group_by(westcoastdate_notime, Rec_ID) %>%
-  summarise(trip_VMSrecords = n()) %>%
-  ungroup() %>%
-  group_by(westcoastdate_notime) %>%
-  summarise(n_tickets = n(),
-            avg_pings_per_ticket = mean(trip_VMSrecords))
-# plot # pings and avg. pings per ticket vs. time, each point is one day
-avg_pings_per_ticket_over_time %>% 
-  pivot_longer(-westcoastdate_notime) %>%
-  ggplot(aes(x = westcoastdate_notime, y = value)) +
-    geom_point() +
-    facet_grid(name ~ .)
-
-# looks like the increase was in 2021, now find out which month...
-
-# look at average pings per ticket over time in table
-avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
-  filter(year == 2021) %>%
-  group_by(month, Rec_ID) %>%
-  summarise(trip_VMSrecords = n()) %>%
-  ungroup() %>%
-  group_by(month) %>%
-  summarise(n_tickets = n(),
-            avg_pings_per_ticket = mean(trip_VMSrecords))
-# plot # pings and avg. pings per ticket vs. time, each point is one month
-avg_pings_per_ticket_over_time %>% 
-  pivot_longer(-month) %>%
-  ggplot(aes(x = month, y = value, color = name)) +
-    geom_point() + 
-    facet_grid(name ~ .)
-
-# looks like the increase was in January, look for a specific day...
-
-# look at average pings per ticket over time in table
-avg_pings_per_ticket_over_time <- dcrb_vms_tix_analysis %>%
-  filter(year == 2021 & month == 'January') %>%
-  group_by(westcoastdate_notime, Rec_ID) %>%
-  summarise(trip_VMSrecords = n()) %>%
-  ungroup() %>%
-  group_by(westcoastdate_notime) %>%
-  summarise(n_tickets = n(),
-            avg_pings_per_ticket = mean(trip_VMSrecords))
-# plot # pings and avg. pings per ticket vs. time, each point is one day in Jan. 2021
-avg_pings_per_ticket_over_time %>% 
-  pivot_longer(-westcoastdate_notime) %>%
-  ggplot(aes(x = westcoastdate_notime, y = value, color = name)) +
-    geom_point() + geom_line() +
-    facet_grid(name ~ .)
-
-# looks like the increase was at the start of January 2021.
-
-# approach 2: look at # pings and normalized # pings per grid cell over time
-# 1 record = sum of pings per grid cell per year-month
-
-# visualize distribution of pings in violin plot
-dcrb_year_month_5km_df %>%
-  ggplot(aes(x = factor(year), y = DCRB_VMS_pings)) + 
-  geom_boxplot()
-
-# see summary of pings by year
-dcrb_year_month_5km_df %>%
-  group_by(year) %>%
-  summarise(
-    min_DCRB_VMS_pings = min(DCRB_VMS_pings),
-    median_DCRB_VMS_pings = median(DCRB_VMS_pings),
-    mean_DCRB_VMS_pings = mean(DCRB_VMS_pings),
-    max_DCRB_VMS_pings = max(DCRB_VMS_pings)
-  )
-
-# see summary of normalized pings by year
-dcrb_year_month_5km_df %>%
-  group_by(year) %>%
-  summarise(
-    min_normalized_DCRB_VMS_pings = min(normalized_DCRB_VMS_pings),
-    median_normalized_DCRB_VMS_pings = median(normalized_DCRB_VMS_pings),
-    mean_normalized_DCRB_VMS_pings = mean(normalized_DCRB_VMS_pings),
-    max_normalized_DCRB_VMS_pings = max(normalized_DCRB_VMS_pings)
-  )
-```
-
-Jameal shared that the ping rate increased 4x in April 2020 for 900/1200 vessels.
-
-Look for a monthly factor to correct vessel ping rate. This is a rough/fast fix, and it is worth checking how sensitive cooccurrence metrics are based on this correction factor.
-
 ```{r quick plot - fish tickets and season length over years}
 # is fishing effort (as # fish tickets / # days fishery open) consistent in the post-April 2020 period?
 
@@ -572,7 +421,7 @@ plot_season_length
 plot_n_fish_tickets_per_season_day
 ```
 
-```{r quick plot - # vessels before and after ping rate increase (Apr. 2020)}
+```{r plot monthly time series of vessel, ticket and ping counts}
 
 monthly_df <- dcrb_vms_tix_analysis_TripInfo %>% 
   filter(year >= 2018 & year <= 2022) %>%
@@ -598,7 +447,7 @@ monthly_df %>%
 
 ```
 
-```{r quick plot - ping interval}
+```{r plot ping interval}
 # each point = 1 VMS ping
 ping_interval_df <- dcrb_vms_tix_analysis %>%
   group_by(Rec_ID) %>%
@@ -635,7 +484,7 @@ ping_interval_df %>%
 # I'm seeing the shift in ping rates between Dec. 30, 2020 and Jan. 7, 2021
 ```
 
-```{r quick plot - pings / hour by trip and vessel hours}
+```{r plot ping rate}
 # avg. ping rate summary
 VMSrecords_per_trip %>%
   group_by(year(trip_start)) %>%
@@ -654,7 +503,7 @@ VMSrecords_per_trip %>%
   summarise(total_vessel_hours = sum(trip_duration_hours))
 ```
 
-```{r check vessel, revenue, and landings representation by VMS data}
+```{r plot vessel, revenue, and landings representation by VMS data}
 
 # load all fish tickets
 fish_ticket_df <- read_rds(here('Confidential', 'processed', 'fish tickets', '2014fishtix_vlengths_withFTID.rds')) %>%
@@ -807,5 +656,3 @@ dcrb_vms_representation_vessel_size_df %>%
   geom_histogram(position='dodge') +
   theme(legend.position = "bottom")
 ```
-
-
