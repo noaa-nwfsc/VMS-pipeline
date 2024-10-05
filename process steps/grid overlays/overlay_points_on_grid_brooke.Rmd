@@ -393,65 +393,23 @@ ggsave(filename = here::here("Confidential", "figures", "map_adjusted_normalized
 
 ### Visualize basic time series
 
-```{r quick plot - fish tickets and season length over years}
-# is fishing effort (as # fish tickets / # days fishery open) consistent in the post-April 2020 period?
-
-crab_years_to_vis = c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019",
-                      "2019_2020", "2020_2021", "2021_2022", "2022_2023")
-
-# how many days was the fishery open each season? how many fish tickets for each season?
-# -"open" means there were VMS pings with fish tickets matched to them
-# - crab_year represents a season and is defined earlier in this script as Nov. - Oct., it is not based on closures
-
-# season length by year
-n_fish_tickets_per_day_by_crab_year <- dcrb_vms_tix_analysis %>%
-  filter(crab_year %in% crab_years_to_vis) %>%
-  group_by(crab_year) %>%
-  summarise(season_start_day = min(westcoastdate_notime),
-            season_end_day = max(westcoastdate_notime),
-            season_length = season_end_day - season_start_day,
-            season_length_numeric = as.numeric(season_length, unit = 'days'),
-            n_fish_tickets = n_distinct(Rec_ID),
-            n_fish_tickets_per_season_day = n_fish_tickets / season_length_numeric)
-# see table
-n_fish_tickets_per_day_by_crab_year
-
-# plot separately over time
-plot_n_fish_tickets <- ggplot(n_fish_tickets_per_day_by_crab_year, aes(x = crab_year, y = n_fish_tickets, group = 1)) +
-    geom_point() + geom_line() + ylim(0, max(n_fish_tickets_per_day_by_crab_year$n_fish_tickets))
-plot_season_length <- ggplot(n_fish_tickets_per_day_by_crab_year, aes(x = crab_year, y = season_length, group = 1)) +
-    geom_point() + geom_line() + ylim(0, max(n_fish_tickets_per_day_by_crab_year$season_length))
-plot_n_fish_tickets_per_season_day <- ggplot(n_fish_tickets_per_day_by_crab_year, aes(x = crab_year, y = n_fish_tickets_per_season_day, group = 1)) +
-    geom_point() + geom_line() + ylim(0, max(n_fish_tickets_per_day_by_crab_year$n_fish_tickets_per_season_day))
-# give up and look at them individually...
-plot_n_fish_tickets
-plot_season_length
-plot_n_fish_tickets_per_season_day
-```
-
-```{r plot monthly time series of vessel, ticket and ping counts}
-
+```{r plot monthly basic counts}
+# summarize counts of vessels, tickets, days with VMS pings, and # pings
 monthly_df <- dcrb_vms_tix_analysis_TripInfo %>% 
-  filter(year >= 2018 & year <= 2022) %>%
   mutate(month_as_date = round_date(westcoastdate_notime, unit='month')) %>%
-  group_by(year, month_as_date) %>%
+  group_by(year, crab_year, month_as_date) %>%
   summarise(n_vessels = n_distinct(drvid),
             n_tickets = n_distinct(Rec_ID),
+            n_days = n_distinct(westcoastdate_notime),
             n_pings = n())
-  
-monthly_df
 
+# visualize count represented vs. not represented for vessels, landings, and revenue
 monthly_df %>% 
-  ggplot(aes(x=month_as_date, y=n_vessels, color = as.factor(year))) + geom_point() + geom_line(group=1) +
-    theme(axis.text.x = element_text(angle = 300))
-
-monthly_df %>% 
-  ggplot(aes(x=month_as_date, y=n_tickets, color = as.factor(year))) + geom_point() + geom_line(group=1) +
-    theme(axis.text.x = element_text(angle = 300))
-
-monthly_df %>% 
-  ggplot(aes(x=month_as_date, y=n_pings, color = as.factor(year))) + geom_point() + geom_line(group=1) +
-    theme(axis.text.x = element_text(angle = 300))
+  pivot_longer(cols = n_vessels:n_pings, names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = month_as_date, y = value, color = crab_year, fill = crab_year)) +
+  geom_col(position = "dodge") + 
+  facet_grid(variable ~ ., scales = "free_y") +
+  expand_limits(y = 0)
 
 ```
 
