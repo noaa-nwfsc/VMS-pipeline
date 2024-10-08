@@ -508,31 +508,48 @@ ggsave(filename = here::here("Confidential", "figures", "map_normalized_pings.pn
 ### Visualize basic time series
 
 ```{r plot monthly basic counts}
-
-# TODO update below this line to visualize both interpolated and non-interpolated data
-
 # summarize counts of vessels, tickets, days with VMS pings, and # pings
-monthly_df <- dcrb_vms_tix_analysis_TripInfo %>% 
+monthly_df_all <- dcrb_df_all %>% 
   mutate(month_as_date = round_date(westcoastdate_notime, unit='month')) %>%
   group_by(year, crab_year, month_as_date) %>%
   summarise(n_vessels = n_distinct(drvid),
             n_tickets = n_distinct(Rec_ID),
             n_days = n_distinct(westcoastdate_notime),
             n_pings = n())
-
 # visualize count represented vs. not represented for vessels, landings, and revenue
-monthly_df %>% 
+monthly_df_all %>% 
   pivot_longer(cols = n_vessels:n_pings, names_to = "variable", values_to = "value") %>%
   ggplot(aes(x = month_as_date, y = value, color = crab_year, fill = crab_year)) +
   geom_col(position = "dodge") + 
   facet_grid(variable ~ ., scales = "free_y") +
   expand_limits(y = 0)
+ggsave(filename = here::here("Confidential", "figures", "counts_non_interpolated.png"))
 
+# repeat for interpolated data
+# summarize counts of vessels, tickets, days with VMS pings, and # pings
+monthly_df_interpolated <- dcrb_df_interpolated %>% 
+  mutate(month_as_date = round_date(westcoastdate_notime, unit='month')) %>%
+  group_by(year, crab_year, month_as_date) %>%
+  summarise(n_vessels = n_distinct(drvid),
+            n_tickets = n_distinct(Rec_ID),
+            n_days = n_distinct(westcoastdate_notime),
+            n_pings = n())
+# visualize count represented vs. not represented for vessels, landings, and revenue
+monthly_df_interpolated %>% 
+  pivot_longer(cols = n_vessels:n_pings, names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = month_as_date, y = value, color = crab_year, fill = crab_year)) +
+  geom_col(position = "dodge") + 
+  facet_grid(variable ~ ., scales = "free_y") +
+  expand_limits(y = 0)
+ggsave(filename = here::here("Confidential", "figures", "counts_interpolated.png"))
 ```
 
 ### Visualize ping interval and rate
 
 ```{r plot ping interval}
+
+# TODO update below this line to visualize both interpolated and non-interpolated data
+
 # each point = 1 VMS ping
 ping_interval_df <- dcrb_vms_tix_analysis %>%
   group_by(Rec_ID) %>%
