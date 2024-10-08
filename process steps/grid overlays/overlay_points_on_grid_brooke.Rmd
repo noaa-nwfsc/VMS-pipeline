@@ -548,10 +548,9 @@ ggsave(filename = here::here("Confidential", "figures", "counts_interpolated.png
 
 ```{r plot ping interval}
 
-# TODO update below this line to visualize both interpolated and non-interpolated data
-
+# visualize for non-interpolated data
 # each point = 1 VMS ping
-ping_interval_df <- dcrb_vms_tix_analysis %>%
+ping_interval_df_all <- dcrb_df_all %>%
   group_by(Rec_ID) %>%
   arrange(westcoastdate) %>%
   mutate(
@@ -559,54 +558,90 @@ ping_interval_df <- dcrb_vms_tix_analysis %>%
     ping_interval_min = as.numeric(difftime(westcoastdate, next_time, units = 'mins')),
     ping_interval_hours = as.numeric(difftime(westcoastdate, next_time, units = 'hours'))
   )
-
-ping_interval_df %>%
+# summarize by year
+ping_interval_df_all %>%
   group_by(crab_year) %>%
   summarise(min = min(ping_interval_hours, na.rm=TRUE),
             median = median(ping_interval_hours, na.rm=TRUE),
             mean = mean(ping_interval_hours, na.rm=TRUE),
             max = max(ping_interval_hours, na.rm=TRUE))
-
-# look by year
-ping_interval_df %>%
-  ggplot(aes(x = as.factor(crab_year), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2))
-
-# look by month (expect shift in Sept. 2020 based on what Blake saw in a quick check in the raw VMS data)
-ping_interval_df %>%
+# visualize by year
+ping_interval_df_all %>%
+  ggplot(aes(x = as.factor(crab_year), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) # note limited axes
+# visualize by month in 2019-2021 (expect shift in Sept. 2020 based on what Blake saw in a quick check in the raw VMS data)
+ping_interval_df_all %>%
   filter(crab_year %in% c("2019_2020", "2020_2021")) %>%
-  ggplot(aes(x = as.factor(year_month), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) +
+  ggplot(aes(x = as.factor(year_month), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) + # note limited axes
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-# look by day
-ping_interval_df %>%
+# visualize by day in Dec. 2020-Jan. 2021
+ping_interval_df_all %>%
   filter(year_month %in% c("2020_12", "2021_01")) %>%
-  ggplot(aes(x = as.factor(westcoastdate_notime), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) +
+  ggplot(aes(x = as.factor(westcoastdate_notime), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) + # note limited axes
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
 # I'm seeing the shift in ping rates between Dec. 30, 2020 and Jan. 7, 2021
+
+# repeat for interpolated data
+# each point = 1 VMS ping
+ping_interval_df_interpolated <- dcrb_df_interpolated %>%
+  group_by(Rec_ID) %>%
+  arrange(westcoastdate) %>%
+  mutate(
+    next_time = lag(westcoastdate, 1),
+    ping_interval_min = as.numeric(difftime(westcoastdate, next_time, units = 'mins')),
+    ping_interval_hours = as.numeric(difftime(westcoastdate, next_time, units = 'hours'))
+  )
+# summarize by year
+ping_interval_df_interpolated %>%
+  group_by(crab_year) %>%
+  summarise(min = min(ping_interval_hours, na.rm=TRUE),
+            median = median(ping_interval_hours, na.rm=TRUE),
+            mean = mean(ping_interval_hours, na.rm=TRUE),
+            max = max(ping_interval_hours, na.rm=TRUE))
+# visualize by year
+ping_interval_df_interpolated %>%
+  ggplot(aes(x = as.factor(crab_year), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) # note limited axes
+# visualize by month in 2019-2021 (expect shift in Sept. 2020 based on what Blake saw in a quick check in the raw VMS data)
+ping_interval_df_interpolated %>%
+  filter(crab_year %in% c("2019_2020", "2020_2021")) %>%
+  ggplot(aes(x = as.factor(year_month), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) + # note limited axes
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# visualize by day in Dec. 2020-Jan. 2021
+ping_interval_df_interpolated %>%
+  filter(year_month %in% c("2020_12", "2021_01")) %>%
+  ggplot(aes(x = as.factor(westcoastdate_notime), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) + # note limited axes
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# I'm seeing some outliers that aren't perfectly one hour intervals
 ```
 
 ```{r plot ping rate}
+# start with non-interpolated data
 # avg. ping rate summary
-VMSrecords_per_trip %>%
+dcrb_trips_all %>%
   group_by(year(trip_start)) %>%
   summarise(min = min(avg_trip_ping_rate, na.rm=TRUE),
             median = median(avg_trip_ping_rate, na.rm=TRUE),
             mean = mean(avg_trip_ping_rate, na.rm=TRUE),
             max = max(avg_trip_ping_rate, na.rm=TRUE))
-
 # avg. ping rate  boxplot
-VMSrecords_per_trip %>%
-  ggplot(aes(x=as.factor(year(trip_start)), y=avg_trip_ping_rate)) + geom_boxplot() + ylim(c(0,10))
+dcrb_trips_all %>%
+  ggplot(aes(x=as.factor(year(trip_start)), y=avg_trip_ping_rate)) + geom_boxplot() + ylim(c(0,10)) # note limited axes
 
-# consistency in hours fishing across vessels from year to year?
-VMSrecords_per_trip %>%
-  group_by(trip_year = year(trip_start)) %>%
-  summarise(total_vessel_hours = sum(trip_duration_hours))
+# repeat with interpolated data
+dcrb_trips_interpolated %>%
+  group_by(year(trip_start)) %>%
+  summarise(min = min(avg_trip_ping_rate, na.rm=TRUE),
+            median = median(avg_trip_ping_rate, na.rm=TRUE),
+            mean = mean(avg_trip_ping_rate, na.rm=TRUE),
+            max = max(avg_trip_ping_rate, na.rm=TRUE))
+# avg. ping rate  boxplot
+dcrb_trips_interpolated %>%
+  ggplot(aes(x=as.factor(year(trip_start)), y=avg_trip_ping_rate)) + geom_boxplot()
 ```
 ### Visualize VMS representativeness
 
 ```{r plot vessel, revenue, and landings representation by VMS data}
+
+# TODO update below this line to visualize both interpolated and non-interpolated data
 
 # load all fish tickets
 fish_ticket_df <- read_rds(here('Confidential', 'processed', 'fish tickets', '2014fishtix_vlengths_withFTID.rds')) %>%
