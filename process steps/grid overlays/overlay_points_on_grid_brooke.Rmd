@@ -27,94 +27,98 @@ library(rnaturalearth) # for mapping states
 library(viridis) # for good color scales
 ```
 
-```{r}
-# set boolean flag for whether to use interpolated or non-interpolated VMS pings
-use_interpolated = TRUE
-```
-
-
 ### Import data
 
 Load VMS pings with fish tickets for all years.
 
 ```{r import data}
 # clear workspace of everything but interpolation flag
-rm(list = setdiff(ls(), 'use_interpolated'))
+rm(list = ls())
 
-# load 2014-2023 VMS data
-if (use_interpolated) {
-  # load interpolated data
-  vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2014_interpolated.rds')) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2015_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2016_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2017_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2018_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2019_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2020_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2021_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2022_interpolated.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2023_interpolated.rds')))
-} else {
-  # load non-interpolated data
-  vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2014_matched_filtered_withFTID_length.rds')) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2015_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2016_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2017_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2018_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2019_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2020_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2021_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
-    bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
-}
+# load interpolated data
+vms_interpolated <- read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2014_interpolated.rds')) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2015_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2016_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2017_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2018_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2019_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2020_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2021_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2022_interpolated.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2023_interpolated.rds')))
+
+# load non-interpolated data
+vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2014_matched_filtered_withFTID_length.rds')) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2015_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2016_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2017_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2018_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2019_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2020_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2021_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
 ```
 
 ``` {r basic counts before filter}
-# count records, trips and years
-n_records <- nrow(vms_all)
-n_trips <- n_distinct(vms_all$Rec_ID)
-n_years <- n_distinct(lubridate::year(vms_all$westcoastdate_notime))
+# count total records, trips and years in non-interpolated dataset
+n_records_all <- nrow(vms_all)
+n_trips_all <- n_distinct(vms_all$Rec_ID)
+n_years_all <- n_distinct(lubridate::year(vms_all$westcoastdate_notime))
 
-# count interpolated records and trips
-if (use_interpolated) {
-  n_interpolated_records <- vms_all %>% filter(is_interpolated == 1) %>% select(VMS_RECNO) %>% n_distinct()
-  n_interpolated_trips <- vms_all %>% filter(is_interpolated == 1) %>% select(Rec_ID) %>% n_distinct()
-} else {
-  n_interpolated_records <- 0
-  n_interpolated_trips <- 0
-}
+# count total records, trips and years in interpolated dataset
+n_records_interpolated <- nrow(vms_interpolated)
+n_trips_interpolated <- n_distinct(vms_interpolated$Rec_ID)
+n_years_interpolated <- n_distinct(lubridate::year(vms_interpolated$westcoastdate_notime))
+
+# count interpolated records and trips in interpolated dataset
+n_interpolated_records_interpolated <- vms_interpolated %>% filter(is_interpolated == 1) %>% select(VMS_RECNO) %>% n_distinct()
+n_interpolated_trips_interpolated <- vms_interpolated %>% filter(is_interpolated == 1) %>% select(Rec_ID) %>% n_distinct()
 ```
 
-Before post-processing filtering, VMS data includes `r n_records` records (VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
-`r n_interpolated_records` records (`r round(n_interpolated_records / n_records * 100, 0)`%) are interpolated, and `r n_interpolated_trips` trips (`r round(n_interpolated_trips / n_trips * 100, 0)`%) have at least one interpolated record.
+Before post-processing filtering, the non-interpolated data includes `r n_records_all` records (VMS pings), `r n_trips_all` trips (fish tickets), across `r n_years_all` years.
+The interpolated data includes `r n_records_interpolated` records (VMS pings), `r n_trips_interpolated` trips (fish tickets), across `r n_years_interpolated` years.
+
+`r n_interpolated_records_interpolated` records (`r round(n_interpolated_records_interpolated / n_records_interpolated * 100, 0)`%) are interpolated, and
+`r n_interpolated_trips_interpolated` trips (`r round(n_interpolated_trips_interpolated / n_trips_interpolated * 100, 0)`%) have at least one interpolated record.
 
 ### Match VMS pings and fish tickets to grid cells
 
 ```{r}
 # remove counts from above
-rm(n_records, n_trips, n_years, n_interpolated_records, n_interpolated_trips)
+rm(list = setdiff(ls(), c('vms_all', 'vms_interpolated')))
 
 # load 5x5 grid shapefile
 grd <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
 
-# convert VMS to spatial object
+# start timing
 pt <- proc.time()
+
+# convert VMS datasets to spatial object, then to planar projection to match the grid
 vms_all_sf <- vms_all %>%
   st_as_sf(coords= c('LON','LAT'), crs=4326) %>% 
-  # then, convert to planar projection to match the grid
   st_transform(st_crs(grd))
+vms_interpolated_sf <- vms_interpolated %>%
+  st_as_sf(coords= c('LON','LAT'), crs=4326) %>% 
+  st_transform(st_crs(grd))
+
+# stop timing
 x <- proc.time() - pt
 ```
 
 Took `r round(x[3]/60,2)` minutes to do the conversion. Now for the join...
 
 ```{r join VMS with spatial object to grid}
-# do the join
+# start timing
 pt <- proc.time()
+
+# do the join
 vms_all_grd_match <- vms_all_sf %>%
   st_join(grd)
+vms_interpolated_grd_match <- vms_interpolated_sf %>%
+  st_join(grd)
 
-# check timing
+# stop timing
 x <- proc.time() - pt
 ```
 
@@ -125,9 +129,14 @@ The join took `r round(x[3]/60,2)` minutes.
 vms_all_grd_match %>% 
   st_set_geometry(NULL) %>% 
   write_rds(here('Confidential', 'processed', 'interim', 'vms_all_w_grd_5km.rds'))
+# save without geometry while still including grid cell ID
+vms_interpolated_grd_match %>% 
+  st_set_geometry(NULL) %>% 
+  write_rds(here('Confidential', 'processed', 'interim', 'vms_interpolated_w_grd_5km.rds'))
 
 # load version without geometry with grid cell ID written above
 vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'interim', 'vms_all_w_grd_5km.rds'))
+vms_interpolated_grd_match <- read_rds(here('Confidential', 'processed', 'interim', 'vms_interpolated_w_grd_5km.rds'))
 ```
 
 ### Filter data and add date columns
@@ -141,7 +150,7 @@ Notes:
 * *agency_code* filters for VMS pings joined to fish tickets that were landed in California. You can see in the map at the end of the file this means some pings extend beyond California.
 * *removal_type* to filter for commercial landings is not included here, so personal take is included in *DCRB_lbs*. This does not impact *DCRB_VMS_pings* or *DCRB_rev*.
 
-```{r filter fishing data}
+```{r filter data}
 
 # set filter parameters
 state_agency_code = "C" # filter for landings brought to California ports
@@ -157,8 +166,8 @@ min_speed <- 0 # units = m/s
 crab_years_to_vis = c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019",
                       "2019_2020", "2020_2021", "2021_2022", "2022_2023")
 
-# filter data, add year/season columns, and select columns for analysis
-dcrb_vms_tix_analysis <- vms_all_grd_match %>%
+# filter data, add year/season columns, and select columns for all data
+dcrb_vms_all <- vms_all_grd_match %>%
   filter(agency_code == state_agency_code) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
@@ -197,37 +206,104 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
       DCRB_lbs, # dungeness crab catch weight
       DCRB_revenue # dungeness crab catch revenue
     )
+
+# repeat for interpolated data
+# only difference is to keep the is_interpolated column
+dcrb_vms_interpolated <- vms_interpolated_grd_match %>%
+  filter(agency_code == state_agency_code) %>%
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
+  filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
+  mutate(
+    year = lubridate::year(westcoastdate_notime),
+    year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime),6,7)),
+    # substr() ensures month is a 2 digit value, e.g. February is "02" not "2"
+    month = lubridate::month(westcoastdate_notime, label=TRUE, abbr = FALSE),
+    month_as_numeric = month(westcoastdate_notime),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    crab_year = ifelse(
+      month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
+    )
+  ) %>%
+  filter(crab_year %in% crab_years_to_vis) %>%
+  dplyr::select(
+      GRID5KM_ID, # grid cell ID
+      Rec_ID, # fish ticket ID
+      VMS_RECNO, # VMS ping ID
+      drvid, # vessel ID
+      FINAL_LENGTH,
+      westcoastdate,
+      westcoastdate_notime,
+      year,
+      crab_year, 
+      year_month,
+      month, 
+      month_as_numeric,
+      season,
+      pacfin_port_code, 
+      port_group_code, 
+      NGDC_M, # depth
+      TARGET_lbs, # target species by weight (filtered to "DCRB")
+      TARGET_rev, # target species by revenue (filtered to "DCRB")
+      DCRB_lbs, # dungeness crab catch weight
+      DCRB_revenue, # dungeness crab catch revenue
+      is_interpolated
+    )
 ```
 
 ``` {r basic counts after filter}
-# count records, trips and years
-n_records <- nrow(dcrb_vms_tix_analysis)
-n_trips <- n_distinct(dcrb_vms_tix_analysis$Rec_ID)
-n_years <- n_distinct(dcrb_vms_tix_analysis$year)
+# count total records, trips and years in non-interpolated dataset
+n_records_all <- nrow(dcrb_vms_all)
+n_trips_all <- n_distinct(dcrb_vms_all$Rec_ID)
+n_years_all <- n_distinct(lubridate::year(dcrb_vms_all$westcoastdate_notime))
+
+# count total records, trips and years in interpolated dataset
+n_records_interpolated <- nrow(dcrb_vms_interpolated)
+n_trips_interpolated <- n_distinct(dcrb_vms_interpolated$Rec_ID)
+n_years_interpolated <- n_distinct(lubridate::year(dcrb_vms_interpolated$westcoastdate_notime))
+
+# count interpolated records and trips in interpolated dataset
+n_interpolated_records_interpolated <- dcrb_vms_interpolated %>% filter(is_interpolated == 1) %>% select(VMS_RECNO) %>% n_distinct()
+n_interpolated_trips_interpolated <- dcrb_vms_interpolated %>% filter(is_interpolated == 1) %>% select(Rec_ID) %>% n_distinct()
 ```
 
-After post-processing filtering, VMS data includes `r n_records` records (VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
+After post-processing filtering, the non-interpolated data includes `r n_records_all` records (VMS pings), `r n_trips_all` trips (fish tickets), across `r n_years_all` years.
+The interpolated VMS data includes `r n_records_interpolated` records (VMS pings), `r n_trips_interpolated` trips (fish tickets), across `r n_years_interpolated` years.
+
+`r n_interpolated_records_interpolated` records (`r round(n_interpolated_records_interpolated / n_records_interpolated * 100, 0)`%) are interpolated, and
+`r n_interpolated_trips_interpolated` trips (`r round(n_interpolated_trips_interpolated / n_trips_interpolated * 100, 0)`%) have at least one interpolated record.
 
 ### Normalize pings and attribute landings and revenue to grid cells
 
-Adjust pings based on # of pings / # hours per trip.
+If not using interpolated pings, also adjust pings based on # of pings / # hours per trip.
 
-* For example, in a 38 hour trip with 38 pings, `avg_trip_ping_rate` = 38/38 = 1 ping/hour, and `VMSrecords_adjusted_trip` = 1/1 = 1 adjusted ping.
-* For example, in a 12 hour trip with 48 pings, `avg_trip_ping_rate` = 48/12 = 4 pings/hour, and `VMSrecords_adjusted_trip` = 1/4 = 0.25 adjusted pings.
+* For example, in a 38 hour trip with 38 pings, `avg_trip_ping_rate` = 38/38 = 1 ping/hour, and `VMSrecords_adjusted` = 1/1 = 1 adjusted ping.
+* For example, in a 12 hour trip with 48 pings, `avg_trip_ping_rate` = 48/12 = 4 pings/hour, and `VMSrecords_adjusted` = 1/4 = 0.25 adjusted pings.
 
- Then, normalize adjusted VMS pings by year-month and grid cell, and attribute landings and revenue across grid cells.
+ Then, normalize interpolated or adjusted VMS pings by year-month and grid cell, and attribute landings and revenue across grid cells.
  
 ```{r distribute $ and lbs to cells, and adjust ping rate}
 
-# remove counts from above
-rm(n_records, n_trips, n_years, n_interpolated_records, n_interpolated_trips)
+# remove counts from above and imported datasets, will use filtered versions for rest of the script
+rm(list = setdiff(ls(), c('dcrb_vms_all', 'dcrb_vms_interpolated', 'grd')))
 
 # create new columns that attribute pings, lbs, and $ from each fish ticket 
 # across all VMS pings matched to that ticket
 
 # total records per trip (total number of VMS records associated with each fish ticket)
 # one record = one fish ticket
-VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
+dcrb_trips_all <- dcrb_vms_all %>%
+  group_by(Rec_ID) %>%
+  summarise(trip_VMSrecords = n(),
+            trip_start = min(westcoastdate),
+            trip_end = max(westcoastdate),
+            trip_duration_hours = if_else(as.numeric(trip_end - trip_start, units = 'hours') > 0,
+                                          as.numeric(trip_end - trip_start, units = 'hours'),
+                                          1),
+            avg_trip_ping_rate = trip_VMSrecords / trip_duration_hours,
+            .groups = 'drop')
+# repeat for interpolated data
+dcrb_trips_interpolated <- dcrb_vms_interpolated %>%
   group_by(Rec_ID) %>%
   summarise(trip_VMSrecords = n(),
             trip_start = min(westcoastdate),
@@ -238,10 +314,20 @@ VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
             avg_trip_ping_rate = trip_VMSrecords / trip_duration_hours,
             .groups = 'drop')
 
-# join total records per trip to VMS and fish ticket data; adjust ping rate; calculate vessels, lbs, and $ per VMS ping
-dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_analysis, by="Rec_ID") %>%
+# join total records per trip to VMS and fish ticket data
+# adjust ping rate for non-interpolated data
+# calculate vessels, lbs, and $ per VMS ping
+dcrb_df_all <- left_join(dcrb_trips_all, dcrb_vms_all, by="Rec_ID") %>%
   mutate(
-    VMSrecords_adjusted_trip = 1 / avg_trip_ping_rate, # adjusted record-level pings (e.g. for 1 ping from trip with 4 pings per hour, this value is 0.25)
+    VMSrecords_adjusted = 1 / avg_trip_ping_rate, # adjusted record-level pings (e.g. for 1 ping from trip with 4 pings per hour, this value is 0.25)
+    DCRB_lbs_per_VMSlocation = DCRB_lbs / trip_VMSrecords,
+    DCRB_rev_per_VMSlocation = DCRB_revenue / trip_VMSrecords,
+    DCRB_Vessels_per_VMSlocation = 1 / trip_VMSrecords
+  )
+# repeat for interpolated data
+dcrb_df_interpolated <- left_join(dcrb_trips_interpolated, dcrb_vms_interpolated, by="Rec_ID") %>%
+  mutate(
+    # no trip-wise adjustment for interpolated pings
     DCRB_lbs_per_VMSlocation = DCRB_lbs / trip_VMSrecords,
     DCRB_rev_per_VMSlocation = DCRB_revenue / trip_VMSrecords,
     DCRB_Vessels_per_VMSlocation = 1 / trip_VMSrecords
@@ -249,31 +335,56 @@ dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_an
 
 # summarize and normalize fishery effort at year, month and grid cell level
 # based on Jameal's prep_data_for_scenario_df_function.R
-dcrb_year_month_5km_df <- dcrb_vms_tix_analysis_TripInfo %>%
+dcrb_year_month_5km_df_all <- dcrb_df_all %>%
   group_by(crab_year, year, year_month, month_as_numeric, month, GRID5KM_ID) %>%
   summarise(
     DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
     DCRB_rev = sum(DCRB_rev_per_VMSlocation),
     DCRB_VMS_pings = n(),
-    DCRB_VMS_pings_adjusted_trip = sum(VMSrecords_adjusted_trip),
+    DCRB_VMS_pings_adjusted = sum(VMSrecords_adjusted),
     DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
     Unique_DCRB_Vessels = length(unique(as.character(drvid)))
   ) %>%
   ungroup() %>%
   mutate(
     # rescale adjusted trip pings to 0-1
-    normalized_adjusted_trip_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings_adjusted_trip, center = min(DCRB_VMS_pings_adjusted_trip), scale = diff(range(DCRB_VMS_pings_adjusted_trip)))),
+    normalized_adjusted_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings_adjusted, center = min(DCRB_VMS_pings_adjusted), scale = diff(range(DCRB_VMS_pings_adjusted)))),
     # above rescaling converts mininmum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
-    normalized_adjusted_trip_DCRB_VMS_pings = ifelse(
-      normalized_adjusted_trip_DCRB_VMS_pings == 0, 
-      0.5 * min(normalized_adjusted_trip_DCRB_VMS_pings[normalized_adjusted_trip_DCRB_VMS_pings != min(normalized_adjusted_trip_DCRB_VMS_pings)]),
-      normalized_adjusted_trip_DCRB_VMS_pings
+    normalized_adjusted_DCRB_VMS_pings = ifelse(
+      normalized_adjusted_DCRB_VMS_pings == 0, 
+      0.5 * min(normalized_adjusted_DCRB_VMS_pings[normalized_adjusted_DCRB_VMS_pings != min(normalized_adjusted_DCRB_VMS_pings)]),
+      normalized_adjusted_DCRB_VMS_pings
+    )
+  )
+# repeat for interpolated data
+dcrb_year_month_5km_df_interpolated <- dcrb_df_interpolated %>%
+  group_by(crab_year, year, year_month, month_as_numeric, month, GRID5KM_ID) %>%
+  summarise(
+    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
+    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
+    DCRB_VMS_pings = n(),
+    DCRB_Vessels = sum(DCRB_Vessels_per_VMSlocation),
+    Unique_DCRB_Vessels = length(unique(as.character(drvid)))
+  ) %>%
+  ungroup() %>%
+  mutate(
+    # rescale adjusted trip pings to 0-1
+    normalized_interpolated_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings, center = min(DCRB_VMS_pings), scale = diff(range(DCRB_VMS_pings)))),
+    # above rescaling converts mininmum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
+    normalized_interpolated_DCRB_VMS_pings = ifelse(
+      normalized_interpolated_DCRB_VMS_pings == 0, 
+      0.5 * min(normalized_interpolated_DCRB_VMS_pings[normalized_interpolated_DCRB_VMS_pings != min(normalized_interpolated_DCRB_VMS_pings)]),
+      normalized_interpolated_DCRB_VMS_pings
     )
   )
 
 # save outputs before splitting into baseline vs. implementation periods
-write_rds(dcrb_vms_tix_analysis_TripInfo, here::here('Confidential', 'processed', 'summaries', 'dcrb_vms_tix_analysis_TripInfo.rds'))
-write_rds(dcrb_year_month_5km_df, here::here('Confidential', 'processed', 'summaries', 'dcrb_year_month_5km_df.rds'))
+write_rds(dcrb_df_all, here::here('Confidential', 'processed', 'summaries', 'dcrb_df_all.rds'))
+write_rds(dcrb_df_interpolated, here::here('Confidential', 'processed', 'summaries', 'dcrb_df_interpolated.rds'))
+write_rds(dcrb_year_month_5km_df_all, here::here('Confidential', 'processed', 'summaries', 'dcrb_year_month_5km_df_all.rds'))
+write_rds(dcrb_year_month_5km_df_interpolated, here::here('Confidential', 'processed', 'summaries', 'dcrb_year_month_5km_df_interpolated.rds'))
+
+# TODO update below this line to summarise and visualize both interpolated and non-interpolated data
 ```
 
 ### Summarize fishing effort in baseline and implementation periods
@@ -303,8 +414,8 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_lbs = sum(DCRB_lbs) / length(baseline_2014_2019_crab_years),
     avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2014_2019_crab_years),
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
-    avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2014_2019_crab_years),
-    avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
+    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2014_2019_crab_years),
+    avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2014_2019_crab_years),
     # take minimum unique DCRB vessels across years
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
@@ -324,8 +435,8 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
     avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2017_2019_crab_years),
     avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2017_2019_crab_years),
-    avg_DCRB_VMS_pings_adjusted_trip = sum(DCRB_VMS_pings_adjusted_trip) / length(baseline_2017_2019_crab_years),
-    avg_normalized_adjusted_trip_DCRB_VMS_pings = sum(normalized_adjusted_trip_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
+    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2017_2019_crab_years),
+    avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     # take minimum unique DCRB vessels across years
     min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
     .groups = 'drop'
@@ -365,7 +476,7 @@ bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
 # visualize VMS pings (tripwise adjustment, no normalization) across all crab years
 map_adjusted_pings <- ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted_trip)), color = NA) +
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted)), color = NA) +
   facet_grid(. ~ crab_year) +
   scale_fill_viridis() +
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
@@ -379,7 +490,7 @@ ggsave(filename = here::here("Confidential", "figures", "map_adjusted_pings.png"
 # visualize VMS pings (tripwise adjustment, with normalization) across all crab years
 map_adjusted_normalized_pings <- ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(normalized_adjusted_trip_DCRB_VMS_pings)), color = NA) +
+  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(normalized_adjusted_DCRB_VMS_pings)), color = NA) +
   facet_grid(. ~ crab_year) +
   scale_fill_viridis() +
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
