@@ -349,7 +349,7 @@ dcrb_year_month_5km_df_all <- dcrb_df_all %>%
   mutate(
     # rescale adjusted trip pings to 0-1
     normalized_adjusted_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings_adjusted, center = min(DCRB_VMS_pings_adjusted), scale = diff(range(DCRB_VMS_pings_adjusted)))),
-    # above rescaling converts mininmum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
+    # above rescaling converts minimum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
     normalized_adjusted_DCRB_VMS_pings = ifelse(
       normalized_adjusted_DCRB_VMS_pings == 0, 
       0.5 * min(normalized_adjusted_DCRB_VMS_pings[normalized_adjusted_DCRB_VMS_pings != min(normalized_adjusted_DCRB_VMS_pings)]),
@@ -370,7 +370,7 @@ dcrb_year_month_5km_df_interpolated <- dcrb_df_interpolated %>%
   mutate(
     # rescale adjusted trip pings to 0-1
     normalized_interpolated_DCRB_VMS_pings = as.vector(scale(DCRB_VMS_pings, center = min(DCRB_VMS_pings), scale = diff(range(DCRB_VMS_pings)))),
-    # above rescaling converts mininmum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
+    # above rescaling converts minimum adjusted ping to 0, so change the minimum scaled value to one half of the rescaled value of the 2nd lowest adjusted ping value
     normalized_interpolated_DCRB_VMS_pings = ifelse(
       normalized_interpolated_DCRB_VMS_pings == 0, 
       0.5 * min(normalized_interpolated_DCRB_VMS_pings[normalized_interpolated_DCRB_VMS_pings != min(normalized_interpolated_DCRB_VMS_pings)]),
@@ -378,13 +378,26 @@ dcrb_year_month_5km_df_interpolated <- dcrb_df_interpolated %>%
     )
   )
 
+# join gridded summaries for trip-wise adjusted and interpolated pings
+# dropping landings, revenue, and vessels; can add back in later if needed
+dcrb_year_month_5km_df <- full_join(x = dcrb_year_month_5km_df_all, 
+                                    y = dcrb_year_month_5km_df_interpolated,
+                                    by = c('crab_year', 'year', 'year_month', 'month_as_numeric', 'month', 'GRID5KM_ID')) %>%
+  rename(DCRB_VMS_pings_non_interpolated = DCRB_VMS_pings.x,
+        DCRB_VMS_pings_interpolated = DCRB_VMS_pings.y) %>%
+  select(crab_year, year, year_month, month_as_numeric, month, GRID5KM_ID,
+         DCRB_VMS_pings_non_interpolated, # pings without interpolation, tripwise adjustment, or normalization
+         DCRB_VMS_pings_adjusted, # pings with tripwise adjustment, without interpolation or normalization
+         normalized_adjusted_DCRB_VMS_pings, # pings without interpolation, with tripwise adjustment and normalization
+         DCRB_VMS_pings_interpolated, # pings without tripwise adjustment or normalization, with interpolation
+         normalized_interpolated_DCRB_VMS_pings) # pings with interpolation and normalization, without tripwise adjustment
+
 # save outputs before splitting into baseline vs. implementation periods
 write_rds(dcrb_df_all, here::here('Confidential', 'processed', 'summaries', 'dcrb_df_all.rds'))
 write_rds(dcrb_df_interpolated, here::here('Confidential', 'processed', 'summaries', 'dcrb_df_interpolated.rds'))
 write_rds(dcrb_year_month_5km_df_all, here::here('Confidential', 'processed', 'summaries', 'dcrb_year_month_5km_df_all.rds'))
 write_rds(dcrb_year_month_5km_df_interpolated, here::here('Confidential', 'processed', 'summaries', 'dcrb_year_month_5km_df_interpolated.rds'))
-
-# TODO update below this line to summarise and visualize both interpolated and non-interpolated data
+write_rds(dcrb_year_month_5km_df, here::here('Confidential', 'processed', 'summaries', 'dcrb_year_month_5km_df.rds'))
 ```
 
 ### Summarize fishing effort in baseline and implementation periods
@@ -393,12 +406,11 @@ write_rds(dcrb_year_month_5km_df_interpolated, here::here('Confidential', 'proce
 * *Baseline 2017-2019* includes the start of Nov. 2017 to the end of Oct. 2019.
 * *Implementation 2019-2023* includes the start of Nov. 2019 to the end of Oct. 2023.
 
-For baseline periods, each record represents one grid cell for one month, across all years. Fishing effort measured by # of pings is averaged across years for a given month. Note that the # of unique vessels is the minimum for that grid cell and month in any year, let me know if I should update this.
+For baseline periods, each record represents one grid cell for one month, across all years. Fishing effort measured by # of pings is averaged across years for a given month.
 
-For implementation period, each record represents one grid cell for one month in one year. 
+For implementation period, each record represents one grid cell for one month in one year. Fishing effort measured by # of pings is not averaged across years for a given month.
 
 ```{r create summaries}
-
 # set baseline and implementation years
 baseline_2014_2019_crab_years <- c("2014_2015", "2015_2016", "2016_2017", "2017_2018", "2018_2019")
 baseline_2017_2019_crab_years <- c("2017_2018", "2018_2019")
@@ -411,14 +423,8 @@ baseline_2014_2019 <- dcrb_year_month_5km_df %>%
   summarise(
     # take average by summing across years and dividing by # years
     # use sum / length instead of mean, because grid cells with 0 pings have no records, rather than a record with '0'
-    avg_DCRB_lbs = sum(DCRB_lbs) / length(baseline_2014_2019_crab_years),
-    avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2014_2019_crab_years),
-    avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
-    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2014_2019_crab_years),
     avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
-    avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2014_2019_crab_years),
-    # take minimum unique DCRB vessels across years
-    min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
+    avg_normalized_interpolated_DCRB_VMS_pings = sum(normalized_interpolated_DCRB_VMS_pings) / length(baseline_2014_2019_crab_years),
     .groups = 'drop'
   )
 # write output
@@ -431,14 +437,8 @@ baseline_2017_2019 <- dcrb_year_month_5km_df %>%
   summarise(
     # take average by summing across years and dividing by # years
     # use sum / length instead of mean, because grid cells with 0 pings have no records, rather than a record with '0'
-    avg_DCRB_lbs = sum(DCRB_lbs) / length(baseline_2017_2019_crab_years),
-    avg_DCRB_rev = sum(DCRB_rev) / length(baseline_2017_2019_crab_years),
-    avg_DCRB_VMS_pings = sum(DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
-    avg_DCRB_Vessels = sum(DCRB_Vessels) / length(baseline_2017_2019_crab_years),
-    avg_DCRB_VMS_pings_adjusted = sum(DCRB_VMS_pings_adjusted) / length(baseline_2017_2019_crab_years),
     avg_normalized_adjusted_DCRB_VMS_pings = sum(normalized_adjusted_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
-    # take minimum unique DCRB vessels across years
-    min_Unique_DCRB_Vessels = min(Unique_DCRB_Vessels),
+    avg_normalized_interpolated_DCRB_VMS_pings = sum(normalized_interpolated_DCRB_VMS_pings) / length(baseline_2017_2019_crab_years),
     .groups = 'drop'
   )
 # write output
@@ -464,47 +464,53 @@ coaststates <- ne_states(country='United States of America',returnclass = 'sf') 
   filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
   # spatially transform to the same coordinate ref system as the 5k grid
   st_transform(st_crs(grd))
-
 # join summary back to geometry by GRID5KM_ID
 dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
+  # pivot from wide to long to enable facet grids by transformation in charts later
+  pivot_longer(cols = DCRB_VMS_pings_non_interpolated:normalized_interpolated_DCRB_VMS_pings, names_to = "transformation", values_to = "pings") %>%
+  # join grid
   left_join(grd, by = join_by(GRID5KM_ID)) %>%
   st_as_sf()
-
 # set bounding box 
 bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
 
-# visualize VMS pings (tripwise adjustment, no normalization) across all crab years
-map_adjusted_pings <- ggplot() +
+# plot non-normalized values together
+map_non_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('DCRB_VMS_pings_adjusted', 'DCRB_VMS_pings_interpolated')) %>%
+  ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(DCRB_VMS_pings_adjusted)), color = NA) +
-  facet_grid(. ~ crab_year) +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(transformation ~ month) +
   scale_fill_viridis() +
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Adjusted Pings) per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        legend.position="bottom")
-map_adjusted_pings
-ggsave(filename = here::here("Confidential", "figures", "map_adjusted_pings.png"),
+  labs(fill="log10 pings variable per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+map_non_normalized_pings
+ggsave(filename = here::here("Confidential", "figures", "map_non_normalized_pings.png"),
        width = 10, height = 5)
 
-# visualize VMS pings (tripwise adjustment, with normalization) across all crab years
-map_adjusted_normalized_pings <- ggplot() +
+# plot normalized values together
+map_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('normalized_adjusted_DCRB_VMS_pings', 'normalized_interpolated_DCRB_VMS_pings')) %>%
+  ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(data = dcrb_year_month_5km_df_with_grid, aes(fill = log10(normalized_adjusted_DCRB_VMS_pings)), color = NA) +
-  facet_grid(. ~ crab_year) +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(transformation ~ month) +
   scale_fill_viridis() +
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10(Normalized Adjusted Pings) per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        legend.position="bottom")
-map_adjusted_normalized_pings
-ggsave(filename = here::here("Confidential", "figures", "map_adjusted_normalized_pings.png"),
+  labs(fill="log10 pings variable per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+map_normalized_pings
+ggsave(filename = here::here("Confidential", "figures", "map_normalized_pings.png"),
        width = 10, height = 5)
 ```
 
 ### Visualize basic time series
 
 ```{r plot monthly basic counts}
+
+# TODO update below this line to visualize both interpolated and non-interpolated data
+
 # summarize counts of vessels, tickets, days with VMS pings, and # pings
 monthly_df <- dcrb_vms_tix_analysis_TripInfo %>% 
   mutate(month_as_date = round_date(westcoastdate_notime, unit='month')) %>%
