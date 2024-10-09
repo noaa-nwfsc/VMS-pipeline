@@ -638,6 +638,7 @@ dcrb_trips_interpolated %>%
 dcrb_trips_interpolated %>%
   ggplot(aes(x=as.factor(year(trip_start)), y=avg_trip_ping_rate)) + geom_boxplot()
 ```
+
 ### Visualize VMS representativeness
 
 ```{r plot vessel, revenue, and landings representation by VMS data}
