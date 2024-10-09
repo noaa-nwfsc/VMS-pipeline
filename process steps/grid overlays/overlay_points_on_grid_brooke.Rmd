@@ -532,6 +532,19 @@ map_interpolated_normalized_pings <- dcrb_year_month_5km_df_with_grid %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
 map_interpolated_normalized_pings
 ggsave(filename = here::here("Confidential", "figures", "map_normalized_interpolated_DCRB_VMS_pings.png"))
+
+# quick histogram of fishing effort per grid cell (each point= 1 gird cell year month)
+dcrb_year_month_5km_df_with_grid %>% 
+  ggplot(aes(x = pings)) + 
+  facet_grid(. ~ transformation, scales = "free_x") +
+  geom_histogram()
+
+# quick summary of each transformation
+summary(dcrb_year_month_5km_df$DCRB_VMS_pings_non_interpolated)
+summary(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted)
+summary(dcrb_year_month_5km_df$normalized_adjusted_DCRB_VMS_pings)
+summary(dcrb_year_month_5km_df$DCRB_VMS_pings_interpolated)
+summary(dcrb_year_month_5km_df$normalized_interpolated_DCRB_VMS_pings)
 ```
 
 ### Visualize basic time series
