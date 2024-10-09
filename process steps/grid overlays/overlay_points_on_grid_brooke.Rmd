@@ -504,6 +504,34 @@ map_normalized_pings <- dcrb_year_month_5km_df_with_grid %>%
 map_normalized_pings
 ggsave(filename = here::here("Confidential", "figures", "map_normalized_pings.png"),
        width = 10, height = 5)
+
+# plot normalized values separately
+# for adjusted pings
+map_adjusted_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('normalized_adjusted_DCRB_VMS_pings')) %>%
+  ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(. ~ month) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10 normalized_adjusted_DCRB_VMS_pings per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+map_adjusted_normalized_pings
+ggsave(filename = here::here("Confidential", "figures", "map_normalized_adjusted_DCRB_VMS_pings.png"))
+# for interpolated pings
+map_interpolated_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('normalized_interpolated_DCRB_VMS_pings')) %>%
+  ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(. ~ month) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10 normalized_interpolated_DCRB_VMS_pings per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+map_interpolated_normalized_pings
+ggsave(filename = here::here("Confidential", "figures", "map_normalized_interpolated_DCRB_VMS_pings.png"))
 ```
 
 ### Visualize basic time series
