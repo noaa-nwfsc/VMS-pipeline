@@ -745,6 +745,16 @@ ping_interval_df_interpolated %>%
   ggplot(aes(x = as.factor(westcoastdate_notime), y = ping_interval_hours)) + geom_boxplot() + ylim(c(0,2)) + # note limited axes
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 # I'm seeing some outliers that aren't perfectly one hour intervals
+
+# calculate % of records with 1 vs. <1 vs. >1 hour ping rate interval in interpolated data, excluding NAs
+sum(ping_interval_df_interpolated$ping_interval_min == 60, na.rm=TRUE) / sum(!is.na(ping_interval_df_interpolated$ping_interval_min)) * 100
+sum(ping_interval_df_interpolated$ping_interval_min < 60, na.rm=TRUE) / sum(!is.na(ping_interval_df_interpolated$ping_interval_min))  * 100
+sum(ping_interval_df_interpolated$ping_interval_min > 60, na.rm=TRUE) / sum(!is.na(ping_interval_df_interpolated$ping_interval_min))  * 100
+
+# calculate % of records with 1 vs. <1 vs. >1 hour ping rate interval in interpolated data, excluding NAs
+sum(ping_interval_df_all$ping_interval_min == 60, na.rm=TRUE) / sum(!is.na(ping_interval_df_all$ping_interval_min)) * 100
+sum(ping_interval_df_all$ping_interval_min < 60, na.rm=TRUE) / sum(!is.na(ping_interval_df_all$ping_interval_min))  * 100
+sum(ping_interval_df_all$ping_interval_min > 60, na.rm=TRUE) / sum(!is.na(ping_interval_df_all$ping_interval_min))  * 100
 ```
 
 ```{r plot ping rate}
