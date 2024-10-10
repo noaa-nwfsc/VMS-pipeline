@@ -617,6 +617,7 @@ dcrb_year_month_5km_df %>%
   geom_point() +
   geom_abline(slope=1, intercept=0) + 
   geom_rug()
+ggsave(filename = here::here("Confidential", "figures", "scatterplot_adjusted_interpolated_pings.png"))
 
 # scatterplot of normalized adjusted vs. normalized interpolated pings
 dcrb_year_month_5km_df %>%
