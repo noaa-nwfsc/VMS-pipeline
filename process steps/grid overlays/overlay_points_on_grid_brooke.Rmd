@@ -480,21 +480,6 @@ dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>%
 # set bounding box 
 bbox <- st_bbox(dcrb_year_month_5km_df_with_grid)
 
-# plot non-normalized values together
-map_non_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
-  filter(transformation %in% c('DCRB_VMS_pings_adjusted', 'DCRB_VMS_pings_interpolated')) %>%
-  ggplot() +
-  geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(aes(fill = log10(pings)), color = NA) +
-  facet_grid(transformation ~ month) +
-  scale_fill_viridis() +
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10 pings variable per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
-map_non_normalized_pings
-ggsave(filename = here::here("Confidential", "figures", "map_non_normalized_pings.png"),
-       width = 10, height = 5)
-
 # plot normalized values together
 map_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
   filter(transformation %in% c('normalized_adjusted_DCRB_VMS_pings', 'normalized_interpolated_DCRB_VMS_pings')) %>%
@@ -510,116 +495,40 @@ map_normalized_pings
 ggsave(filename = here::here("Confidential", "figures", "map_normalized_pings.png"),
        width = 10, height = 5)
 
-# plot normalized values separately
-# for adjusted pings
-map_adjusted_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
-  filter(transformation %in% c('normalized_adjusted_DCRB_VMS_pings')) %>%
+# plot difference between interpolated and adjusted pings before normalization by month
+dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('DCRB_VMS_pings_diff')) %>%
   ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(aes(fill = log10(pings)), color = NA) +
+  geom_sf(aes(fill = pings), color = NA) +
   facet_grid(. ~ month) +
   scale_fill_viridis() +
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10 normalized_adjusted_DCRB_VMS_pings per 5x5 cell") +
+  labs(fill="(interpolated - adjusted) pings per 5x5 cell") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
-map_adjusted_normalized_pings
-ggsave(filename = here::here("Confidential", "figures", "map_normalized_adjusted_DCRB_VMS_pings.png"))
-# for interpolated pings
-map_interpolated_normalized_pings <- dcrb_year_month_5km_df_with_grid %>% 
-  filter(transformation %in% c('normalized_interpolated_DCRB_VMS_pings')) %>%
-  ggplot() +
-  geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(aes(fill = log10(pings)), color = NA) +
-  facet_grid(. ~ month) +
-  scale_fill_viridis() +
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10 normalized_interpolated_DCRB_VMS_pings per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
-map_interpolated_normalized_pings
-ggsave(filename = here::here("Confidential", "figures", "map_normalized_interpolated_DCRB_VMS_pings.png"))
+ggsave(filename = here::here("Confidential", "figures", "map_diff_DCRB_VMS_pings_by_month.png"))
 
-# plot absolute difference between interpolated and adjusted pings (before and after normalization)
+# plot difference between interpolated and adjusted pings before normalization by crab year
 dcrb_year_month_5km_df_with_grid %>% 
-  filter(transformation %in% c('DCRB_VMS_pings_diff', 'normalized_DCRB_VMS_pings_diff')) %>%
+  filter(transformation %in% c('DCRB_VMS_pings_diff')) %>%
   ggplot() +
   geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(aes(fill = log10(pings)), color = NA) +
-  facet_grid(transformation ~ month) +
-  scale_fill_viridis() +
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10 absolute difference for pings (before and after normalization) per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
-ggsave(filename = here::here("Confidential", "figures", "map_diff_DCRB_VMS_pings.png"))
-
-# plot % difference between interpolated and adjusted pings (before and after normalization)
-dcrb_year_month_5km_df_with_grid %>% 
-  filter(transformation %in% c('percent_DCRB_VMS_pings_diff', 'percent_normalized_DCRB_VMS_pings_diff')) %>%
-  ggplot() +
-  geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(aes(fill = log10(pings)), color = NA) +
-  facet_grid(transformation ~ month) +
-  scale_fill_viridis() +
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10 % difference for pings (before and after normalization) per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
-ggsave(filename = here::here("Confidential", "figures", "map_percent_diff_DCRB_VMS_pings.png"))
-
-# plot % difference between normalized interpolated and adjusted pings by month
-dcrb_year_month_5km_df_with_grid %>% 
-  filter(transformation %in% c('percent_normalized_DCRB_VMS_pings_diff')) %>%
-  ggplot() +
-  geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(aes(fill = log10(pings)), color = NA) +
-  facet_grid(. ~ month) +
-  scale_fill_viridis() +
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10 % difference for normalized pings per 5x5 cell") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
-ggsave(filename = here::here("Confidential", "figures", "map_percent_diff_DCRB_VMS_pings_month.png"))
-
-# plot % difference between normalized interpolated and adjusted pings by crab year
-dcrb_year_month_5km_df_with_grid %>% 
-  filter(transformation %in% c('percent_normalized_DCRB_VMS_pings_diff')) %>%
-  ggplot() +
-  geom_sf(data = coaststates, fill = 'gray80') +
-  geom_sf(aes(fill = log10(pings)), color = NA) +
+  geom_sf(aes(fill = pings), color = NA) +
   facet_grid(. ~ crab_year) +
   scale_fill_viridis() +
   xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  labs(fill="log10 % difference for normalized pings per 5x5 cell") +
+  labs(fill="(interpolated - adjusted) pings per 5x5 cell") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
-ggsave(filename = here::here("Confidential", "figures", "map_percent_diff_DCRB_VMS_pings_crab_year.png"))
+ggsave(filename = here::here("Confidential", "figures", "map_diff_DCRB_VMS_pings_by_year.png"))
 
 # quick histogram of % difference in fishing effort per grid cell (each point = 1 grid cell year month)
 dcrb_year_month_5km_df_with_grid %>% 
   filter(transformation %in% c('percent_normalized_DCRB_VMS_pings_diff')) %>%
   ggplot(aes(x = pings)) + 
   labs(x="% difference for normalized pings per 5x5 cell for a year and month") +
-  geom_histogram(binwidth = 5)+ 
+  geom_histogram(binwidth = 10)+  
   xlim(c(-200,500)) # note limited axes from -2x (-200%) to +5x (+500%)
-
-# boxplot of fishing effort per grid cell (each point = 1 gird cell year month)
-dcrb_year_month_5km_df_with_grid %>%
-  filter(transformation %in% c('DCRB_VMS_pings_adjusted', 'DCRB_VMS_pings_interpolated')) %>%
-  ggplot(aes(fill = transformation, y = pings)) +
-  geom_boxplot() + 
-  facet_grid(. ~ crab_year) + 
-  ylim(c(0,25)) # note limited axes
-
-# quick summary of each transformation
-summary(dcrb_year_month_5km_df$DCRB_VMS_pings_non_interpolated)
-summary(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted)
-summary(dcrb_year_month_5km_df$normalized_adjusted_DCRB_VMS_pings)
-summary(dcrb_year_month_5km_df$DCRB_VMS_pings_interpolated)
-summary(dcrb_year_month_5km_df$normalized_interpolated_DCRB_VMS_pings)
-
-# scatterplot of adjusted vs. interpolated pings
-dcrb_year_month_5km_df %>%
-  ggplot(aes(x = DCRB_VMS_pings_adjusted, y = DCRB_VMS_pings_interpolated)) + 
-  geom_point() +
-  geom_abline(slope=1, intercept=0) + 
-  geom_rug()
-ggsave(filename = here::here("Confidential", "figures", "scatterplot_adjusted_interpolated_pings.png"))
+ggsave(filename = here::here("Confidential", "figures", "histogram_percent_diff_normalized_pings.png"))
 
 # scatterplot of normalized adjusted vs. normalized interpolated pings
 dcrb_year_month_5km_df %>%
@@ -627,11 +536,7 @@ dcrb_year_month_5km_df %>%
   geom_point() +
   geom_abline(slope=1, intercept=0) + 
   geom_rug()
-
-# correlation between adjusted and interpolated pings
-cor(x = dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted,
-    y = dcrb_year_month_5km_df$DCRB_VMS_pings_interpolated,
-    use = "pairwise.complete.obs")
+ggsave(filename = here::here("Confidential", "figures", "scatterplot_normalized_pings.png"))
 
 # correlation between normalized adjusted and normalized interpolated pings
 cor(x = dcrb_year_month_5km_df$normalized_adjusted_DCRB_VMS_pings,
