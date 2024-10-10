@@ -467,8 +467,13 @@ coaststates <- ne_states(country='United States of America',returnclass = 'sf') 
   st_transform(st_crs(grd))
 # join summary back to geometry by GRID5KM_ID
 dcrb_year_month_5km_df_with_grid <- dcrb_year_month_5km_df %>% 
+  # calculate percent difference between adjusted and interpolated pings
+  mutate(DCRB_VMS_pings_diff = DCRB_VMS_pings_interpolated - DCRB_VMS_pings_adjusted,
+         percent_DCRB_VMS_pings_diff = DCRB_VMS_pings_diff / DCRB_VMS_pings_adjusted * 100,
+         normalized_DCRB_VMS_pings_diff = normalized_interpolated_DCRB_VMS_pings - normalized_adjusted_DCRB_VMS_pings,
+         percent_normalized_DCRB_VMS_pings_diff = normalized_DCRB_VMS_pings_diff / normalized_adjusted_DCRB_VMS_pings * 100) %>%
   # pivot from wide to long to enable facet grids by transformation in charts later
-  pivot_longer(cols = DCRB_VMS_pings_non_interpolated:normalized_interpolated_DCRB_VMS_pings, names_to = "transformation", values_to = "pings") %>%
+  pivot_longer(cols = DCRB_VMS_pings_non_interpolated:percent_normalized_DCRB_VMS_pings_diff, names_to = "transformation", values_to = "pings") %>%
   # join grid
   left_join(grd, by = join_by(GRID5KM_ID)) %>%
   st_as_sf()
@@ -532,6 +537,58 @@ map_interpolated_normalized_pings <- dcrb_year_month_5km_df_with_grid %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
 map_interpolated_normalized_pings
 ggsave(filename = here::here("Confidential", "figures", "map_normalized_interpolated_DCRB_VMS_pings.png"))
+
+# plot absolute difference between interpolated and adjusted pings (before and after normalization)
+dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('DCRB_VMS_pings_diff', 'normalized_DCRB_VMS_pings_diff')) %>%
+  ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(transformation ~ month) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10 absolute difference for pings (before and after normalization) per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+ggsave(filename = here::here("Confidential", "figures", "map_diff_DCRB_VMS_pings.png"))
+
+# plot % difference between interpolated and adjusted pings (before and after normalization)
+dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('percent_DCRB_VMS_pings_diff', 'percent_normalized_DCRB_VMS_pings_diff')) %>%
+  ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(transformation ~ month) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10 % difference for pings (before and after normalization) per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+ggsave(filename = here::here("Confidential", "figures", "map_percent_diff_DCRB_VMS_pings.png"))
+
+# plot % difference between normalized interpolated and adjusted pings by month
+dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('percent_normalized_DCRB_VMS_pings_diff')) %>%
+  ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(. ~ month) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10 % difference for normalized pings per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+ggsave(filename = here::here("Confidential", "figures", "map_percent_diff_DCRB_VMS_pings_month.png"))
+
+# plot % difference between normalized interpolated and adjusted pings by crab year
+dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('percent_normalized_DCRB_VMS_pings_diff')) %>%
+  ggplot() +
+  geom_sf(data = coaststates, fill = 'gray80') +
+  geom_sf(aes(fill = log10(pings)), color = NA) +
+  facet_grid(. ~ crab_year) +
+  scale_fill_viridis() +
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  labs(fill="log10 % difference for normalized pings per 5x5 cell") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
+ggsave(filename = here::here("Confidential", "figures", "map_percent_diff_DCRB_VMS_pings_crab_year.png"))
 
 # quick histogram of fishing effort per grid cell (each point = 1 gird cell year month)
 dcrb_year_month_5km_df_with_grid %>% 
