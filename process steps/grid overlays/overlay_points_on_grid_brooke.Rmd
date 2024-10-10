@@ -545,7 +545,7 @@ dcrb_year_month_5km_df_with_grid %>%
   ggplot(aes(fill = transformation, y = pings)) +
   geom_boxplot() + 
   facet_grid(. ~ crab_year) + 
-  ylim(c(0,100)) # note limited axes
+  ylim(c(0,25)) # note limited axes
 
 # quick summary of each transformation
 summary(dcrb_year_month_5km_df$DCRB_VMS_pings_non_interpolated)
@@ -553,6 +553,30 @@ summary(dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted)
 summary(dcrb_year_month_5km_df$normalized_adjusted_DCRB_VMS_pings)
 summary(dcrb_year_month_5km_df$DCRB_VMS_pings_interpolated)
 summary(dcrb_year_month_5km_df$normalized_interpolated_DCRB_VMS_pings)
+
+# scatterplot of adjusted vs. interpolated pings
+dcrb_year_month_5km_df %>%
+  ggplot(aes(x = DCRB_VMS_pings_adjusted, y = DCRB_VMS_pings_interpolated)) + 
+  geom_point() +
+  geom_abline(slope=1, intercept=0) + 
+  geom_rug()
+
+# scatterplot of normalized adjusted vs. normalized interpolated pings
+dcrb_year_month_5km_df %>%
+  ggplot(aes(x = normalized_adjusted_DCRB_VMS_pings, y = normalized_interpolated_DCRB_VMS_pings)) + 
+  geom_point() +
+  geom_abline(slope=1, intercept=0) + 
+  geom_rug()
+
+# correlation between adjusted and interpolated pings
+cor(x = dcrb_year_month_5km_df$DCRB_VMS_pings_adjusted,
+    y = dcrb_year_month_5km_df$DCRB_VMS_pings_interpolated,
+    use = "pairwise.complete.obs")
+
+# correlation between normalized adjusted and normalized interpolated pings
+cor(x = dcrb_year_month_5km_df$normalized_adjusted_DCRB_VMS_pings,
+    y = dcrb_year_month_5km_df$normalized_interpolated_DCRB_VMS_pings,
+    use = "pairwise.complete.obs")
 ```
 
 ### Visualize basic time series
