@@ -590,11 +590,13 @@ dcrb_year_month_5km_df_with_grid %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position="bottom")
 ggsave(filename = here::here("Confidential", "figures", "map_percent_diff_DCRB_VMS_pings_crab_year.png"))
 
-# quick histogram of fishing effort per grid cell (each point = 1 gird cell year month)
+# quick histogram of % difference in fishing effort per grid cell (each point = 1 grid cell year month)
 dcrb_year_month_5km_df_with_grid %>% 
+  filter(transformation %in% c('percent_normalized_DCRB_VMS_pings_diff')) %>%
   ggplot(aes(x = pings)) + 
-  facet_grid(. ~ transformation, scales = "free_x") +
-  geom_histogram()
+  labs(x="% difference for normalized pings per 5x5 cell for a year and month") +
+  geom_histogram(binwidth = 5)+ 
+  xlim(c(-200,500)) # note limited axes from -2x (-200%) to +5x (+500%)
 
 # boxplot of fishing effort per grid cell (each point = 1 gird cell year month)
 dcrb_year_month_5km_df_with_grid %>%
