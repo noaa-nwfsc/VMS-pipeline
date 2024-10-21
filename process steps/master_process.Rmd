@@ -26,11 +26,11 @@ alltime <- proc.time()
 Indicate the PacFIN codes for the fish ticket species you are interested in tracking, as well as the gears. Landings and revenue for these species and gears will be tracked in the pipeline, for both targeted and non-targeted trips. Keep in mind that although the pipeline will record all species that are landed on each fish ticket, exact landings and revenues for these species will ONLY be reported if they are included in `spp_codes`. Likewise, `gear_codes` should be thought of NOT as a filter on which gears you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings, regardless of target species.
 
 ```{r}
-spp_codes <- c("DCRB") #,"CHNK") # All of the species for which you want specific revenue and landings by ticket
+spp_codes <- c("DCRB","CHNK") # All of the species for which you want specific revenue and landings by ticket
 # spp_codes_name <- "DCRB_CHNK"
 # here's your options
 #https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/sp.txt
-gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING") #,"TROLL, (SALMON)","OCEAN TROLL","TROLL (SALMON)","DRAG SEINE","DIP BAG NET","HOOK AND LINE","PURSE SEINE (SALMON)")
+gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING","TROLL, (SALMON)","OCEAN TROLL","TROLL (SALMON)","DRAG SEINE","DIP BAG NET","HOOK AND LINE","PURSE SEINE (SALMON)")
 # All of the gears for which you want total revenue and landings by ticket
 # As implemented, these are the full names (i.e., the "AGENCY DESCRIPTION" column of the table linked here, e.g. "CRAB POT", not "CPT")
 # https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/agency_gears.txt
@@ -41,7 +41,7 @@ Indicate the metric to use in determining targets of fishing trips, as well as t
 ```{r}
 # choose landing and revenue metrics
 pacfin_weight_metric <- "LANDED_WEIGHT_LBS" # another option is "LANDED_WEIGHT_MTONS"
-pacfin_revenue_metric <- "EXVESSEL_REVENUE" # another option is EXVESSEL_REVENUE
+pacfin_revenue_metric <- "EXVESSEL_REVENUE" # another option is AFI_EXVESSEL_REVENUE
 # target_metric <- "revenue" # afi_revenue is an alternative option for newer fish tickets, but use caution as you need to know reference year
 
 ## how much "more important" does your target need to be than the species with the second greatest catch? Expressed as a ratio.
@@ -62,7 +62,7 @@ alltime <- proc.time()
 # choose year of data to process
 process_year <- 2014
 
-# choose first year of data available
+# choose first year of data processed for this set of pipeline runs
 # if process_year > first_process_year, then lookback at the end of the prior year for tickets and VMS pings in step 4
 first_process_year <- 2014
 ```
