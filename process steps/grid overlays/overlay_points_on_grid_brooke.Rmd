@@ -8,7 +8,9 @@ output:
 
 ### Set up
 
-Attribute the VMS and fish ticket pipeline output for dungeness crab to each grid cell, then summarize for two baseline periods and one implementation period. Created for CDFW data request by Oct. 1, 2024.
+Attribute the VMS and fish ticket pipeline output for dungeness crab to each grid cell, then summarize for two baseline periods and one implementation period. Created for CDFW data request by Oct. 1, 2024. 
+
+Used to further explore the impacts of the change in ping interval rate in September 2020, and how to implement interpolation into the pipeline.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -59,6 +61,34 @@ vms_all <- read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2
   bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2022_matched_filtered_withFTID_length.rds'))) %>%
   bind_rows(read_rds(here('Confidential', 'processed', 'matched', 'filtering', '2023_matched_filtered_withFTID_length.rds')))
 ```
+
+Filter non-interpolated data with the same filters applied to the interpolated data. This was one of the major discrepancies between tripwise adjusted VMS data used in the CDFW report, compared to the interpolated data that was generated after the report was sent.
+
+```{r match interpolation filters}
+# adapted from optional_06_interpolate.Rmd
+vms_all_gap_filtered <- vms_all %>%
+  group_by(Rec_ID) %>% 
+  # overall trip duration
+  mutate(trip_dur_seconds = sum(segment_dur)) %>% # change from optional_06_interpolate.Rmd: rename trip_dur to trip_dur_seconds
+  # add a sequential record number
+  arrange(westcoastdate) %>% 
+  mutate(recnum = row_number()) %>% 
+  # indicate whether to keep or remove trip based on segment durations
+  mutate(keep_remove_timelag = ifelse(max(segment_dur, na.rm = T) > (4*3600) | (segment_dur / trip_dur_seconds) > 0.40, "remove", "keep")) %>% 
+  # indicate whether the reason for removal was because of the last segment
+  mutate(longest_seg = first(recnum, order_by = desc(segment_dur))) %>% 
+  mutate(last_seg_longest = longest_seg == max(recnum)) %>% 
+  mutate(is_last_seg = ifelse(last_seg_longest&keep_remove_timelag == 'remove', TRUE, FALSE)) %>% 
+  ungroup() %>%
+  # change trips flagged for removal because of last segment to "keep" instead
+  mutate(keep_remove_timelag = ifelse(is_last_seg, 'keep', keep_remove_timelag)) %>%
+  filter(keep_remove_timelag == 'keep')
+
+# replace vms_all with vms_gap_filtered for the rest of the script
+vms_all <- vms_all_gap_filtered
+rm(vms_gap_filtered)
+```
+
 
 ``` {r basic counts before filter}
 # count total records, trips and years in non-interpolated dataset
