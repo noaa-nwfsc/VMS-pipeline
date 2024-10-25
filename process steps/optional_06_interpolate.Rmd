@@ -25,7 +25,6 @@ library(here)
 library(lubridate)
 library(sf)
 library(move)
-library(rgdal)
 
 # ggplot theme
 plot_theme <-   theme_minimal()+
@@ -46,9 +45,7 @@ rm(list=setdiff(ls(),c('process_year','alltime')))
 Read in the filtered VMS data set from the previous step
 
 ```{r rawdat}
-vms_filtered <- read_rds(here::here('data','processed','matched','filtering',paste0(process_year,'matched_filtered.rds')))
-
-#vms_filtered <- read_rds(paste0("/Users/jameal.samhouri/Documents/RAIMBOW/Processed Data/VMS/",process_year,'matched_filtered.rds'))
+vms_filtered <- read_rds(here::here('Confidential','processed','matched','filtering',paste0(process_year,'_matched_filtered_withFTID_length.rds')))
 ```
 
 ## Remove Trips with Large Time Gaps
@@ -105,9 +102,9 @@ Arrange by trip and ascending in time.
 ```{r}
 vms_move <- vms_gapfiltered %>% 
   ungroup() %>% 
-  arrange(Rec_ID, UTCDATETIM) %>% 
-  distinct(VMS_RECNO,UTCDATETIM,.keep_all = T) %>% 
-  mutate(DECLARATIO=na_if(DECLARATIO,'N/A')) %>% 
+  arrange(Rec_ID, UTCDATETIME) %>% 
+  distinct(VMS_RECNO,UTCDATETIME,.keep_all = T) %>% 
+  # mutate(DECLARATION_CODE=na_if(DECLARATION_CODE,'N/A')) %>% # removed, seems like N/A already converted to NA
   #remove_rownames %>%
   as.data.frame()
 ```
@@ -118,28 +115,14 @@ vms_move <- vms_gapfiltered %>%
 # install.packages("proj4")
 # library("proj4")
 
-#some update in the proj_string caused this section to break
-#This was the original code
-# start.time <- Sys.time()
-# movedat <- move(x=vms_move$X_COORD,
-#                 y=vms_move$Y_COORD,
-#                 time=vms_move$UTCDATETIM,
-#                 data=vms_move,
-#                 proj=sp::CRS("+proj=utm +north +zone=10 +ellps=WGS84 +datum=WGS84"), #though note that e.g. 2010 HTML doesn't have the '+datum=WGS84' part in this call
-#                 animal=vms_move$Rec_ID)
-# Sys.time() - start.time
-
-
-
-
-#After various tests, this works now
+# create move object
 start.time <- Sys.time()
-movedat <- move(x=vms_move$LONGITUDE,
-                y=vms_move$LATITUDE,
-                time=vms_move$UTCDATETIM,
-                data=vms_move,
-                proj=sp::CRS("+proj=longlat +datum=WGS84 +no_defs +type=crs"),
-                animal=vms_move$Rec_ID)
+movedat <- move(x=vms_move$LON, # x coordinates
+                y=vms_move$LAT, # y coordinates
+                time=vms_move$UTCDATETIME, # time stamps
+                data=vms_move, # optional, additional data associated with coordinates and timestamps
+                proj=sp::CRS("+proj=longlat +datum=WGS84 +no_defs +type=crs"), # projection method
+                animal=vms_move$Rec_ID) # individual identifier, usually an animal, but in this application, the VMS pings from a vessel for a given fish ticket 
 Sys.time() - start.time
 
 movedatProj <- spTransform(movedat, CRSobj="+proj=utm +zone=10 +datum=WGS84 +units=m +no_defs +type=crs")
@@ -163,7 +146,7 @@ interpolated_data <- purrr::map_df(1:ntrips,function(i){
   inter_df <- as.data.frame(inter_movedat)
   #clean up the data frame
   inter_df <- inter_df %>%
-    dplyr::select(Rec_ID, drvid, UTCDATETIM, X_COORD, Y_COORD, timestamps, coords.x1, coords.x2, sensor) %>% 
+    dplyr::select(Rec_ID, drvid, UTCDATETIME, X_COORD, Y_COORD, timestamps, coords.x1, coords.x2, sensor) %>% 
     mutate_if(is.factor,as.character)
   if(i%%500==0){
     message("completed interpolation for ", i, " out of ", ntrips, " trips.")
@@ -180,31 +163,20 @@ Interpolation took taken `r round(tm[3]/60,2)` minutes to run.
 Rename columns from interpolation so we can re-join the rest of the VMS trip information. For original (non-interpolated) data, we can re-join with times and coordinates. For newly-interpolated data, we define the new time and coordinates and then join the trip-level information.
 
 ```{r}
-# original:
-# orig_vms <- interpolated_data %>%
-#   filter(sensor=="unknown") %>% 
-#   dplyr::select(-UTCDATETIM,-X_COORD,-Y_COORD) %>% 
-#   rename(UTCDATETIM=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
-#   left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIM", "X_COORD", "Y_COORD"))
-
-#use this instead
 orig_vms <- interpolated_data %>%
-  filter(sensor=="unknown") %>% 
-  left_join(vms_move,by = c("Rec_ID", "drvid", "UTCDATETIM", "X_COORD", "Y_COORD")) %>% 
-  dplyr::select(-UTCDATETIM,-X_COORD,-Y_COORD) %>% 
-  rename(UTCDATETIM=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2)
-
-
+  filter(sensor=="unknown") %>% # non-interpolated points
+  left_join(vms_move, by = c("Rec_ID", "drvid", "UTCDATETIME", "X_COORD", "Y_COORD")) %>% 
+  dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
+  rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2)
 
 vms_trip_info <- vms_move %>% 
-  dplyr::select(-VMS_RECNO,-UTCDATETIM,-LATITUDE,-LONGITUDE,-NGDC_M,-X_COORD,-Y_COORD,-AVG_SPEED,-AVG_COURSE,-westcoastdate,-westcoastdate_notime,-segment_dur,-avg_speed_recalc,-in_port,-recnum,-keep_remove_timelag,-longest_seg,-last_seg_longest,-is_last_seg) %>%
+  dplyr::select(-VMS_RECNO,-UTCDATETIME,-LAT,-LON,-NGDC_M,-X_COORD,-Y_COORD,-AVG_SPEED,-AVG_COURSE,-westcoastdate,-westcoastdate_notime,-segment_dur,-avg_speed_recalc,-in_port,-recnum,-keep_remove_timelag,-longest_seg,-last_seg_longest,-is_last_seg) %>%
   distinct()
 
-
 new_vms <- interpolated_data %>% 
-  filter(sensor=="interpolateTime")%>% 
-  dplyr::select(-UTCDATETIM,-X_COORD,-Y_COORD) %>% 
-  rename(UTCDATETIM=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
+  filter(sensor=="interpolateTime")%>% # interpolated points
+  dplyr::select(-UTCDATETIME,-X_COORD,-Y_COORD) %>% 
+  rename(UTCDATETIME=timestamps,X_COORD=coords.x1,Y_COORD=coords.x2) %>% 
   left_join(vms_trip_info,by = c("Rec_ID", "drvid"))
 ```
 
@@ -213,7 +185,7 @@ Create calculable missing columns: west coast dates, latitude, longitude.
 ```{r}
 # west coast dates
 new_vms %<>%
-  mutate(westcoastdate = with_tz(UTCDATETIM, tzone = "America/Los_Angeles"),
+  mutate(westcoastdate = with_tz(UTCDATETIME, tzone = "America/Los_Angeles"),
          westcoastdate_notime = as_date(westcoastdate))
 
 # convert UTM x/y coordinates to lat/lon
@@ -222,7 +194,7 @@ new_vms_coords <- new_vms %>%
   st_transform(4326) %>% 
   st_coordinates() %>% 
   as_tibble() %>% 
-  set_colnames(c('LONGITUDE','LATITUDE'))
+  set_colnames(c('LON','LAT'))
 
 # add the new lat/lon into the dataset
 new_vms %<>%
@@ -238,6 +210,7 @@ new_vms %<>% mutate(VMS_RECNO = new_recnos)
 
 Recombine
 ```{r}
+# vms_regular includes original (non-interpolated) points from orig_vms, and new (interpolated) points from new_vms
 vms_regular <- bind_rows(orig_vms, new_vms)
 
 # check record numbers to make sure they're unique
@@ -253,7 +226,7 @@ vms_regular <- vms_regular %>%
   ungroup() %>% 
   group_by(Rec_ID) %>% 
   # lag latitude and longitude by 1 time step
-  mutate(laglon=lag(LONGITUDE,1,order_by=westcoastdate),laglat=lag(LATITUDE,1,order_by=westcoastdate)) %>% 
+  mutate(laglon=lag(LON,1,order_by=westcoastdate),laglat=lag(LAT,1,order_by=westcoastdate)) %>% 
   # lag time by 1 time step
   mutate(lagdate=lag(westcoastdate,1,order_by=westcoastdate)) %>% 
   # calculate duration since last ping, in seconds
@@ -261,7 +234,7 @@ vms_regular <- vms_regular %>%
   ungroup()
 
 # Calculate distance (Note: geosphere seems much faster than doing this with sf())
-segment_dists <- geosphere::distHaversine(p1=cbind(vms_regular$LONGITUDE, vms_regular$LATITUDE),
+segment_dists <- geosphere::distHaversine(p1=cbind(vms_regular$LON, vms_regular$LAT),
                                     p2=cbind(vms_regular$laglon, vms_regular$laglat))
 
 vms_regular %<>% 
@@ -283,20 +256,20 @@ We re-match to the bathymetry layer but do NO FILTERING for now.
 Read in the bathymetry SpatialGridDataFrame object
 
 ```{r}
-bathy.grid <- read_rds(here::here('data','raw','vms_composite_bath_spGrid.RDS'))
+# commented out
+# bathy.grid <- read_rds(here::here('data','raw','vms_composite_bath_spGrid.RDS'))
+
+# copied / pasted from 03_process_vms.Rmd
+bathy.grid <- rast(here::here('data','bathymetry','composite_bath.tif'))
 ```
 
 Get bathymetry at VMS data points
 
 ```{r}
-# tm <- proc.time()
-vms_sp <- vms_regular
-coordinates(vms_sp) <- c("LONGITUDE", "LATITUDE") 
-proj4string(vms_sp)<-proj4string(bathy.grid) <- CRS("+init=epsg:4326") # WGS 84
-bathy.points <- over(vms_sp, bathy.grid)$vms_composite_bath
-# proc.time()-tm
-
-vms_regular %<>% mutate(NGDC_M = bathy.points)
+vms_sp <- vms_regular %>% st_as_sf(coords=c("LON","LAT"), crs=4326) # make non-spatial object to spatial (sf) object
+vms_lat_lon_matrix <- st_coordinates(vms_sp) # extracts X Y coordinates as 2 column matrix instead of dataframe
+bathy.points <- terra::extract(bathy.grid, vms_lat_lon_matrix) / 10 # extract bathymetry values at VMS points, and convert to meters from decimeters
+vms_regular %<>% mutate(NGDC_M = bathy.points) # put depth into tbl
 ```
 
 ## Save Results
@@ -304,8 +277,9 @@ vms_regular %<>% mutate(NGDC_M = bathy.points)
 Add a final indicator for whether a point was interpolated or not, then save
 
 ```{r}
+# create is_interpolated column based on sensor column, then drop sensor column
 vms_regular %<>% mutate(is_interpolated=ifelse(sensor=="interpolateTime",1,0)) %>% dplyr::select(-sensor)
-
-write_rds(vms_regular,here::here('data','processed','matched','interpolation',paste0(process_year,'interpolated.rds')))
+# write output
+write_rds(vms_regular, here::here('Confidential','processed','matched','interpolation',paste0(process_year,'_interpolated.rds')))
 ```
 

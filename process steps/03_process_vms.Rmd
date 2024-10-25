@@ -36,7 +36,7 @@ library(janitor)
 library(rnaturalearth)
 library(sp)
 
-keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin')
+keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag')
 
 rm(list=setdiff(ls(),keepers))
 options(dplyr.summarise.inform=F)
