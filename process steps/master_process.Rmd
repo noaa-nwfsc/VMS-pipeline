@@ -17,8 +17,6 @@ library(here)
 
 This document collates all individual steps of VMS/Fish Ticket processing for a chosen year.
 
-#Kelly adding stuff to see if it commits to the repo
-
 ```{r timer, include=FALSE}
 alltime <- proc.time()
 ```
@@ -42,13 +40,12 @@ gear_codes <- c("BALLOON TRAWL","BEAM TRAWL","bottom trawl - mud(sole) gear","bo
 Indicate the metric to use in determining targets of fishing trips, as well as the threshold for determining the target of each fishing trip.
 
 ```{r}
-# exvessel_revenue for now
+# choose landing and revenue metrics
 pacfin_weight_metric <- "LANDED_WEIGHT_LBS" # another option is "LANDED_WEIGHT_MTONS"
 pacfin_revenue_metric <- "EXVESSEL_REVENUE" # another option is AFI_EXVESSEL_REVENUE
 # target_metric <- "revenue" # afi_revenue is an alternative option for newer fish tickets, but use caution as you need to know reference year
 
 ## how much "more important" does your target need to be than the species with the second greatest catch? Expressed as a ratio.
-
 target_cutoff <- 1
 
 ## do you want to report revenue and lbs for the given target species? (dynamic)
@@ -60,9 +57,16 @@ target_cutoff <- 1
 This parameter will get passed through all processing steps
 
 ```{r choose year}
-# Leena will be working through all steps for 2014 as a test
+# initialize variable to measure script runtime
 alltime <- proc.time()
-process_year <- 2023
+
+# choose year of data to process
+process_year <- 2014
+
+# choose first year of data processed for this set of pipeline runs
+# if process_year > first_process_year, then lookback at the end of the prior year for tickets and VMS pings in step 4
+first_process_year <- 2014
+
 ```
 
 ## Lookback Window
@@ -76,11 +80,19 @@ lookback_window <- 7 # in days
 year_begin <- lubridate::ymd(paste0(process_year,"-01-01"), tz= "America/Los_Angeles")
 year_end <- lubridate::ymd(paste0(process_year,"-12-31"), tz= "America/Los_Angeles")
 
-if(process_year == 2009){
+if(process_year == first_process_year){
   lookback_begin <- year_begin
 } else{
   lookback_begin <- year_begin - lubridate::days(lookback_window)
 }
+```
+
+## Interpolation
+
+Optionally, interpolate between geocoordinates for a consistent interval between VMS pings.
+
+```{r interpolate}
+interpolate_flag <- TRUE
 ```
 
 # Step 1: Process Raw Fish Ticket Data
@@ -133,3 +145,13 @@ x<-proc.time()-alltime
 ```
 
 **So far, this pipeline for `r process_year` VMS data has taken `r round(x[3]/60,2)` minutes to run.**
+
+# Step 6: Optional: Interpolate VMS Pings
+
+```{r step6, message=F,warning=F,child=if (interpolate_flag) here::here('process steps','optional_06_interpolate.Rmd')}
+```
+```{r}
+x<-proc.time()-alltime
+```
+
+**This pipeline for `r process_year` VMS data took `r round(x[3]/60,2)` minutes to run.**
