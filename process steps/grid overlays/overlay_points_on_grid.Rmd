@@ -189,7 +189,7 @@ Now filter the data based on control variables above: California, DCRB trips onl
 # subset the data based on above queries
 dcrb_vms_tix_analysis <- vms_all_grd_match %>%
   # filter(agency_code == state_agency_code) %>%
-  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>% # comment out for groundfish?????
   filter(removal_type_name %in% removal_types) %>%
   #filter(DEPTH_CATM == "0-100m" | DEPTH_CATM == "100-150m") %>%
   #filter(NGDC_M <= 0 & NGDC_M >= -12000) %>% # considered adding 052220. also see "evaluate fishing depths.R". probably unnecessary because NGDC_M refers to centroid depth and we can match depths by 5km grid cell later
