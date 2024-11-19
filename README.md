@@ -20,7 +20,7 @@ Each individual process step (i.e., Steps 01-06 in the `process steps` folder) c
 | Choice  | Parameter | Description |
 | ---- | :-----: | ------- |
 | Species  | `spp_codes`    | For which species ([PacFIN species codes](https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/sp.txt)) do you want specific landings information (weight and value) NOTE: this does NOT filter which fish tickets are processed, but rather adds extra variables |
-| Gear types | `gear_codes`  | similar to above, should be thought of NOT as a filter on which gears ([PacFIN gear codes]((https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/agency_gears.txt)) you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings (e.g. "CRAB POT"), regardless of target species. |
+| Gear types | `gear_codes`  | similar to above, should be thought of NOT as a filter on which gears ([PacFIN gear codes](https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/agency_gears.txt)) you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings (e.g. "CRAB POT"), regardless of target species. |
 | Target cutoff    | `target_cutoff` | Determines how the target species of each trip is calculated. For trips that land multiple species, how much "more important" does your target need to be than the species with the second greatest catch? Expressed as a ratio. |
 | Revenue metric | `pacfin_revenue_metric` | Which PacFIN-reported revenue metric to use in calculation of landings |
 | Weight metric | `pacfin_weight_metric` | Which PacFIN-reported weight metric to use in calculation of landings |
