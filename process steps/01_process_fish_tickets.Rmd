@@ -46,7 +46,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.major = element_line(color="gray50",linetype=3))
 theme_set(plot_theme)
 
-keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin')
+keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag')
 
 rm(list=setdiff(ls(),keepers))
 
@@ -107,7 +107,7 @@ rawdat <- rawdat %>%
 #     LANDING_DATE= col_character(),
 #     LANDING_MONTH= col_double(), 
 #     LANDING_YEAR= col_double(), 
-#     PACFIN_SPECIES_CODE= col_character(), 
+#     NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE= col_character(), 
 #     LANDED_WEIGHT_LBS= col_double(), 
 #     EXVESSEL_REVENUE= col_double()))
 # })
@@ -129,10 +129,10 @@ First, subset the raw data to include only the columns that are needed. Rename t
 
 ```{r}
 rawdat.sub <- rawdat %>% 
-  dplyr::select(FISH_TICKET_ID, FTID, PACFIN_PORT_CODE, PACFIN_GROUP_PORT_CODE, DEALER_ID, VESSEL_NUM, AGENCY_CODE, GEAR_CODE, GEAR_NAME, PACFIN_GROUP_GEAR_CODE, REMOVAL_TYPE_CODE, REMOVAL_TYPE_NAME, LANDING_DATE, LANDING_MONTH, LANDING_YEAR, PACFIN_SPECIES_CODE, LANDED_WEIGHT_LBS, EXVESSEL_REVENUE) %>% 
+  dplyr::select(FISH_TICKET_ID, FTID, PACFIN_PORT_CODE, PACFIN_GROUP_PORT_CODE, DEALER_ID, VESSEL_NUM, AGENCY_CODE, GEAR_CODE, GEAR_NAME, PACFIN_GROUP_GEAR_CODE, REMOVAL_TYPE_CODE, REMOVAL_TYPE_NAME, LANDING_DATE, LANDING_MONTH, LANDING_YEAR, NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE, LANDED_WEIGHT_LBS, EXVESSEL_REVENUE) %>% 
 # change some column names
   set_colnames(c("Rec_ID", "FTID", "pacfin_port_code", "port_group_code","dealerID","drvid", "agency_code","gear_code", "gear_name", "gear_group", "removal_type_code", "removal_type_name", "date", "month", "year", 
-                          "PACFIN_SPECIES_CODE", "LANDED_WEIGHT_LBS", "EXVESSEL_REVENUE"))
+                          "NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE", "LANDED_WEIGHT_LBS", "EXVESSEL_REVENUE"))
 ```
 
 Remove the columns where the vessel identifier (drvid) is either "UNKNOWN" or blank ("")
@@ -165,10 +165,10 @@ Concatenate all species information for the fish ticket.
 ```{r}
 # all.species <- rawdat.sub %>%
 #   group_by(Rec_ID, removal_type_name) %>%
-#   summarise(species_code_all = ifelse(length(unique(PACFIN_SPECIES_CODE)) > 1, paste(unique(PACFIN_SPECIES_CODE), collapse="/"), as.character(unique(PACFIN_SPECIES_CODE))))
+#   summarise(species_code_all = ifelse(length(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)) > 1, paste(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE), collapse="/"), as.character(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE))))
 all.species <- rawdat.sub %>%
   group_by(Rec_ID) %>%
-  summarise(species_code_all = ifelse(length(unique(PACFIN_SPECIES_CODE)) > 1, paste(unique(PACFIN_SPECIES_CODE), collapse="/"), as.character(unique(PACFIN_SPECIES_CODE)))) %>% 
+  summarise(species_code_all = ifelse(length(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)) > 1, paste(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE), collapse="/"), as.character(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)))) %>% 
   ungroup()
 ```
 
@@ -212,10 +212,10 @@ rawdat.w.targets <- rawdat.sub %>%
   distinct() %>% 
   
   # NEW SEP 2024: REMOVE DEPENDENCY ON REMOVAL TYPE, i.e. JUST GROUP BY TICKET AND SPECIES
-  group_by(Rec_ID,PACFIN_SPECIES_CODE) %>% 
+  group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% 
   
   # OLD: Group by ticket, removal type, and species
-  # group_by(Rec_ID,removal_type_code,removal_type_name,PACFIN_SPECIES_CODE) %>% 
+  # group_by(Rec_ID,removal_type_code,removal_type_name,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% 
   
   # calculate landed pounds and revenue by species
   # NEW 09/2024- also calculate landed pounds with zero revenue (indicating personal or other use)
@@ -224,7 +224,7 @@ rawdat.w.targets <- rawdat.sub %>%
             spp_revenue=sum({{pacfin_revenue_metric}})) %>% 
   
   # now, calculate total pounds per species across the entire ticket
-  # group_by(Rec_ID,PACFIN_SPECIES_CODE) %>%
+  # group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
   # mutate(tot_lbs_spp=sum(spp_lbs),
   #        tot_revenue_spp=sum(spp_revenue)) %>% 
   # ungroup() %>% 
@@ -243,12 +243,12 @@ rawdat.w.targets <- rawdat.sub %>%
   # If a species landed is not >10% more than the second species, target is NONE
   mutate(first_rev=dplyr::first(prop_revenue_spp,order_by = desc(prop_revenue_spp)),
          second_rev=dplyr::nth(prop_revenue_spp,n=2,order_by = desc(prop_revenue_spp)),
-         first_rev_spp=dplyr::first(PACFIN_SPECIES_CODE,order_by= desc(prop_revenue_spp)),
-         second_rev_spp=dplyr::nth(PACFIN_SPECIES_CODE,n=2,order_by= desc(prop_revenue_spp)),
+         first_rev_spp=dplyr::first(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,order_by= desc(prop_revenue_spp)),
+         second_rev_spp=dplyr::nth(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,n=2,order_by= desc(prop_revenue_spp)),
          first_lbs=dplyr::first(prop_lbs_spp,order_by = desc(prop_lbs_spp)),
          second_lbs=dplyr::nth(prop_lbs_spp,2,order_by = desc(prop_lbs_spp)),
-         first_lbs_spp=dplyr::first(PACFIN_SPECIES_CODE,order_by=desc(prop_lbs_spp)),
-         second_lbs_spp=dplyr::nth(PACFIN_SPECIES_CODE,n=2,order_by= desc(prop_lbs_spp))) %>% 
+         first_lbs_spp=dplyr::first(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,order_by=desc(prop_lbs_spp)),
+         second_lbs_spp=dplyr::nth(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,n=2,order_by= desc(prop_lbs_spp))) %>% 
   
   # check if first is >10% more than second, for revenue and landed lbs
   # or, if first and second species are the same (i.e. for a ticket with both commercial and personal use catch)
@@ -261,43 +261,43 @@ rawdat.w.targets <- rawdat.sub %>%
 
 # Add back in dates, vessel IDs, etc.##Added FTID in this list
 # Tested a few different ways of doing this...
-# 1. select all columns of interest and match by c(Rec_ID,PACFIN_SPECIES_CODE)
+# 1. select all columns of interest and match by c(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)
 #   recID_attributes <- rawdat.sub %>%
-#     select(Rec_ID,FTID,PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
-# 2. select all columns and match by c(Rec_ID,PACFIN_SPECIES_CODE)
+#     select(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+# 2. select all columns and match by c(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)
 #   recID_attributes2 <- rawdat.sub %>% 
-#     distinct(Rec_ID,FTID,PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+#     distinct(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
 # 3. select just the first set of attributes for each fish ticket/species combo
 #   recID_attributes3 <- rawdat.sub %>% 
-#     group_by(Rec_ID,PACFIN_SPECIES_CODE) %>% 
+#     group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% 
 #     slice(1) %>% 
 #     ungroup()%>%
-#     select(Rec_ID,FTID,PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+#     select(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
 # As of 09/2024, we are moving forward with this last option
 recID_attributes <- rawdat.sub %>%
-  group_by(Rec_ID,PACFIN_SPECIES_CODE) %>%
+  group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
   slice(1) %>%
   ungroup()%>%
-  select(Rec_ID,FTID,PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+  select(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
 
 # Test the join and count
   # rawdat.w.targets.test1 <- rawdat.w.targets %>%
-  #   left_join(recID_attributes,by=c("Rec_ID","PACFIN_SPECIES_CODE"))
-  # rawdat.w.targets.test1 %>% count(Rec_ID,PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
+  #   left_join(recID_attributes,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
+  # rawdat.w.targets.test1 %>% count(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
 # for 2017 data- range is 1:40.
 
   # rawdat.w.targets.test2 <- rawdat.w.targets %>% 
-  #   left_join(recID_attributes2,by=c("Rec_ID","PACFIN_SPECIES_CODE"))
-  # rawdat.w.targets.test2 %>% count(Rec_ID,PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
+  #   left_join(recID_attributes2,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
+  # rawdat.w.targets.test2 %>% count(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
 # for 2017 data- range is 1:2.
 
   # rawdat.w.targets.test3 <- rawdat.w.targets %>% 
-  #   left_join(recID_attributes3,by=c("Rec_ID","PACFIN_SPECIES_CODE"))
-  # rawdat.w.targets.test3 %>% count(Rec_ID,PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
+  #   left_join(recID_attributes3,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
+  # rawdat.w.targets.test3 %>% count(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
 # for 2017 data- all combinations are unique (i.e., only 1 row per fish ticket/spp combo)
 # As of 09/2024, we are moving forward with this last option
 rawdat.w.targets %<>%
-  left_join(recID_attributes,by=c("Rec_ID","PACFIN_SPECIES_CODE"))
+  left_join(recID_attributes,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
 # for 2017 data- all combinations are unique (i.e., only 1 row per fish ticket/spp combo)
 
 
@@ -305,6 +305,19 @@ rawdat.w.targets %<>%
 rawdat.w.targets %<>%
   left_join(all.species,by = join_by(Rec_ID)) %>% 
   left_join(gear.info,by = join_by(Rec_ID))
+
+## CAUTION: this subsection will subset all fish tix just to groundfish bottom trawl. Comment out for all other pipeline runs!!!
+# rawdat.w.targets %<>% # <- rawdat.targets %>%
+#   filter(gear_group == "TWL",
+#                 !gear_name %in% c("MIDWATER TRAWL", "BEAM TRAWL"),
+#                 !TARGET_lbs %in% c("CHLB", "PHLB", "UHLB", "BSRM", "PSHP", "OSRM", "USRM", "RPRW", "SPRW", "GPRW", "LOBS", "OCRB", "RCRB", "OMSK", "OURC", "USCU", "RURC", "SHAD", "SHPD",  "WBAS", "WCRK"),
+#                   !TARGET_rev %in% c("CHLB", "PHLB", "UHLB", "BSRM", "PSHP", "OSRM", "USRM", "RPRW", "SPRW", "GPRW", "LOBS", "OCRB", "RCRB", "OMSK", "OURC", "USCU", "RURC", "SHAD", "SHPD",  "WBAS", "WCRK"))
+
+######## NOT DONE!!!!!! #########
+## CAUTION: this subsection will subset all fish tix just to pink shrimp trawl. Comment out for all other pipeline runs!!!
+# rawdat.w.targets %<>% # <- rawdat.targets %>%
+#   filter(gear_group != "TWL" & gear_name != "BEAM TRAWL" & TARGET_lbs != "PSHP" | TARGET_rev != "PSHP")
+######## NOT DONE!!!!!! #########
 ```
 
 ## Calculate "Other" Category
@@ -330,8 +343,8 @@ Here we add some species-specific columns based on the choice made in the beginn
 ```{r}
 # Use pivoting to define pounds and revenue for each species of interest
 RecID_spp_cols <- dat_targets_other %>% 
-  select(Rec_ID,PACFIN_SPECIES_CODE,spp_lbs,spp_lbs_no_revenue,spp_revenue) %>% 
-  filter(PACFIN_SPECIES_CODE %in% spp_codes) %>%
+  select(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,spp_lbs,spp_lbs_no_revenue,spp_revenue) %>% 
+  filter(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE %in% spp_codes) %>%
   distinct() %>% 
   pivot_longer(spp_lbs:spp_revenue) %>% 
   mutate(type=case_when(
@@ -343,7 +356,7 @@ RecID_spp_cols <- dat_targets_other %>%
   select(-name) %>% 
   group_by(Rec_ID) %>% 
   # spread to create the columns
-  pivot_wider(names_from=c(PACFIN_SPECIES_CODE,type),values_from = value,values_fill = list(value=0)) %>%
+  pivot_wider(names_from=c(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,type),values_from = value,values_fill = list(value=0)) %>%
   ungroup()
     
 # add back to main data

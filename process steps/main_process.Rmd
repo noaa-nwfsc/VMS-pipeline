@@ -1,6 +1,6 @@
 ---
 title: "Step by Step VMS Processing"
-author: "Owen Liu"
+author: "Owen Liu (Lead code developer) and Blake Feist (Pipeline operator)"
 date: Last Run "`r Sys.Date()`"
 output: 
   html_document:
@@ -17,8 +17,6 @@ library(here)
 
 This document collates all individual steps of VMS/Fish Ticket processing for a chosen year.
 
-#Kelly adding stuff to see if it commits to the repo
-
 ```{r timer, include=FALSE}
 alltime <- proc.time()
 ```
@@ -28,11 +26,22 @@ alltime <- proc.time()
 Indicate the PacFIN codes for the fish ticket species you are interested in tracking, as well as the gears. Landings and revenue for these species and gears will be tracked in the pipeline, for both targeted and non-targeted trips. Keep in mind that although the pipeline will record all species that are landed on each fish ticket, exact landings and revenues for these species will ONLY be reported if they are included in `spp_codes`. Likewise, `gear_codes` should be thought of NOT as a filter on which gears you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings, regardless of target species.
 
 ```{r}
-spp_codes <- c("DCRB","CHNK") # All of the species for which you want specific revenue and landings by ticket
+# spp_codes <- c("DCRB") # species code for Dungeness crab
+# spp_codes <- c("CHNK") # species code for Chinook salmon
+# spp_codes <- c("ALBC") # species code for Albacore tuna
+# spp_codes <- c("DOVR") # species code for Dover sole (if running just for LE groundfish bottom trawl)
+spp_codes <- c("PSHP") # species code for pink shrimp
+
 # spp_codes_name <- "DCRB_CHNK"
 # here's your options
-#https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/sp.txt
-gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING","TROLL, (SALMON)","OCEAN TROLL","TROLL (SALMON)","DRAG SEINE","DIP BAG NET","HOOK AND LINE","PURSE SEINE (SALMON)")
+# https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/sp.txt
+
+# gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING") ## gear types for Dungeness 
+# gear_codes <- c("TROLL, (SALMON)","OCEAN TROLL","TROLL (SALMON)","DRAG SEINE","DIP BAG NET","HOOK AND LINE","PURSE SEINE (SALMON)") ## gear types for salmon (Chinook)
+# gear_codes <- c("OCEAN TROLL","TROLL (SALMON)","TROLL (ALBACORE)","HOOK AND LINE","JIG (ALBACORE)") ## gear types for Albacore
+# gear_codes <- c("BALLOON TRAWL","BEAM TRAWL","bottom trawl - mud(sole) gear","bottom trawl - roller gear","DANISH/SCOTTISH SEINE (TRAWL)","GROUNDFISH TRAWL","GROUNDFISH TRAWL, SMALL FOOTROPE (< 8 in.)","GROUNDFISH(OTTER) TRAWL","OTTER TRAWL","PAIR TRAWL","PARANZELLA","ROLLER TRAWL","SELECTIVE FLATFISH TRAWL","SELECTIVE FLATFISH TRAWL, SMALL FOOTROPE","TRAWL NET","TRAWL, FOOTROPE GREATER THAN 8 INCHES IN DIAMETER","TRAWL, FOOTROPE LESS THAN 8 INCHES IN DIAMETER") ## these are for groundfish bottom trawl only
+gear_codes <- c("SINGLE RIGGED SHRIMP TRAWL","DOUBLE RIGGED SHRIMP TRAWL","SHRIMP TRAWL (SR)","SHRIMP TRAWL (DR)","GULF SHRIMP TRAWL","BEAM TRAWL") ## gear types for pink shrimp 
+
 # All of the gears for which you want total revenue and landings by ticket
 # As implemented, these are the full names (i.e., the "AGENCY DESCRIPTION" column of the table linked here, e.g. "CRAB POT", not "CPT")
 # https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/agency_gears.txt
@@ -41,13 +50,12 @@ gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RI
 Indicate the metric to use in determining targets of fishing trips, as well as the threshold for determining the target of each fishing trip.
 
 ```{r}
-# exvessel_revenue for now
+# choose landing and revenue metrics
 pacfin_weight_metric <- "LANDED_WEIGHT_LBS" # another option is "LANDED_WEIGHT_MTONS"
 pacfin_revenue_metric <- "EXVESSEL_REVENUE" # another option is AFI_EXVESSEL_REVENUE
 # target_metric <- "revenue" # afi_revenue is an alternative option for newer fish tickets, but use caution as you need to know reference year
 
 ## how much "more important" does your target need to be than the species with the second greatest catch? Expressed as a ratio.
-
 target_cutoff <- 1
 
 ## do you want to report revenue and lbs for the given target species? (dynamic)
@@ -59,9 +67,16 @@ target_cutoff <- 1
 This parameter will get passed through all processing steps
 
 ```{r choose year}
-# Leena will be working through all steps for 2014 as a test
+# initialize variable to measure script runtime
 alltime <- proc.time()
-process_year <- 2009
+
+# choose year of data to process
+process_year <- 2014
+
+# choose first year of data processed for this set of pipeline runs
+# if process_year > first_process_year, then lookback at the end of the prior year for tickets and VMS pings in step 4
+first_process_year <- 2014
+
 ```
 
 ## Lookback Window
@@ -71,15 +86,23 @@ We enforce a "lookback window" when matching the VMS and fish tickets such that 
 Create lookback object. Here is where the lookback window duration can be changed. Default is 7 days.
 
 ```{r lookback}
-lookback_window <- 7 # in days
+lookback_window <- 7 # in days (7 for DCRB, CHNK, groundfish, 40 for ALBC)
 year_begin <- lubridate::ymd(paste0(process_year,"-01-01"), tz= "America/Los_Angeles")
 year_end <- lubridate::ymd(paste0(process_year,"-12-31"), tz= "America/Los_Angeles")
 
-if(process_year == 2009){
+if(process_year == first_process_year){
   lookback_begin <- year_begin
 } else{
   lookback_begin <- year_begin - lubridate::days(lookback_window)
 }
+```
+
+## Interpolation
+
+Optionally, interpolate between geocoordinates for a consistent interval between VMS pings.
+
+```{r interpolate}
+interpolate_flag <- TRUE
 ```
 
 # Step 1: Process Raw Fish Ticket Data
@@ -132,3 +155,13 @@ x<-proc.time()-alltime
 ```
 
 **So far, this pipeline for `r process_year` VMS data has taken `r round(x[3]/60,2)` minutes to run.**
+
+# Step 6: Optional: Interpolate VMS Pings
+
+```{r step6, message=F,warning=F,child=if (interpolate_flag) here::here('process steps','optional_06_interpolate.Rmd')}
+```
+```{r}
+x<-proc.time()-alltime
+```
+
+**This pipeline for `r process_year` VMS data took `r round(x[3]/60,2)` minutes to run.**
