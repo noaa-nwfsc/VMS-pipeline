@@ -42,9 +42,9 @@ Each individual process step (i.e., Steps 01-06 in the `process steps` folder) c
 
 **Parameter details**
 
-* *Species code* refers to the `NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE` within the fish ticket data, which has more straightforward species codes than are listed on PacFIN. For example, dover sole is only referred to as `DOVR`, not `DOVR` and `DVR1`.
+* *Species code* refers to the `NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE` attribute or column in the fish ticket data, which does not subdivide groundfish species into additional species codes. For example, dover sole are only listed as `DOVR`, not `DOVR` and `DVR1` as found in the `PACFIN_SPECIES_CODE` attribute.
 * *Target cutoff* uses a ratio to determine the target for a given fishing trip, using revenue for the derived column `TARGET_rev` and using weight for the derived column `TARGET_lbs`. For a species to be considered the target, the ratio between the highest and 2nd highest catch must be greater than or equal to the target threshold. For example, if the threshold is set to `1.1`, then a species is considered a target if its catch ≥10% more the catch of the next highest catch on that fishing trip.
-* *Lookback window* provides a maximum length for a fishing trip, and is set based on the fishery. If the lookback window is too short, the pipeline will miss fishing activity. If the lookback window is too long, the pipeline will include transit activity that isn't really fishing related.
+* *Lookback window* provides a maximum length for a fishing trip, and is set based on the fishery. If the lookback window is too short, the pipeline will miss fishing activity. If the lookback window is too long, the pipeline derived fishing trip will include VMS pings from when vessels transited into a given fishery, which aren't considered active fishing.
 
 ## Pipeline Outputs
 
@@ -66,7 +66,7 @@ The main output of this data analysis pipeline is clean fishery landings data (f
 **Which output file should I use?**
 
 * To create fishing activity heatmaps, use either `matched_filtered_withFTID_length` for non-interpolated data or `interpolated` for interpolated data.
-* To calculate the proportion of boats, trips, landings and revenues with VMS transponders, use `matched_alltix_withFTID`.
+* To calculate the proportion of boats, trips, landings and revenue that was tracked from vessels using VMS transponders, use `matched_alltix_withFTID`, which adds a row for each fish ticket that could not be matched to a VMS tracked fishing trip.
 
 ## Disclaimer
 
