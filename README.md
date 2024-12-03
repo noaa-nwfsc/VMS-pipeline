@@ -37,6 +37,12 @@ Each individual process step (i.e., Steps 01-06 in the `process steps` folder) c
 | Weight metric | `pacfin_weight_metric` | Which PacFIN-reported weight metric to use in calculation of landings |
 | Lookback window | `lookback_window` | What is the maximum allowed trip length to attach to a fish ticket (e.g., maximum allowed difference between first and last VMS pings associated with a trip). |
 
+**Parameter details**
+
+* *Species code* refers to the `NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE` within the fish ticket data, which has more straightforward species codes than are listed on PacFIN. For example, dover sole is only referred to as `DOVR`, not `DOVR` and `DVR1`.
+* *Target cutoff* uses a ratio to determine the target for a given fishing trip, using revenue for the derived column `TARGET_rev` and using weight for the derived column `TARGET_lbs`. For a species to be considered the target, the ratio between the highest and 2nd highest catch must be greater than or equal to the target threshold. For example, if the threshold is set to `1.1`, then a species is considered a target if its catch ≥10% more the catch of the next highest catch on that fishing trip.
+* *Lookback window* provides a maximum length for a fishing trip, and is set based on the fishery. If the lookback window is too short, the pipeline will miss fishing activity. If the lookback window is too long, the pipeline will include transit activity that isn't really fishing related.
+
 ## Pipeline Outputs
 
 The main output of this data analysis pipeline is clean fishery landings data (fish tickets), joined to the relevant spatial information (VMS ping locations) associated with each fishing trip. As the pipeline runs, it produces intermediate outputs, which are especially helpful for checking errors and quality assurance/control (QA/QC). Example file names are listed below, where `yyyy` refers to the year of data the pipeline was run for.
@@ -53,6 +59,11 @@ The main output of this data analysis pipeline is clean fishery landings data (f
 | `matched/filtering/yyyy_matched_filtered_withFTID_length.rds` | Cleaned fish tickets joined to cleaned VMS data, with filters calculated and applied | 5 |
 | `matched/filtering/yyyy_matched_unfiltered.rds` | Same as `matched_filtered_withFTID_length`, but filters not applied (generated for QA/QC) | 5 |
 | `interpolation/yyyy_interpolated.rds` | Cleaned and filtered fish ticket data joined to VMS data, with interpolation to regularize the VMS ping interval | 6 |
+
+**Which output file should I use?**
+
+* To create fishing activity heatmaps, use either `matched_filtered_withFTID_length` for non-interpolated data or `interpolated` for interpolated data.
+* To calculate the proportion of boats, trips, landings and revenues with VMS transponders, use `matched_alltix_withFTID`.
 
 ## Disclaimer
 
