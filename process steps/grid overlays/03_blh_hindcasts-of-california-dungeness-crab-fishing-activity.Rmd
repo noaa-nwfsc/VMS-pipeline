@@ -1,0 +1,175 @@
+---
+title: "Hindcasts of California Dungeness crab fishing activity, 2011-2023"
+author: "Brooke Hawkins"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Purpose
+* Integrate interpolated VMS and fish ticket data to produce time series, rasters, and maps of fishing activity, landed weight, and revenue.
+Deliverable:
+* Monthly maps of fishing activity; tables summarizing monthly fishing activity
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prep data
+
+```{r import-libraries}
+library(here)
+library(readr)
+library(tidyverse)
+library(sf)
+```
+
+I'm starting with one year and one season, I will extend to more years once I like the output format.
+
+```{r load-data}
+# load RDS of joined, cleaned, interpolated VMS and fish ticket data as a dataframe
+vms_df <- read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2014_interpolated.rds'))
+
+# load 5km grid shape file as a simple features object
+grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
+
+# join VMS and fish ticket data to grid
+vms_df <- vms_df %>%
+  st_as_sf(coords = c('LON', 'LAT'), crs=4326) %>%
+  st_transform(st_crs(grid_5km)) %>%
+  st_join(grid_5km) %>%
+  st_set_geometry(NULL)
+```
+
+Some commonly used acronyms in variable naming are:
+
+* `dcrb` dungeness crab
+* `rev` revenue
+* `lbs` pounds
+* `VMS` vessel monitoring system
+
+```{r transform-data}
+# define filters
+target_rev <- "DCRB"         # revenue target
+target_lbs <- "DCRB"         # landings target
+state_agency_code <- "C"     # landings brought to California ports
+min_depth <- 0               # minimum depth in meters
+max_depth <- -150            # maximum depth in meters
+min_speed <- 0               # minimum speed in m/s
+max_speed <- 4.11556         # maximum speed in m/s (4.11556 m/s = 8 knots)
+crab_year_start <- 11        # month defines start of crab year
+crab_years <- c("2014_2015") # crab years to include
+winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
+
+# transform data
+dcrb_df <- vms_df %>%
+  # add temporal columns
+  mutate(
+    year = lubridate::year(westcoastdate_notime),
+    month = lubridate::month(westcoastdate_notime, label=TRUE, abbr=FALSE),
+    month_numeric = month(westcoastdate_notime),
+    year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime), 6, 7)),
+    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    week_of_year = week(westcoastdate_notime),
+    day_of_year = yday(westcoastdate_notime)
+  ) %>%
+  # apply filters
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  filter(agency_code == state_agency_code) %>%
+  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>% # TODO should this be for WM_NGDC_M instead?
+  filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
+  filter(crab_year %in% crab_years) %>%
+  # select columns
+  dplyr::select(
+    # identifiers
+    Rec_ID,           # fish ticket ID
+    VMS_RECNO,        # VMS ping ID
+    drvid,            # vessel ID
+    pacfin_port_code, # port ID
+    port_group_code,  # port group ID
+    GRID5KM_ID,       # grid cell ID
+    # temporal fields
+    westcoastdate,
+    westcoastdate_notime,
+    crab_year, 
+    season,
+    year,
+    year_month,
+    month, 
+    month_numeric,
+    week_of_year,
+    day_of_year,
+    # vessel length
+    FINAL_LENGTH,
+    # dungeness crab fields
+    DCRB_lbs,
+    DCRB_revenue
+  )
+
+# count total records, trips and years
+n_records <- nrow(vms_df)
+n_trips   <- n_distinct(vms_df$Rec_ID)
+n_years   <- n_distinct(lubridate::year(vms_df$westcoastdate_notime))
+
+# take a peek at the resulting dataframe
+glimpse(dcrb_df)
+```
+
+The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `n_years` years.
+
+```{r summarize-fishing-activity}
+# summarize trip-level attributes
+trip_df <- dcrb_df %>%
+  group_by(Rec_ID) %>%
+  summarise(trip_n_vms_records = n(),
+            trip_start = min(westcoastdate),
+            trip_end = max(westcoastdate))
+
+# join trip-level attributes back to dungeness crab dataframe
+dcrb_trip_df <- left_join(dcrb_df, trip_df, by="Rec_ID") %>%
+  mutate(
+    dcrb_lbs_per_vms_record     = DCRB_lbs / trip_n_vms_records,
+    dcrb_rev_per_vms_record     = DCRB_revenue / trip_n_vms_records,
+    dcrb_vessels_per_vms_record = 1 / trip_n_vms_records
+  )
+
+# create daily gridded summary
+dcrb_5km_summary <- dcrb_trip_df %>%
+  group_by(
+    # grid cell ID, makes this a gridded summary
+    GRID5KM_ID,
+    # temporal columns, makes this a daily summary
+    year,
+    crab_year,
+    year_month,
+    season,
+    month,
+    month_numeric,
+    week_of_year,
+    day_of_year,
+    westcoastdate_notime
+  ) %>%
+  summarise(
+    dcrb_lbs = sum(dcrb_lbs_per_vms_record),
+    dcrb_rev = sum(dcrb_rev_per_vms_record),
+    n_vms_records = n(),
+    n_vessels = sum(dcrb_vessels_per_vms_record),
+    n_unique_vessels = n_distinct(drvid)
+  ) %>% 
+  ungroup()
+```
+
+
+## Map data
+
+```{r}
+
+```
+
+## Summarize data
+
+```{r}
+
+```
+
+
