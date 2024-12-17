@@ -21,6 +21,8 @@ library(here)
 library(readr)
 library(tidyverse)
 library(sf)
+library(rnaturalearth)
+library(viridis)
 ```
 
 I'm starting with one year and one season, I will extend to more years once I like the output format.
@@ -117,6 +119,8 @@ glimpse(dcrb_df)
 
 The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `n_years` years.
 
+I need to check on rescaled vs. normalized.
+
 ```{r summarize-fishing-activity}
 # summarize trip-level attributes
 trip_df <- dcrb_df %>%
@@ -133,21 +137,18 @@ dcrb_trip_df <- left_join(dcrb_df, trip_df, by="Rec_ID") %>%
     dcrb_vessels_per_vms_record = 1 / trip_n_vms_records
   )
 
-# create daily gridded summary
+# create monthly gridded summary
 dcrb_5km_summary <- dcrb_trip_df %>%
   group_by(
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
-    # temporal columns, makes this a daily summary
+    # temporal columns, makes this a monthly summary
     year,
     crab_year,
     year_month,
     season,
     month,
-    month_numeric,
-    week_of_year,
-    day_of_year,
-    westcoastdate_notime
+    month_numeric
   ) %>%
   # sum landings, revenue; count unique vessels and VMS records
   summarise(
@@ -156,7 +157,21 @@ dcrb_5km_summary <- dcrb_trip_df %>%
     n_vms_records = n(),
     n_unique_vessels = n_distinct(drvid)
   ) %>% 
-  ungroup()
+  ungroup() %>%
+  # rescale fishing effort from 0 to 1
+  mutate(
+    normalized_n_vms_records = as.vector(scale(n_vms_records, center=min(n_vms_records), scale=diff(range(n_vms_records)))),
+    normalized_n_vms_records = ifelse(
+      normalized_n_vms_records == 0,
+      0.5 * min(normalized_n_vms_records[normalized_n_vms_records != min(normalized_n_vms_records)]),
+      normalized_n_vms_records
+    ),
+    rescaled_n_vms_records = as.vector(scale(n_vms_records, center=0, scale=max(n_vms_records)))
+  )
+
+# compare ranges of normalized vs. rescaled
+print(summary(dcrb_5km_summary_sf$rescaled_n_vms_records))
+print(summary(dcrb_5km_summary_sf$normalized_n_vms_records))
 
 # join geometry from 5km grid to gridded fishing summary
 dcrb_5km_summary_sf <- dcrb_5km_summary %>%
@@ -164,13 +179,11 @@ dcrb_5km_summary_sf <- dcrb_5km_summary %>%
   st_as_sf()
 ```
 
+I still need to add a filter to remove confidential grid cells.
 
 ## Map data
 
 ```{r}
-library(rnaturalearth)
-library(viridis)
-
 # load west coast states simple features object
 west_coast_states <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
   filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
@@ -195,6 +208,40 @@ map_density <- ggplot() +
         axis.ticks.y=element_blank(),
         legend.position="bottom")
 ggsave(filename=here("Confidential", "figures", "sample_fishing_effort_map.png"))
+
+# another basic plot
+map_density <- ggplot() +
+  # plot background
+  geom_sf(data=west_coast_states, fill='gray80') +
+  # plot fishing effort
+  geom_sf(data=dcrb_5km_summary_sf, aes(fill=log10(rescaled_n_vms_records))) +
+  # label plot
+  labs(fill="log10(rescaled_n_vms_records) per 5x5 cell") +
+  # aesthetic changes
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  scale_fill_viridis() +
+  theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+        axis.ticks.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="bottom")
+ggsave(filename=here("Confidential", "figures", "sample_rescaled_fishing_effort_map.png"))
+
+# another basic plot
+map_density <- ggplot() +
+  # plot background
+  geom_sf(data=west_coast_states, fill='gray80') +
+  # plot fishing effort
+  geom_sf(data=dcrb_5km_summary_sf, aes(fill=log10(normalized_n_vms_records))) +
+  # label plot
+  labs(fill="log10(normalized_n_vms_records) per 5x5 cell") +
+  # aesthetic changes
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  scale_fill_viridis() +
+  theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+        axis.ticks.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="bottom")
+ggsave(filename=here("Confidential", "figures", "sample_normalized_fishing_effort_map.png"))
 ```
 
 ## Summarize data
