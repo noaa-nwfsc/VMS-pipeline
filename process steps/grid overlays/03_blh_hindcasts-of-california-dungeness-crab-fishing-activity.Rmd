@@ -149,21 +149,52 @@ dcrb_5km_summary <- dcrb_trip_df %>%
     day_of_year,
     westcoastdate_notime
   ) %>%
+  # sum landings, revenue; count unique vessels and VMS records
   summarise(
     dcrb_lbs = sum(dcrb_lbs_per_vms_record),
     dcrb_rev = sum(dcrb_rev_per_vms_record),
     n_vms_records = n(),
-    n_vessels = sum(dcrb_vessels_per_vms_record),
     n_unique_vessels = n_distinct(drvid)
   ) %>% 
   ungroup()
+
+# join geometry from 5km grid to gridded fishing summary
+dcrb_5km_summary_sf <- dcrb_5km_summary %>%
+  left_join(grid_5km, by=join_by(GRID5KM_ID)) %>%
+  st_as_sf()
 ```
 
 
 ## Map data
 
 ```{r}
+library(rnaturalearth)
+library(viridis)
 
+# load west coast states simple features object
+west_coast_states <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
+  filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
+  st_transform(st_crs(grid_5km))
+
+# set bounding box 
+bbox <- st_bbox(dcrb_5km_summary_sf)
+
+# basic plot
+map_density <- ggplot() +
+  # plot background
+  geom_sf(data=west_coast_states, fill='gray80') +
+  # plot fishing effort
+  geom_sf(data=dcrb_5km_summary_sf, aes(fill=log10(n_vms_records))) +
+  # label plot
+  labs(fill="log10(n_vms_records) per 5x5 cell") +
+  # aesthetic changes
+  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+  scale_fill_viridis() +
+  theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+        axis.ticks.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="bottom")
+ggsave(filename=here("Confidential", "figures", "sample_fishing_effort_map.png"))
 ```
 
 ## Summarize data
