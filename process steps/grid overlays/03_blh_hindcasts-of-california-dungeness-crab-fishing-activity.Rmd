@@ -117,7 +117,7 @@ n_years   <- n_distinct(lubridate::year(vms_df$westcoastdate_notime))
 glimpse(dcrb_df)
 ```
 
-The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `n_years` years.
+The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
 
 I need to check on rescaled vs. normalized.
 
@@ -138,7 +138,7 @@ dcrb_trip_df <- left_join(dcrb_df, trip_df, by="Rec_ID") %>%
   )
 
 # create monthly gridded summary
-dcrb_5km_summary <- dcrb_trip_df %>%
+dcrb_5km_summary_df <- dcrb_trip_df %>%
   group_by(
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
@@ -170,11 +170,11 @@ dcrb_5km_summary <- dcrb_trip_df %>%
   )
 
 # compare ranges of normalized vs. rescaled
-print(summary(dcrb_5km_summary_sf$rescaled_n_vms_records))
-print(summary(dcrb_5km_summary_sf$normalized_n_vms_records))
+print(summary(dcrb_5km_summary_df$rescaled_n_vms_records))
+print(summary(dcrb_5km_summary_df$normalized_n_vms_records))
 
 # join geometry from 5km grid to gridded fishing summary
-dcrb_5km_summary_sf <- dcrb_5km_summary %>%
+dcrb_5km_summary_sf <- dcrb_5km_summary_df %>%
   left_join(grid_5km, by=join_by(GRID5KM_ID)) %>%
   st_as_sf()
 ```
