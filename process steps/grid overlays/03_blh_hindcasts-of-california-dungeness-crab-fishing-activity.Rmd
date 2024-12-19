@@ -183,7 +183,7 @@ I still need to add a filter to remove confidential grid cells.
 
 ## Map data
 
-```{r}
+```{r maps}
 # load west coast states simple features object
 west_coast_states <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
   filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
@@ -208,6 +208,8 @@ map_density <- ggplot() +
         axis.ticks.y=element_blank(),
         legend.position="bottom")
 ggsave(filename=here("Confidential", "figures", "sample_fishing_effort_map.png"))
+# see result
+map_density
 
 # another basic plot
 map_density <- ggplot() +
@@ -225,6 +227,8 @@ map_density <- ggplot() +
         axis.ticks.y=element_blank(),
         legend.position="bottom")
 ggsave(filename=here("Confidential", "figures", "sample_rescaled_fishing_effort_map.png"))
+# see result
+map_density
 
 # another basic plot
 map_density <- ggplot() +
@@ -242,6 +246,8 @@ map_density <- ggplot() +
         axis.ticks.y=element_blank(),
         legend.position="bottom")
 ggsave(filename=here("Confidential", "figures", "sample_normalized_fishing_effort_map.png"))
+# see result
+map_density
 ```
 
 ## Summarize data
