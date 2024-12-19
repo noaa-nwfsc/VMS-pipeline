@@ -247,7 +247,36 @@ ggsave(filename=here("Confidential", "figures", "sample_normalized_fishing_effor
 ## Summarize data
 
 ```{r}
+# define columns and functions to summarize in table
+colnames_vector <- c('n_vms_records', 'normalized_n_vms_records', 'rescaled_n_vms_records')
+function_vector <- c('length', 'min', 'mean', 'median', 'max', 'IQR')
 
+# summarize in a for loop for columns in column name vector c_vector
+summary_table <- rbind(
+  summarise_at(dcrb_5km_summary_df, colnames_vector, get(function_vector[1])),
+  summarise_at(dcrb_5km_summary_df, colnames_vector, get(function_vector[2])),
+  summarise_at(dcrb_5km_summary_df, colnames_vector, get(function_vector[3])),
+  summarise_at(dcrb_5km_summary_df, colnames_vector, get(function_vector[4])),
+  summarise_at(dcrb_5km_summary_df, colnames_vector, get(function_vector[5])),
+  summarise_at(dcrb_5km_summary_df, colnames_vector, get(function_vector[6]))
+)
+
+# reformat table
+summary_table <- cbind(
+  # add metric name as column
+  metric = function_vector,
+  summary_table
+) %>% 
+  # turn metric name into rowname
+  column_to_rownames('metric') %>%
+  # transpose result
+  t()
+
+# write result
+write.csv(file=here("Confidential", "tables", "sample_summary_table.csv"), x=summary_table)
+
+# see result
+summary_table
 ```
 
 
