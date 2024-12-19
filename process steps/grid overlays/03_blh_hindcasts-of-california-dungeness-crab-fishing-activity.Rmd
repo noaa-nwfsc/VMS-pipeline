@@ -179,7 +179,23 @@ dcrb_5km_summary_sf <- dcrb_5km_summary_df %>%
   st_as_sf()
 ```
 
-I still need to add a filter to remove confidential grid cells.
+## Confidentiality filter
+
+I'd like to do this one step earlier (to `_df` rather than `_sf`), and write the output with normalized VMS records to a CSV. I think there's a better way to summarize this, with n_vms_pings as records rather than grid cell months.
+
+```{r}
+# create a non-confidential version of gridded fishing summary
+dcrb_5km_summary_confidential_sf <- dcrb_5km_summary_sf %>%
+  filter(n_unique_vessels >= 3)
+
+# summarize how much data is dropped
+# get the number of records
+n_drop_confidential <- dim(dcrb_5km_summary_sf)[1] - dim(dcrb_5km_summary_confidential_sf)[1]
+# calculate the number of records, and convert to a percent as a string
+percent_drop_confidential <- substr(as.character(n_drop_confidential / dim(dcrb_5km_summary_sf)[1] * 100), 1, 5)
+```
+
+The non-confidential data has `r n_drop_confidential` (`r percent_drop_confidential`%) fewer records, where grid cells had <3 unique vessels in a given month.
 
 ## Map data
 
@@ -190,14 +206,14 @@ west_coast_states <- rnaturalearth::ne_states(country='United States of America'
   st_transform(st_crs(grid_5km))
 
 # set bounding box 
-bbox <- st_bbox(dcrb_5km_summary_sf)
+bbox <- st_bbox(dcrb_5km_summary_confidential_sf)
 
 # basic plot
 map_density <- ggplot() +
   # plot background
   geom_sf(data=west_coast_states, fill='gray80') +
   # plot fishing effort
-  geom_sf(data=dcrb_5km_summary_sf, aes(fill=log10(n_vms_records))) +
+  geom_sf(data=dcrb_5km_summary_confidential_sf, aes(fill=log10(n_vms_records))) +
   # label plot
   labs(fill="log10(n_vms_records) per 5x5 cell") +
   # aesthetic changes
@@ -216,7 +232,7 @@ map_density <- ggplot() +
   # plot background
   geom_sf(data=west_coast_states, fill='gray80') +
   # plot fishing effort
-  geom_sf(data=dcrb_5km_summary_sf, aes(fill=log10(rescaled_n_vms_records))) +
+  geom_sf(data=dcrb_5km_summary_confidential_sf, aes(fill=log10(rescaled_n_vms_records))) +
   # label plot
   labs(fill="log10(rescaled_n_vms_records) per 5x5 cell") +
   # aesthetic changes
@@ -235,7 +251,7 @@ map_density <- ggplot() +
   # plot background
   geom_sf(data=west_coast_states, fill='gray80') +
   # plot fishing effort
-  geom_sf(data=dcrb_5km_summary_sf, aes(fill=log10(normalized_n_vms_records))) +
+  geom_sf(data=dcrb_5km_summary_confidential_sf, aes(fill=log10(normalized_n_vms_records))) +
   # label plot
   labs(fill="log10(normalized_n_vms_records) per 5x5 cell") +
   # aesthetic changes
@@ -251,6 +267,8 @@ map_density
 ```
 
 ## Summarize data
+
+I need to update this to use a confidential version. Or all the calculations are wrong anyway, so might be a moot point.
 
 ```{r}
 # define columns and functions to summarize in table
