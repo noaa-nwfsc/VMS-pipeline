@@ -119,8 +119,6 @@ glimpse(dcrb_df)
 
 The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
 
-I need to check on rescaled vs. normalized.
-
 ```{r summarize-fishing-activity}
 # summarize trip-level attributes
 trip_df <- dcrb_df %>%
@@ -157,21 +155,7 @@ dcrb_5km_summary_df <- dcrb_trip_df %>%
     n_vms_records = n(),
     n_unique_vessels = n_distinct(drvid)
   ) %>% 
-  ungroup() %>%
-  # rescale fishing effort from 0 to 1
-  mutate(
-    normalized_n_vms_records = as.vector(scale(n_vms_records, center=min(n_vms_records), scale=diff(range(n_vms_records)))),
-    normalized_n_vms_records = ifelse(
-      normalized_n_vms_records == 0,
-      0.5 * min(normalized_n_vms_records[normalized_n_vms_records != min(normalized_n_vms_records)]),
-      normalized_n_vms_records
-    ),
-    rescaled_n_vms_records = as.vector(scale(n_vms_records, center=0, scale=max(n_vms_records)))
-  )
-
-# compare ranges of normalized vs. rescaled
-print(summary(dcrb_5km_summary_df$rescaled_n_vms_records))
-print(summary(dcrb_5km_summary_df$normalized_n_vms_records))
+  ungroup()
 
 # join geometry from 5km grid to gridded fishing summary
 dcrb_5km_summary_sf <- dcrb_5km_summary_df %>%
@@ -181,7 +165,7 @@ dcrb_5km_summary_sf <- dcrb_5km_summary_df %>%
 
 ## Confidentiality filter
 
-I'd like to do this one step earlier (to `_df` rather than `_sf`), and write the output with normalized VMS records to a CSV. I think there's a better way to summarize this, with n_vms_pings as records rather than grid cell months.
+I think there's a better way to summarize this, with n_vms_pings as records rather than grid cell months.
 
 ```{r}
 # create a non-confidential version of gridded fishing summary
@@ -226,44 +210,6 @@ map_density <- ggplot() +
 ggsave(filename=here("Confidential", "figures", "sample_fishing_effort_map.png"))
 # see result
 map_density
-
-# another basic plot
-map_density <- ggplot() +
-  # plot background
-  geom_sf(data=west_coast_states, fill='gray80') +
-  # plot fishing effort
-  geom_sf(data=dcrb_5km_summary_confidential_sf, aes(fill=log10(rescaled_n_vms_records))) +
-  # label plot
-  labs(fill="log10(rescaled_n_vms_records) per 5x5 cell") +
-  # aesthetic changes
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  scale_fill_viridis() +
-  theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
-        axis.ticks.x=element_blank(),
-        axis.ticks.y=element_blank(),
-        legend.position="bottom")
-ggsave(filename=here("Confidential", "figures", "sample_rescaled_fishing_effort_map.png"))
-# see result
-map_density
-
-# another basic plot
-map_density <- ggplot() +
-  # plot background
-  geom_sf(data=west_coast_states, fill='gray80') +
-  # plot fishing effort
-  geom_sf(data=dcrb_5km_summary_confidential_sf, aes(fill=log10(normalized_n_vms_records))) +
-  # label plot
-  labs(fill="log10(normalized_n_vms_records) per 5x5 cell") +
-  # aesthetic changes
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  scale_fill_viridis() +
-  theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
-        axis.ticks.x=element_blank(),
-        axis.ticks.y=element_blank(),
-        legend.position="bottom")
-ggsave(filename=here("Confidential", "figures", "sample_normalized_fishing_effort_map.png"))
-# see result
-map_density
 ```
 
 ## Summarize data
@@ -272,7 +218,7 @@ I need to update this to use a confidential version. Or all the calculations are
 
 ```{r}
 # define columns and functions to summarize in table
-colnames_vector <- c('n_vms_records', 'normalized_n_vms_records', 'rescaled_n_vms_records')
+colnames_vector <- c('n_vms_records')
 function_vector <- c('length', 'min', 'mean', 'median', 'max', 'IQR')
 
 # summarize in a for loop for columns in column name vector c_vector
