@@ -165,21 +165,22 @@ dcrb_5km_summary_sf <- dcrb_5km_summary_df %>%
 
 ## Confidentiality filter
 
-I think there's a better way to summarize this, with n_vms_pings as records rather than grid cell months.
-
 ```{r}
 # create a non-confidential version of gridded fishing summary
 dcrb_5km_summary_confidential_sf <- dcrb_5km_summary_sf %>%
   filter(n_unique_vessels >= 3)
 
-# summarize how much data is dropped
-# get the number of records
-n_drop_confidential <- dim(dcrb_5km_summary_sf)[1] - dim(dcrb_5km_summary_confidential_sf)[1]
+# summarize how much data is dropped, where a record is a VMS pings
+# numerator: # of records dropped due to confidentiality filter
+n_drop_confidential <- sum(dcrb_5km_summary_sf$n_vms_records) - sum(dcrb_5km_summary_confidential_sf$n_vms_records)
+# denominator: # of records, without any confidentiality filter
+n_no_drop_confidential <- sum(dcrb_5km_summary_sf$n_vms_records)
+
 # calculate the number of records, and convert to a percent as a string
-percent_drop_confidential <- substr(as.character(n_drop_confidential / dim(dcrb_5km_summary_sf)[1] * 100), 1, 5)
+percent_drop_confidential <- substr(as.character(n_drop_confidential / n_no_drop_confidential * 100), 1, 5)
 ```
 
-The non-confidential data has `r n_drop_confidential` (`r percent_drop_confidential`%) fewer records, where grid cells had <3 unique vessels in a given month.
+The non-confidential data has `r n_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
 
 ## Map data
 
