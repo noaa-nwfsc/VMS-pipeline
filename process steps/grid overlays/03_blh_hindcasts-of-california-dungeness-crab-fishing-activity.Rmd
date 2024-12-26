@@ -119,7 +119,7 @@ glimpse(dcrb_df)
 
 The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
 
-```{r summarize-fishing-activity}
+```{r gridded-summary}
 # summarize trip-level attributes
 trip_df <- dcrb_df %>%
   group_by(Rec_ID) %>%
@@ -158,9 +158,9 @@ dcrb_5km_summary_df <- dcrb_trip_df %>%
   ungroup()
 ```
 
-## Confidentiality filter
+If a grid cell in a given month has < 3 unique vessels, it cannot be included in non-confidential maps summarizing the data.
 
-```{r}
+```{r confidentiality-filter}
 # create a non-confidential version of gridded fishing summary
 dcrb_5km_summary_confidential_df <- dcrb_5km_summary_df %>%
   filter(n_unique_vessels >= 3)
@@ -177,11 +177,9 @@ percent_drop_confidential <- substr(as.character(n_drop_confidential / n_no_drop
 
 The non-confidential data has `r n_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
 
-## Summarize data
+## Create outputs
 
-I need to update this to use a confidential version. Or all the calculations are wrong anyway, so might be a moot point.
-
-```{r}
+```{r tables}
 # define columns and functions to summarize in table
 colnames_vector <- c('n_vms_records')
 function_vector <- c('length', 'min', 'mean', 'median', 'max', 'IQR')
@@ -213,8 +211,6 @@ write.csv(file=here("Confidential", "tables", "sample_summary_table.csv"), x=sum
 # see result
 summary_table
 ```
-
-## Map data
 
 ```{r maps}
 # load west coast states simple features object
