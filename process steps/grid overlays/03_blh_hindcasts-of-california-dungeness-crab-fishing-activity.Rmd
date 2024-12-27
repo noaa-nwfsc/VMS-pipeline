@@ -203,7 +203,7 @@ The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_c
 
 ```{r tables}
 # define columns and functions to summarize in table
-colnames_vector <- c('n_vms_records')
+colnames_vector <- c('n_vms_records', 'n_unique_vessels')
 function_vector <- c('length', 'min', 'mean', 'median', 'max', 'IQR')
 
 # summarize in a for loop for columns in column name vector c_vector
@@ -235,37 +235,45 @@ summary_table
 ```
 
 ```{r maps}
-# create a log-10 transformed map, to apply to each month of data
+# map fishing effort, apply to each month of data
 #   data_sf: sf object
 #   data_col: vector from data_sf to log-transform and map
-#   log10_fill_range: range for the log-10 transformed fill of data_col vector
+#   log_transform: boolean to log-transform data_col on map
+#   fill_range: range for the fill of data_col vector
 #   bbox: bounding box to use for map
 #   title: map title
 #   data_col_name: name of data_col vector, used to label map legend and name output PNG
 #   png_suffix: optional string, used to name output PNG
 #   background_sf: sf object
-create_log10_map <- function (data_sf, data_col, bbox, log10_fill_range, title, data_col_name, png_suffix='', background_sf) {
+fishing_effort_map <- function (data_sf, data_col, bbox, log_transform, fill_range, title, data_col_name, png_suffix='', background_sf) {
+  # log-transform data, if applicable
+  if (log_transform) {
+    data_col <- log10(data_col)
+    fill_range <- log10(fill_range)
+    data_col_name <- paste0("log10_", data_col_name)
+  }
   # create map
   map_output <- ggplot() +
     # plot background
     geom_sf(data=background_sf, fill='gray80') +
     # plot log-10 transformed data
-    geom_sf(data=data_sf, aes(fill=log10(data_col))) +
+    geom_sf(data=data_sf, aes(fill=data_col)) +
     # label plot
     labs(title=title,
-         fill=paste0("log10(", data_col_name, ") per 5x5 cell")) +
+         fill=paste(data_col_name, "per 5x5 cell")) +
     # set bounding box
     xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
     # set fill color and legend limits
-    scale_fill_viridis(limits=log10_fill_range) +
+    scale_fill_viridis(limits=fill_range) +
     # adjust labels and legend position
     theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
           axis.ticks.x=element_blank(),
           axis.ticks.y=element_blank(),
           legend.position="bottom")
   # save the output map
-  ggsave(filename=here("Confidential", "figures", paste0("map_log10_", 
-                                                         data_col_name, 
+  ggsave(filename=here("Confidential", "figures", paste0("map_", 
+                                                         data_col_name,
+                                                         "_",
                                                          png_suffix, 
                                                          ".png")))
   # return the output map
@@ -285,8 +293,9 @@ dcrb_5km_output_sf <- dcrb_5km_output_df %>%
 # set bounding box
 bbox <- st_bbox(dcrb_5km_output_sf)
 
-# set limits for min and max fill for log-10 transformed data
-log10_fill_range <- range(log10(dcrb_5km_output_sf$n_vms_records))
+# set limits for min and max fill for # VMS pings and # unique vessels
+vms_fill_range <- range(dcrb_5km_output_sf$n_vms_records)
+vessels_fill_range <- range(dcrb_5km_output_sf$n_unique_vessels)
 
 # get unique and ordered year, year_month and month from gridded fishing summary
 month_df <- dcrb_5km_output_sf %>% 
@@ -305,16 +314,31 @@ for (ym in month_df$year_month) {
   title <- paste(y, m)
   # filter data for given month
   ym_data_sf <- dcrb_5km_output_sf %>% filter(year_month == ym)
-  # make and save map
-  map_output <- create_log10_map(data_sf=ym_data_sf,
-                                data_col=ym_data_sf$n_vms_records,
-                                bbox=bbox,
-                                log10_fill_range = log10_fill_range,
-                                title=title,
-                                data_col_name='n_vms_records',
-                                png_suffix=ym,
-                                background_sf=west_coast_states)
+  # make and save map of # VMS pings
+  vms_map <- fishing_effort_map(data_sf = ym_data_sf,
+                                data_col = ym_data_sf$n_vms_records,
+                                bbox = bbox,
+                                log_transform = TRUE,
+                                fill_range = vms_fill_range,
+                                title = title,
+                                data_col_name = 'n_vms_records',
+                                png_suffix = ym,
+                                background_sf = west_coast_states)
+  # make and save map of # unique vessels
+  vessels_map <- fishing_effort_map(data_sf = ym_data_sf,
+                                    data_col = ym_data_sf$n_unique_vessels,
+                                    bbox = bbox,
+                                    log_transform = FALSE,
+                                    fill_range = vessels_fill_range,
+                                    title = title,
+                                    data_col_name = 'n_unique_vessels',
+                                    png_suffix = ym,
+                                    background_sf = west_coast_states)
 }
+
+# view last one of each map
+vms_map
+vessels_map
 ```
 
 ```{r time-series}
