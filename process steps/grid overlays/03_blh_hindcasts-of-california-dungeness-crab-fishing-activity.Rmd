@@ -213,25 +213,14 @@ summary_table
 ```
 
 ```{r maps}
-# load west coast states simple features object
-west_coast_states <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
-  filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
-  st_transform(st_crs(grid_5km))
-
-# join geometry from 5km grid to gridded fishing summary
-dcrb_5km_summary_confidential_sf <- dcrb_5km_summary_confidential_df %>%
-  left_join(grid_5km, by=join_by(GRID5KM_ID)) %>%
-  st_as_sf()
-
 # create a log-10 transformed map
 #   data_sf: sf object
 #   data_col: vector from data_sf to log-transform and map
+#   bbox: bounding box to use for map
 #   data_col_name: name of data_col vector, used to label map legend and name output PNG
 #   png_suffix: optional string, used to name output PNG
 #   background_sf: sf object
-create_log10_map <- function (data_sf, data_col, data_col_name, png_suffix='', background_sf) {
-  # set bounding box
-  bbox <- st_bbox(data_sf)
+create_log10_map <- function (data_sf, data_col, bbox, data_col_name, png_suffix='', background_sf) {
   # create map
   map_output <- ggplot() +
     # plot background
@@ -256,12 +245,37 @@ create_log10_map <- function (data_sf, data_col, data_col_name, png_suffix='', b
   return(map_output)
 }
 
-# make map
-map_output <- create_log10_map(data_sf=dcrb_5km_summary_confidential_sf,
-                               data_col=dcrb_5km_summary_confidential_sf$n_vms_records,
-                               data_col_name='n_vms_records',
-                               png_suffix='',
-                               background_sf=west_coast_states)
-# view map
-map_output
+# load west coast states simple features object for background
+west_coast_states <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
+  filter(name %in% c('California','Oregon','Washington','Nevada')) %>% 
+  st_transform(st_crs(grid_5km))
+
+# join geometry from 5km grid to gridded fishing summary
+dcrb_5km_summary_confidential_sf <- dcrb_5km_summary_confidential_df %>%
+  left_join(grid_5km, by=join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+
+# set bounding box
+bbox <- st_bbox(dcrb_5km_summary_confidential_sf)
+
+# get unique and ordered year (numeric), year_month (character), and month (factor)
+month_df <- dcrb_5km_summary_confidential_sf %>% 
+  st_drop_geometry() %>% 
+  select(year, year_month, month) %>% 
+  unique() %>% 
+  arrange(year_month)
+# iterate over months
+for (ym in month_df$year_month) {
+  # print progress
+  print(ym)
+  # filter data for month
+  ym_data_sf <- dcrb_5km_summary_confidential_sf %>% filter(year_month == ym)
+  # make and save map
+  map_output <- create_log10_map(data_sf=ym_data_sf,
+                                data_col=ym_data_sf$n_vms_records,
+                                bbox=bbox,
+                                data_col_name='n_vms_records',
+                                png_suffix=ym,
+                                background_sf=west_coast_states)
+}
 ```
