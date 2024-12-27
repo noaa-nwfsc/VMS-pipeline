@@ -223,25 +223,45 @@ dcrb_5km_summary_confidential_sf <- dcrb_5km_summary_confidential_df %>%
   left_join(grid_5km, by=join_by(GRID5KM_ID)) %>%
   st_as_sf()
 
-# set bounding box based on gridded fishing summary
-bbox <- st_bbox(dcrb_5km_summary_confidential_sf)
+# create a log-10 transformed map
+#   data_sf: sf object
+#   data_col: vector from data_sf to log-transform and map
+#   data_col_name: name of data_col vector, used to label map legend and name output PNG
+#   png_suffix: optional string, used to name output PNG
+#   background_sf: sf object
+create_log10_map <- function (data_sf, data_col, data_col_name, png_suffix='', background_sf) {
+  # set bounding box
+  bbox <- st_bbox(data_sf)
+  # create map
+  map_output <- ggplot() +
+    # plot background
+    geom_sf(data=background_sf, fill='gray80') +
+    # plot log-10 transformed data
+    geom_sf(data=data_sf, aes(fill=log10(data_col))) +
+    # label plot
+    labs(fill=paste0("log10(", data_col_name, ") per 5x5 cell")) +
+    # aesthetic changes
+    xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
+    scale_fill_viridis() +
+    theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+          axis.ticks.x=element_blank(),
+          axis.ticks.y=element_blank(),
+          legend.position="bottom")
+  # save the output map
+  ggsave(filename=here("Confidential", "figures", paste0("map_log10_", 
+                                                         data_col_name, 
+                                                         png_suffix, 
+                                                         ".png")))
+  # return the output map
+  return(map_output)
+}
 
-# basic plot
-map_density <- ggplot() +
-  # plot background
-  geom_sf(data=west_coast_states, fill='gray80') +
-  # plot fishing effort
-  geom_sf(data=dcrb_5km_summary_confidential_sf, aes(fill=log10(n_vms_records))) +
-  # label plot
-  labs(fill="log10(n_vms_records) per 5x5 cell") +
-  # aesthetic changes
-  xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-  scale_fill_viridis() +
-  theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
-        axis.ticks.x=element_blank(),
-        axis.ticks.y=element_blank(),
-        legend.position="bottom")
-ggsave(filename=here("Confidential", "figures", "sample_fishing_effort_map.png"))
-# see result
-map_density
+# make map
+map_output <- create_log10_map(data_sf=dcrb_5km_summary_confidential_sf,
+                               data_col=dcrb_5km_summary_confidential_sf$n_vms_records,
+                               data_col_name='n_vms_records',
+                               png_suffix='',
+                               background_sf=west_coast_states)
+# view map
+map_output
 ```
