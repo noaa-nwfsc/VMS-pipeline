@@ -33,8 +33,25 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
 I'm starting with one year and one season, I will extend to more years once I like the output format.
 
 ```{r load-data}
+
+# create variable for years of data to load
+load_years <- c(2014, 2015, 2016)
+# make sure to change crab_years in the next code chunk too
+
 # load RDS of joined, cleaned, interpolated VMS and fish ticket data as a dataframe
-vms_df <- read_rds(here('Confidential', 'processed', 'matched', 'interpolation', '2014_interpolated.rds'))
+file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
+                  paste0(load_years[1],'_interpolated.rds'))
+# read the first year of data
+vms_df <- read_rds(file_name)
+
+# read the remaining years of data
+if (length(load_years) > 1) {
+  for (ly in load_years[2:length(load_years)]) {
+    file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
+                      paste0(ly,'_interpolated.rds'))
+    vms_df <- bind_rows(vms_df, read_rds(file_name))
+  }
+}
 
 # load 5km grid shape file as a simple features object
 grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
@@ -64,7 +81,7 @@ max_depth <- -150            # maximum depth in meters
 min_speed <- 0               # minimum speed in m/s
 max_speed <- 4.11556         # maximum speed in m/s (4.11556 m/s = 8 knots)
 crab_year_start <- 11        # month defines start of crab year
-crab_years <- c("2014_2015") # crab years to include
+crab_years <- c("2014_2015", "2015_2016") # crab years to include
 winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
 
 # transform data
