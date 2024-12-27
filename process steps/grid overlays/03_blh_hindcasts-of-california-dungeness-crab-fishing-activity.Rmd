@@ -23,6 +23,11 @@ library(tidyverse)
 library(sf)
 library(rnaturalearth)
 library(viridis)
+
+# adjust ggplot theme
+theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+              axis.ticks.x=element_blank(),
+              axis.ticks.y=element_blank())
 ```
 
 I'm starting with one year and one season, I will extend to more years once I like the output format.
@@ -265,11 +270,8 @@ fishing_effort_map <- function (data_sf, data_col, bbox, log_transform, fill_ran
     xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
     # set fill color and legend limits
     scale_fill_viridis(limits=fill_range) +
-    # adjust labels and legend position
-    theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
-          axis.ticks.x=element_blank(),
-          axis.ticks.y=element_blank(),
-          legend.position="bottom")
+    # adjust legend position
+    theme(legend.position="bottom")
   # save the output map
   ggsave(filename=here("Confidential", "figures", paste0("map_", 
                                                          data_col_name,
