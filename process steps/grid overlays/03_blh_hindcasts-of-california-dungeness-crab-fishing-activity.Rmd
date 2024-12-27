@@ -135,8 +135,20 @@ dcrb_trip_df <- left_join(dcrb_df, trip_df, by="Rec_ID") %>%
     dcrb_vessels_per_vms_record = 1 / trip_n_vms_records
   )
 
+# summarize grid cell and month-level attributes
+confidential_df <- dcrb_df %>%
+  group_by(GRID5KM_ID, year_month) %>%
+  summarise(n_unique_vessels = n_distinct(drvid),
+            # set confidential_flag TRUE for confidential, FALSE for non-confidential
+            confidential_flag = (n_distinct(drvid) < 3), .groups="keep") %>%
+  ungroup()
+
+# join grid cell and month-level attributes back to dungeness crab dataframe
+dcrb_confidential_df <- dcrb_trip_df %>%
+  left_join(confidential_df, by=join_by(GRID5KM_ID, year_month))
+
 # create monthly gridded summary
-dcrb_5km_summary_df <- dcrb_trip_df %>%
+dcrb_5km_summary_df <- dcrb_confidential_df %>%
   group_by(
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
@@ -148,36 +160,46 @@ dcrb_5km_summary_df <- dcrb_trip_df %>%
     month,
     month_numeric
   ) %>%
-  # sum landings, revenue; count unique vessels and VMS records
+  # sum landings, revenue; count unique vessels and VMS records; determine confidentiality filter
   summarise(
     dcrb_lbs = sum(dcrb_lbs_per_vms_record),
     dcrb_rev = sum(dcrb_rev_per_vms_record),
     n_vms_records = n(),
-    n_unique_vessels = n_distinct(drvid)
+    n_unique_vessels = n_distinct(drvid),
+    # set confidential_flag TRUE for confidential, FALSE for non-confidential
+    confidential_flag = max(confidential_flag) == 1,
+    .groups = "keep"
   ) %>% 
   ungroup()
 ```
 
+## Create outputs
+
 If a grid cell in a given month has < 3 unique vessels, it cannot be included in non-confidential maps summarizing the data.
 
-```{r confidentiality-filter}
-# create a non-confidential version of gridded fishing summary
-dcrb_5km_summary_confidential_df <- dcrb_5km_summary_df %>%
-  filter(n_unique_vessels >= 3)
+```{r}
+# set whether to use the non-confidential or confidential gridded summary for output
+confidential_output_flag <- TRUE
 
-# summarize how much data is dropped, where a record is a VMS pings
-# numerator: # of records dropped due to confidentiality filter
-n_drop_confidential <- sum(dcrb_5km_summary_df$n_vms_records) - sum(dcrb_5km_summary_confidential_df$n_vms_records)
-# denominator: # of records, without any confidentiality filter
-n_no_drop_confidential <- sum(dcrb_5km_summary_df$n_vms_records)
-
-# calculate the number of records, and convert to a percent as a string
-percent_drop_confidential <- substr(as.character(n_drop_confidential / n_no_drop_confidential * 100), 1, 5)
+if (confidential_output_flag) {
+  # if confidential output is ok, then don't remove any VMS records
+  dcrb_5km_output_df <- dcrb_5km_summary_df
+} else {
+  # if non-confidential output is needed, then remove any VMS records where the grid cell and month had < 3 unique vessels, where confidential_flag is FALSE
+ dcrb_5km_output_df <- dcrb_5km_summary_df %>% filter(!confidential_flag)
+}
 ```
 
-The non-confidential data has `r n_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
+Regardless of whether you're using confidential or non-confidential output, report how many VMS records are filtered out by the confidentiality flag.
 
-## Create outputs
+```{r confidentiality-stats}
+# calculate the % of VMS records dropped by confidentiality filter
+numerator_drop_confidential <- sum(dcrb_confidential_df$confidential_flag)
+denominator_drop_confidential <- dim(dcrb_confidential_df)[1]
+percent_drop_confidential <- substr(as.character(numerator_drop_confidential / denominator_drop_confidential * 100), 1, 5)
+```
+
+The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
 
 ```{r tables}
 # define columns and functions to summarize in table
@@ -186,12 +208,12 @@ function_vector <- c('length', 'min', 'mean', 'median', 'max', 'IQR')
 
 # summarize in a for loop for columns in column name vector c_vector
 summary_table <- rbind(
-  summarise_at(dcrb_5km_summary_confidential_df, colnames_vector, get(function_vector[1])),
-  summarise_at(dcrb_5km_summary_confidential_df, colnames_vector, get(function_vector[2])),
-  summarise_at(dcrb_5km_summary_confidential_df, colnames_vector, get(function_vector[3])),
-  summarise_at(dcrb_5km_summary_confidential_df, colnames_vector, get(function_vector[4])),
-  summarise_at(dcrb_5km_summary_confidential_df, colnames_vector, get(function_vector[5])),
-  summarise_at(dcrb_5km_summary_confidential_df, colnames_vector, get(function_vector[6]))
+  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[1])),
+  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[2])),
+  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[3])),
+  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[4])),
+  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[5])),
+  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[6]))
 )
 
 # reformat table
@@ -213,7 +235,7 @@ summary_table
 ```
 
 ```{r maps}
-# create a log-10 transformed map
+# create a log-10 transformed map, to apply to each month of data
 #   data_sf: sf object
 #   data_col: vector from data_sf to log-transform and map
 #   log10_fill_range: range for the log-10 transformed fill of data_col vector
@@ -256,18 +278,18 @@ west_coast_states <- rnaturalearth::ne_states(country='United States of America'
   st_transform(st_crs(grid_5km))
 
 # join geometry from 5km grid to gridded fishing summary
-dcrb_5km_summary_confidential_sf <- dcrb_5km_summary_confidential_df %>%
+dcrb_5km_output_sf <- dcrb_5km_output_df %>%
   left_join(grid_5km, by=join_by(GRID5KM_ID)) %>%
   st_as_sf()
 
 # set bounding box
-bbox <- st_bbox(dcrb_5km_summary_confidential_sf)
+bbox <- st_bbox(dcrb_5km_output_sf)
 
 # set limits for min and max fill for log-10 transformed data
-log10_fill_range <- range(log10(dcrb_5km_summary_confidential_sf$n_vms_records))
+log10_fill_range <- range(log10(dcrb_5km_output_sf$n_vms_records))
 
 # get unique and ordered year, year_month and month from gridded fishing summary
-month_df <- dcrb_5km_summary_confidential_sf %>% 
+month_df <- dcrb_5km_output_sf %>% 
   st_drop_geometry() %>% 
   select(year, year_month, month) %>% 
   unique() %>% 
@@ -282,7 +304,7 @@ for (ym in month_df$year_month) {
   m <- month_df$month[which(month_df$year_month==ym)]
   title <- paste(y, m)
   # filter data for given month
-  ym_data_sf <- dcrb_5km_summary_confidential_sf %>% filter(year_month == ym)
+  ym_data_sf <- dcrb_5km_output_sf %>% filter(year_month == ym)
   # make and save map
   map_output <- create_log10_map(data_sf=ym_data_sf,
                                 data_col=ym_data_sf$n_vms_records,
