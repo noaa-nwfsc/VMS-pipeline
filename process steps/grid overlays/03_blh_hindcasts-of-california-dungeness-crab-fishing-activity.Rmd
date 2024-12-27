@@ -216,11 +216,13 @@ summary_table
 # create a log-10 transformed map
 #   data_sf: sf object
 #   data_col: vector from data_sf to log-transform and map
+#   log10_fill_range: range for the log-10 transformed fill of data_col vector
 #   bbox: bounding box to use for map
+#   title: map title
 #   data_col_name: name of data_col vector, used to label map legend and name output PNG
 #   png_suffix: optional string, used to name output PNG
 #   background_sf: sf object
-create_log10_map <- function (data_sf, data_col, bbox, data_col_name, png_suffix='', background_sf) {
+create_log10_map <- function (data_sf, data_col, bbox, log10_fill_range, title, data_col_name, png_suffix='', background_sf) {
   # create map
   map_output <- ggplot() +
     # plot background
@@ -228,10 +230,13 @@ create_log10_map <- function (data_sf, data_col, bbox, data_col_name, png_suffix
     # plot log-10 transformed data
     geom_sf(data=data_sf, aes(fill=log10(data_col))) +
     # label plot
-    labs(fill=paste0("log10(", data_col_name, ") per 5x5 cell")) +
-    # aesthetic changes
+    labs(title=title,
+         fill=paste0("log10(", data_col_name, ") per 5x5 cell")) +
+    # set bounding box
     xlim(bbox[1], bbox[3]) + ylim(bbox[2], bbox[4]) +
-    scale_fill_viridis() +
+    # set fill color and legend limits
+    scale_fill_viridis(limits=log10_fill_range) +
+    # adjust labels and legend position
     theme(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
           axis.ticks.x=element_blank(),
           axis.ticks.y=element_blank(),
@@ -258,22 +263,32 @@ dcrb_5km_summary_confidential_sf <- dcrb_5km_summary_confidential_df %>%
 # set bounding box
 bbox <- st_bbox(dcrb_5km_summary_confidential_sf)
 
-# get unique and ordered year (numeric), year_month (character), and month (factor)
+# set limits for min and max fill for log-10 transformed data
+log10_fill_range <- range(log10(dcrb_5km_summary_confidential_sf$n_vms_records))
+
+# get unique and ordered year, year_month and month from gridded fishing summary
 month_df <- dcrb_5km_summary_confidential_sf %>% 
   st_drop_geometry() %>% 
   select(year, year_month, month) %>% 
   unique() %>% 
   arrange(year_month)
+
 # iterate over months
 for (ym in month_df$year_month) {
   # print progress
   print(ym)
-  # filter data for month
+  # get title as a combination of year and month
+  y <- month_df$year[which(month_df$year_month==ym)]
+  m <- month_df$month[which(month_df$year_month==ym)]
+  title <- paste(y, m)
+  # filter data for given month
   ym_data_sf <- dcrb_5km_summary_confidential_sf %>% filter(year_month == ym)
   # make and save map
   map_output <- create_log10_map(data_sf=ym_data_sf,
                                 data_col=ym_data_sf$n_vms_records,
                                 bbox=bbox,
+                                log10_fill_range = log10_fill_range,
+                                title=title,
                                 data_col_name='n_vms_records',
                                 png_suffix=ym,
                                 background_sf=west_coast_states)
