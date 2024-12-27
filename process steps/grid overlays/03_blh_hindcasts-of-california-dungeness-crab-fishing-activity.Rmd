@@ -316,3 +316,27 @@ for (ym in month_df$year_month) {
                                 background_sf=west_coast_states)
 }
 ```
+
+```{r time-series}
+# TODO does this section need a confidentiality filter, since not spatial?
+
+# this uses the confidential data, using non-gridded summary to not double count unique vessels
+time_series_df <- dcrb_confidential_df %>%
+  group_by(crab_year, year, year_month, month) %>%
+  summarise(total_vms_records = n(),
+            n_unique_vessels = n_distinct(drvid),
+            .groups = 'keep')
+
+# plot # VMS pings per month
+vms_time_series <- time_series_df %>% ggplot() + 
+  geom_col(aes(x=year_month, y=total_vms_records, fill=crab_year))
+ggsave(filename=here("Confidential", "figures", "time_series_vms.png"))
+vms_time_series
+
+# plot # unique vessels per month
+vessels_time_series <- time_series_df %>% ggplot() + 
+  geom_col(aes(x=year_month, y=n_unique_vessels, fill=crab_year))
+ggsave(filename=here("Confidential", "figures", "time_series_vessels.png"))
+vessels_time_series
+```
+
