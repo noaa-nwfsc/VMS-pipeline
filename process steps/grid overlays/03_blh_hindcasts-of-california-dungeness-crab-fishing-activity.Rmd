@@ -327,16 +327,32 @@ time_series_df <- dcrb_confidential_df %>%
             n_unique_vessels = n_distinct(drvid),
             .groups = 'keep')
 
-# plot # VMS pings per month
-vms_time_series <- time_series_df %>% ggplot() + 
+# plot # VMS pings per month as bar chart
+vms_time_series <- time_series_df %>% 
+  ggplot() + 
   geom_col(aes(x=year_month, y=total_vms_records, fill=crab_year))
 ggsave(filename=here("Confidential", "figures", "time_series_vms.png"))
 vms_time_series
 
-# plot # unique vessels per month
-vessels_time_series <- time_series_df %>% ggplot() + 
+# plot # unique vessels per month as bar chart
+vessels_time_series <- time_series_df %>% 
+  ggplot() + 
   geom_col(aes(x=year_month, y=n_unique_vessels, fill=crab_year))
 ggsave(filename=here("Confidential", "figures", "time_series_vessels.png"))
 vessels_time_series
+
+# plot # VMS pings per month as heatmap
+vms_heatmap <- time_series_df %>%
+  ggplot() +
+  geom_tile(aes(x=month, y=as.factor(year), fill=total_vms_records))
+ggsave(filename=here("Confidential", "figures", "heatmap_vms.png"))
+vms_heatmap
+
+# plot # unique vessels per month as heatmap
+vessels_heatmap <- time_series_df %>%
+  ggplot() +
+  geom_tile(aes(x=month, y=as.factor(year), fill=n_unique_vessels))
+ggsave(filename=here("Confidential", "figures", "heatmap_vessels.png"))
+vessels_heatmap
 ```
 
