@@ -29,21 +29,18 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
               axis.ticks.x=element_blank(),
               axis.ticks.y=element_blank())
 ```
-
-I'm starting with one year and one season, I will extend to more years once I like the output format.
+Load the joined, cleaned, interpolated VMS and fish ticket data for specified years. Then load and join the spatial 5km grid.
 
 ```{r load-data}
-
-# create variable for years of data to load
+# TODO should yearly filters and summaries be by year or by crab_year?
+# choose years of data to load
 load_years <- c(2014, 2015, 2016)
-# make sure to change crab_years in the next code chunk too
 
-# load RDS of joined, cleaned, interpolated VMS and fish ticket data as a dataframe
+# load VMS and fish ticket data
 file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
                   paste0(load_years[1],'_interpolated.rds'))
 # read the first year of data
 vms_df <- read_rds(file_name)
-
 # read the remaining years of data
 if (length(load_years) > 1) {
   for (ly in load_years[2:length(load_years)]) {
@@ -53,15 +50,17 @@ if (length(load_years) > 1) {
   }
 }
 
-# load 5km grid shape file as a simple features object
+# load 5km grid shape file
 grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
-
-# join VMS and fish ticket data to grid
+# join VMS and fish ticket data to 5km grid
 vms_df <- vms_df %>%
   st_as_sf(coords = c('LON', 'LAT'), crs=4326) %>%
   st_transform(st_crs(grid_5km)) %>%
   st_join(grid_5km) %>%
   st_set_geometry(NULL)
+
+# clean up
+remove(file_name, ly)
 ```
 
 Some commonly used acronyms in variable naming are:
@@ -81,7 +80,6 @@ max_depth <- -150            # maximum depth in meters
 min_speed <- 0               # minimum speed in m/s
 max_speed <- 4.11556         # maximum speed in m/s (4.11556 m/s = 8 knots)
 crab_year_start <- 11        # month defines start of crab year
-crab_years <- c("2014_2015", "2015_2016") # crab years to include
 winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
 
 # transform data
@@ -102,7 +100,6 @@ dcrb_df <- vms_df %>%
   filter(agency_code == state_agency_code) %>%
   filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>% # TODO should this be for WM_NGDC_M instead?
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
-  filter(crab_year %in% crab_years) %>%
   # select columns
   dplyr::select(
     # identifiers
@@ -140,6 +137,11 @@ glimpse(dcrb_df)
 ```
 
 The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
+
+```{r}
+# clean up
+remove(vms_df, n_records, n_trips, n_years)
+```
 
 ```{r gridded-summary}
 # summarize trip-level attributes
@@ -198,6 +200,12 @@ dcrb_5km_summary_df <- dcrb_confidential_df %>%
 write.csv(file=here("Confidential", "tables", "dcrb_5km_summary_df.csv"), x=dcrb_5km_summary_df)
 ```
 
+```{r}
+# clean up
+remove(trip_df, dcrb_trip_df, confidential_df)
+```
+
+
 ## Create outputs
 
 If a grid cell in a given month has < 3 unique vessels, it cannot be included in non-confidential maps summarizing the data.
@@ -236,7 +244,6 @@ confidential_monthly_table <- dcrb_confidential_df %>% group_by(year, month_nume
 write.csv(file = here("Confidential", "tables", "table_confidentiality_monthly.csv"),
           x = confidential_monthly_table)
 
-# TODO should this be by crab_year rather than by year?
 # repeat for each year
 confidential_yearly_table <- dcrb_confidential_df %>% group_by(year) %>%
   summarise(confidential_vms_records = sum(confidential_flag),
@@ -252,6 +259,12 @@ write.csv(file = here("Confidential", "tables", "table_confidentiality_yearly.cs
 ```
 
 The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
+
+```{r}
+# clean up
+remove(numerator_drop_confidential, denominator_drop_confidential, percent_drop_confidential)
+```
+
 
 ```{r tables}
 # create monthly summary of gridded fishing activity
@@ -273,7 +286,8 @@ fishing_activity_monthly_table <- dcrb_5km_output_df %>%
   ) %>%
   arrange(year, month_numeric)
 # write result
-write.csv(file=here("Confidential", "tables", "table_fishing_activity_monthly.csv"), x=fishing_activity_monthly_table)
+write.csv(file=here("Confidential", "tables", "table_fishing_activity_monthly.csv"),
+          x=fishing_activity_monthly_table)
 
 # repeat for yearly
 fishing_activity_yearly_table <- dcrb_5km_output_df %>%
@@ -295,11 +309,12 @@ fishing_activity_yearly_table <- dcrb_5km_output_df %>%
   ) %>%
   arrange(year)
 # write result
-write.csv(file=here("Confidential", "tables", "table_fishing_activity_yearly.csv"), x=fishing_activity_yearly_table)
+write.csv(file=here("Confidential", "tables", "table_fishing_activity_yearly.csv"),
+          x=fishing_activity_yearly_table)
 ```
 
 ```{r maps}
-# map fishing effort, apply to each month of data
+# map fishing activity, apply to each month of data
 #   data_sf: sf object
 #   data_col: vector from data_sf to log-transform and map
 #   log_transform: boolean to log-transform data_col on map
@@ -309,7 +324,7 @@ write.csv(file=here("Confidential", "tables", "table_fishing_activity_yearly.csv
 #   data_col_name: name of data_col vector, used to label map legend and name output PNG
 #   png_suffix: optional string, used to name output PNG
 #   background_sf: sf object
-fishing_effort_map <- function (data_sf, data_col, bbox, log_transform, fill_range, title, data_col_name, png_suffix='', background_sf) {
+fishing_activity_map <- function (data_sf, data_col, bbox, log_transform, fill_range, title, data_col_name, png_suffix='', background_sf) {
   # log-transform data, if applicable
   if (log_transform) {
     data_col <- log10(data_col)
@@ -376,30 +391,34 @@ for (ym in month_df$year_month) {
   # filter data for given month
   ym_data_sf <- dcrb_5km_output_sf %>% filter(year_month == ym)
   # make and save map of # VMS pings
-  vms_map <- fishing_effort_map(data_sf = ym_data_sf,
-                                data_col = ym_data_sf$n_vms_records,
-                                bbox = bbox,
-                                log_transform = TRUE,
-                                fill_range = vms_fill_range,
-                                title = title,
-                                data_col_name = 'n_vms_records',
-                                png_suffix = ym,
-                                background_sf = west_coast_states)
+  vms_map <- fishing_activity_map(data_sf = ym_data_sf,
+                                  data_col = ym_data_sf$n_vms_records,
+                                  bbox = bbox,
+                                  log_transform = TRUE,
+                                  fill_range = vms_fill_range,
+                                  title = title,
+                                  data_col_name = 'n_vms_records',
+                                  png_suffix = ym,
+                                  background_sf = west_coast_states)
   # make and save map of # unique vessels
-  vessels_map <- fishing_effort_map(data_sf = ym_data_sf,
-                                    data_col = ym_data_sf$n_unique_vessels,
-                                    bbox = bbox,
-                                    log_transform = FALSE,
-                                    fill_range = vessels_fill_range,
-                                    title = title,
-                                    data_col_name = 'n_unique_vessels',
-                                    png_suffix = ym,
-                                    background_sf = west_coast_states)
+  vessels_map <- fishing_activity_map(data_sf = ym_data_sf,
+                                      data_col = ym_data_sf$n_unique_vessels,
+                                      bbox = bbox,
+                                      log_transform = FALSE,
+                                      fill_range = vessels_fill_range,
+                                      title = title,
+                                      data_col_name = 'n_unique_vessels',
+                                      png_suffix = ym,
+                                      background_sf = west_coast_states)
 }
 
 # view last one of each map
 vms_map
 vessels_map
+```
+```{r}
+# clean up
+remove(ym, y, m, ym_data_sf, month_df, bbox, title, vessels_fill_range, vms_fill_range)
 ```
 
 ```{r time-series}
