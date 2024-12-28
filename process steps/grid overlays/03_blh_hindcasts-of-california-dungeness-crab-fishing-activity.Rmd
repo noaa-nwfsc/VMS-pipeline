@@ -254,36 +254,48 @@ write.csv(file = here("Confidential", "tables", "table_confidentiality_yearly.cs
 The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
 
 ```{r tables}
-# define columns and functions to summarize in table
-colnames_vector <- c('n_vms_records', 'n_unique_vessels')
-function_vector <- c('length', 'min', 'mean', 'median', 'max', 'IQR')
-
-# summarize in a for loop for columns in column name vector c_vector
-summary_table <- rbind(
-  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[1])),
-  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[2])),
-  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[3])),
-  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[4])),
-  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[5])),
-  summarise_at(dcrb_5km_output_df, colnames_vector, get(function_vector[6]))
-)
-
-# reformat table
-summary_table <- cbind(
-  # add metric name as column
-  metric = function_vector,
-  summary_table
-) %>% 
-  # turn metric name into rowname
-  column_to_rownames('metric') %>%
-  # transpose result
-  t()
-
+# create monthly summary of gridded fishing activity
+fishing_activity_monthly_table <- dcrb_5km_output_df %>%
+  group_by(year, month_numeric) %>%
+  summarise(
+    n_grid_cells = n(),
+    min_vms_records = min(n_vms_records),
+    median_vms_records = median(n_vms_records),
+    mean_vms_records = mean(n_vms_records),
+    max_vms_records = max(n_vms_records),
+    iqr_vms_records = IQR(n_vms_records),
+    min_unique_vessels = min(n_unique_vessels),
+    median_unique_vessels = median(n_unique_vessels),
+    mean_unique_vessels = mean(n_unique_vessels),
+    max_unique_vessels = max(n_unique_vessels),
+    iqr_unique_vessels = IQR(n_unique_vessels),
+    .groups = 'keep'
+  ) %>%
+  arrange(year, month_numeric)
 # write result
-write.csv(file=here("Confidential", "tables", "sample_summary_table.csv"), x=summary_table)
+write.csv(file=here("Confidential", "tables", "table_fishing_activity_monthly.csv"), x=fishing_activity_monthly_table)
 
-# see result
-summary_table
+# repeat for yearly
+fishing_activity_yearly_table <- dcrb_5km_output_df %>%
+  group_by(year) %>%
+  summarise(
+    n_grid_cell_months = n(),
+    n_grid_cells = n_distinct(GRID5KM_ID),
+    min_vms_records = min(n_vms_records),
+    median_vms_records = median(n_vms_records),
+    mean_vms_records = mean(n_vms_records),
+    max_vms_records = max(n_vms_records),
+    iqr_vms_records = IQR(n_vms_records),
+    min_unique_vessels = min(n_unique_vessels),
+    median_unique_vessels = median(n_unique_vessels),
+    mean_unique_vessels = mean(n_unique_vessels),
+    max_unique_vessels = max(n_unique_vessels),
+    iqr_unique_vessels = IQR(n_unique_vessels),
+    .groups = 'keep'
+  ) %>%
+  arrange(year)
+# write result
+write.csv(file=here("Confidential", "tables", "table_fishing_activity_yearly.csv"), x=fishing_activity_yearly_table)
 ```
 
 ```{r maps}
