@@ -29,12 +29,12 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
               axis.ticks.x=element_blank(),
               axis.ticks.y=element_blank())
 ```
-Load the joined, cleaned, interpolated VMS and fish ticket data for specified years. Then load and join the spatial 5km grid.
+Load the joined, cleaned, interpolated VMS and fish ticket data for specified years. Also load the cleaned fish ticket data for specified years, which will be used to check how representative the VMS dataset is of all dungeness crab landings. Then load and join the spatial 5km grid, which will be used to generate spatial summaries of fishing activity.
 
 ```{r load-data}
 # TODO should yearly filters and summaries be by year or by crab_year?
 # choose years of data to load
-load_years <- c(2014)
+load_years <- c(2014, 2015)
 
 # load VMS and fish ticket data
 file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
@@ -50,6 +50,24 @@ if (length(load_years) > 1) {
   }
 }
 
+# load fish ticket data before it was joined to VMS data, used to check VMS representativeness
+file_name <- here('Confidential', 'processed', 'fish tickets',
+                  paste0(load_years[1],'fishtix_vlengths_withFTID.rds'))
+
+# read the first year of data
+ticket_df <- read_rds(file_name)
+# read the remaining years of data
+if (length(load_years) > 1) {
+  for (ly in load_years[2:length(load_years)]) {
+    file_name <- here('Confidential', 'processed', 'fish tickets',
+                      paste0(ly,'fishtix_vlengths_withFTID.rds'))
+    ticket_df <- bind_rows(ticket_df, read_rds(file_name))
+  }
+}
+
+# clean up
+remove(file_name, ly)
+
 # load 5km grid shape file
 grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
 # join VMS and fish ticket data to 5km grid
@@ -58,9 +76,6 @@ vms_df <- vms_df %>%
   st_transform(st_crs(grid_5km)) %>%
   st_join(grid_5km) %>%
   st_set_geometry(NULL)
-
-# clean up
-remove(file_name, ly)
 ```
 
 Some commonly used acronyms in variable naming are:
@@ -70,7 +85,7 @@ Some commonly used acronyms in variable naming are:
 * `lbs` pounds
 * `VMS` vessel monitoring system
 
-```{r transform-data}
+```{r transform-vms-data}
 # define filters
 target_rev <- "DCRB"         # revenue target
 target_lbs <- "DCRB"         # landings target
@@ -82,7 +97,7 @@ max_speed <- 4.11556         # maximum speed in m/s (4.11556 m/s = 8 knots)
 crab_year_start <- 11        # month defines start of crab year
 winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
 
-# transform data
+# transform VMS and fish ticket data
 dcrb_df <- vms_df %>%
   # add temporal columns
   mutate(
@@ -128,30 +143,48 @@ dcrb_df <- vms_df %>%
   )
 
 # count total records, trips and years
-n_records <- nrow(vms_df)
-n_trips   <- n_distinct(vms_df$Rec_ID)
-n_years   <- n_distinct(lubridate::year(vms_df$westcoastdate_notime))
+n_records <- nrow(dcrb_df)
+n_trips   <- n_distinct(dcrb_df$Rec_ID)
+n_years   <- n_distinct(lubridate::year(dcrb_df$westcoastdate_notime))
 
 # take a peek at the resulting dataframe
 glimpse(dcrb_df)
 ```
 
-The dungeness crab dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
+The dungeness crab VMS dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
 
 ```{r}
 # clean up
 remove(vms_df, n_records, n_trips, n_years)
 ```
 
+Create a monthly gridded summary of fishing activity. 
+
+Trip-level attributes are added at this step:
+
+* `trip_n_vms_records`: the number of VMS records associated with a fishing trip (fish ticket)
+
+VMS-record attributes are then calculated using the trip-level attribute:
+
+* `dcrb_lbs_per_vms_record`: the total landings for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with 1200 lbs landed and 20 VMS records would have 60 lbs per VMS record)
+* `dcrb_rev_per_vms_record`: the total revenue for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with $4000 revenue and 20 VMS pings would have \$200 revenue per VMS record)
+
+Then, the activity is summarized at a monthly gridded level:
+
+* `dcrb_lbs`: the total landings per VMS record in a given grid cell in a given month
+* `dcrb_rev`: the total revenue per VMS record in a given grid cell in a given month
+* `n_vms_records`: the number of VMS records in a given grid cell in a given month
+* `n_unique_vessels`: the number of unique vessels in a given grid cell in a given month
+* `confidential_flag`: determines whether the grid cell month has <3 unique vessels; in which case, the data in this grid cell needs to be excluded from non-confidential reports
+
 ```{r gridded-summary}
 # summarize trip-level attributes
 trip_df <- dcrb_df %>%
   group_by(Rec_ID) %>%
-  summarise(trip_n_vms_records = n(),
-            trip_start = min(westcoastdate),
-            trip_end = max(westcoastdate))
+  summarise(trip_n_vms_records = n())
 
 # join trip-level attributes back to dungeness crab dataframe
+# TODO should I be using dcrb_vessels_per_vms_record instead of n_unique_vessels for vessel map?
 dcrb_trip_df <- left_join(dcrb_df, trip_df, by="Rec_ID") %>%
   mutate(
     dcrb_lbs_per_vms_record     = DCRB_lbs / trip_n_vms_records,
@@ -205,6 +238,75 @@ write.csv(file=here("Confidential", "tables", "dcrb_5km_summary_df.csv"), x=dcrb
 remove(trip_df, dcrb_trip_df, confidential_df)
 ```
 
+Repeat the data transformation steps for fish ticket data, which will be used to later on to evaluate the representativeness of the VMS data for dungeness crab fishing activity.
+
+```{r transform-ticket-data}
+# select distinct fish ticket IDs from filtered VMS dataframe
+dcrb_vms_rec_ids <- dcrb_confidential_df %>% 
+  distinct(Rec_ID) %>% 
+  mutate(vms_represented_flag = TRUE)
+
+# apply same filters as VMS dataframe (except for depth and speed filters, which are from VMS data)
+dcrb_ticket_df <- ticket_df %>%
+  # add temporal columns
+  mutate(
+    year = lubridate::year(date),
+    month = lubridate::month(date, label=TRUE, abbr=FALSE),
+    month_numeric = month(date),
+    year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date), 6, 7)),
+    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    week_of_year = week(date),
+    day_of_year = yday(date)
+  ) %>%
+  # apply filters
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  filter(agency_code == state_agency_code) %>%
+  mutate(
+    year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date),6,7)),
+    month_as_numeric = month(date),
+    month_as_date = round_date(date, unit='month'),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    crab_year = ifelse(
+      month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
+    )
+  ) %>%
+  # select columns
+  dplyr::select(
+    # identifiers
+    Rec_ID,           # fish ticket ID
+    drvid,            # vessel ID
+    pacfin_port_code, # port ID
+    port_group_code,  # port group ID
+    # temporal fields
+    date,
+    crab_year,
+    season,
+    year,
+    year_month,
+    month,
+    month_numeric,
+    week_of_year,
+    day_of_year,
+    # vessel length
+    FINAL_LENGTH,
+    # dungeness crab fields
+    DCRB_lbs,
+    DCRB_revenue
+  ) %>%
+  # add column to ticket dataframe for whether that ticket was represented by VMS data
+  left_join(dcrb_vms_rec_ids, by = join_by(Rec_ID)) %>%
+  mutate(vms_represented_flag = if_else(is.na(vms_represented_flag), FALSE, TRUE),
+         vms_represented_drvid = if_else(vms_represented_flag, drvid, NA))
+
+# take a peek at the resulting dataframe
+glimpse(dcrb_ticket_df)
+```
+
+```{r}
+# clean up
+remove(ticket_df)
+```
 
 ## Create outputs
 
@@ -225,7 +327,7 @@ if (confidential_output_flag) {
 
 Regardless of whether you're using confidential or non-confidential output, report how many VMS records are filtered out by the confidentiality flag.
 
-```{r confidentiality-stats}
+```{r confidentiality-table}
 # calculate the % of VMS records dropped by confidentiality filter, for the entire time period
 numerator_drop_confidential <- sum(dcrb_confidential_df$confidential_flag)
 denominator_drop_confidential <- dim(dcrb_confidential_df)[1]
@@ -263,6 +365,67 @@ The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_c
 ```{r}
 # clean up
 remove(numerator_drop_confidential, denominator_drop_confidential, percent_drop_confidential)
+```
+
+```{r representativeness-table}
+# TODO use inflation-adjusted revenue
+# check monthly VMS representativeness for tickets, landings, revenue and vessels
+representativeness_monthly_table <- dcrb_ticket_df %>%
+  group_by(year, month_numeric) %>%
+  summarise(
+    # check for tickets
+    vms_represented_tickets          = sum(vms_represented_flag),
+    total_tickets                    = n(),
+    percent_vms_represented_tickets  = trunc(vms_represented_tickets / total_tickets * 10000) / 100,
+    # repeat for landings
+    vms_represented_landings         = sum(vms_represented_flag * DCRB_lbs),
+    total_landings                   = sum(DCRB_lbs),
+    percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
+    # repeat for revenue
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
+    total_revenue                    = sum(DCRB_revenue),
+    percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
+    # repeat for vessels
+    vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
+    total_vessels                    = n_distinct(drvid),
+    percent_vms_represented_vessels  = trunc(vms_represented_vessels / total_vessels * 10000) / 100,
+    .groups = 'keep'
+  ) %>%
+  ungroup() %>%
+  arrange(year, month_numeric)
+
+# write monthly result
+write.csv(file = here("Confidential", "tables", "table_vms_representativeness_monthly.csv"),
+          x = representativeness_monthly_table)
+
+# repeat check yearly
+representativeness_yearly_table <- dcrb_ticket_df %>%
+  group_by(year) %>%
+  summarise(
+    # check for tickets
+    vms_represented_tickets          = sum(vms_represented_flag),
+    total_tickets                    = n(),
+    percent_vms_represented_tickets  = trunc(vms_represented_tickets / total_tickets * 10000) / 100,
+    # repeat for landings
+    vms_represented_landings         = sum(vms_represented_flag * DCRB_lbs),
+    total_landings                   = sum(DCRB_lbs),
+    percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
+    # repeat for revenue
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
+    total_revenue                    = sum(DCRB_revenue),
+    percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
+    # repeat for vessels
+    vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
+    total_vessels                    = n_distinct(drvid),
+    percent_vms_represented_vessels  = trunc(vms_represented_vessels / total_vessels * 10000) / 100,
+    .groups = 'keep'
+  ) %>%
+  ungroup() %>%
+  arrange(year)
+
+# write yearly result
+write.csv(file = here("Confidential", "tables", "table_vms_representativeness_yearly.csv"),
+          x = representativeness_yearly_table)
 ```
 
 
@@ -459,149 +622,3 @@ vessels_heatmap <- time_series_df %>%
 ggsave(filename=here("Confidential", "figures", "heatmap_vessels.png"))
 vessels_heatmap
 ```
-
-```{r vms-representativeness}
-# TODO move this higher up in script
-# - load data before generating outputs
-# - generate plots before confidentiality stats
-# TODO test for multiple years of data
-
-# load fish ticket data, before joined to VMS pings
-file_name <- here('Confidential', 'processed', 'fish tickets',
-                  paste0(load_years[1],'fishtix_vlengths_withFTID.rds'))
-
-# read the first year of data
-ticket_df <- read_rds(file_name)
-# read the remaining years of data
-if (length(load_years) > 1) {
-  for (ly in load_years[2:length(load_years)]) {
-    file_name <- here('Confidential', 'processed', 'fish tickets',
-                      paste0(ly,'fishtix_vlengths_withFTID.rds'))
-    ticket_df <- bind_rows(ticket_df, read_rds(file_name))
-  }
-}
-
-# clean up
-remove(file_name, ly)
-
-# apply same filters as VMS pings, except for depth and speed which are from VMS
-dcrb_ticket_df <- ticket_df %>%
-  # add temporal columns
-  mutate(
-    year = lubridate::year(date),
-    month = lubridate::month(date, label=TRUE, abbr=FALSE),
-    month_numeric = month(date),
-    year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date), 6, 7)),
-    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
-    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-    week_of_year = week(date),
-    day_of_year = yday(date)
-  ) %>%
-  # apply filters
-  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  filter(agency_code == state_agency_code) %>%
-  mutate(
-    year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date),6,7)),
-    month_as_numeric = month(date),
-    month_as_date = round_date(date, unit='month'),
-    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-    crab_year = ifelse(
-      month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
-    )
-  ) %>%
-  # select columns
-  dplyr::select(
-    # identifiers
-    Rec_ID,           # fish ticket ID
-    drvid,            # vessel ID
-    pacfin_port_code, # port ID
-    port_group_code,  # port group ID
-    # temporal fields
-    date,
-    crab_year,
-    season,
-    year,
-    year_month,
-    month,
-    month_numeric,
-    week_of_year,
-    day_of_year,
-    # vessel length
-    FINAL_LENGTH,
-    # dungeness crab fields
-    DCRB_lbs,
-    DCRB_revenue
-  )
-
-# select distinct fish ticket IDs from filtered VMS dataframe
-dcrb_vms_rec_ids <- dcrb_confidential_df %>% 
-  distinct(Rec_ID) %>% 
-  mutate(vms_represented_flag = TRUE)
-
-# TODO combine with transformation step, don't do separately
-# add column to ticket dataframe for whether that ticket was represented by VMS data
-dcrb_ticket_df <- left_join(dcrb_ticket_df, dcrb_vms_rec_ids, by = join_by(Rec_ID)) %>%
-  mutate(vms_represented_flag = if_else(is.na(vms_represented_flag), FALSE, TRUE),
-         vms_represented_drvid = if_else(vms_represented_flag, drvid, NA))
-
-# TODO use inflation-adjusted revenue
-# check monthly VMS representativeness for tickets, landings, revenue and vessels
-representativeness_monthly_table <- dcrb_ticket_df %>%
-  group_by(year, month_numeric) %>%
-  summarise(
-    # check for tickets
-    vms_represented_tickets          = sum(vms_represented_flag),
-    total_tickets                    = n(),
-    percent_vms_represented_tickets  = trunc(vms_represented_tickets / total_tickets * 10000) / 100,
-    # repeat for landings
-    vms_represented_landings         = sum(vms_represented_flag * DCRB_lbs),
-    total_landings                   = sum(DCRB_lbs),
-    percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
-    # repeat for revenue
-    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
-    total_revenue                    = sum(DCRB_revenue),
-    percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
-    # repeat for vessels
-    vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
-    total_vessels                    = n_distinct(drvid),
-    percent_vms_represented_vessels  = trunc(vms_represented_vessels / total_vessels * 10000) / 100,
-    .groups = 'keep'
-  ) %>%
-  ungroup() %>%
-  arrange(year, month_numeric)
-
-# write monthly result
-write.csv(file = here("Confidential", "tables", "table_vms_representativeness_monthly.csv"),
-          x = representativeness_monthly_table)
-
-# repeat check yearly
-representativeness_yearly_table <- dcrb_ticket_df %>%
-  group_by(year) %>%
-  summarise(
-    # check for tickets
-    vms_represented_tickets          = sum(vms_represented_flag),
-    total_tickets                    = n(),
-    percent_vms_represented_tickets  = trunc(vms_represented_tickets / total_tickets * 10000) / 100,
-    # repeat for landings
-    vms_represented_landings         = sum(vms_represented_flag * DCRB_lbs),
-    total_landings                   = sum(DCRB_lbs),
-    percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
-    # repeat for revenue
-    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
-    total_revenue                    = sum(DCRB_revenue),
-    percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
-    # repeat for vessels
-    vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
-    total_vessels                    = n_distinct(drvid),
-    percent_vms_represented_vessels  = trunc(vms_represented_vessels / total_vessels * 10000) / 100,
-    .groups = 'keep'
-  ) %>%
-  ungroup() %>%
-  arrange(year)
-
-# write yearly result
-write.csv(file = here("Confidential", "tables", "table_vms_representativeness_yearly.csv"),
-          x = representativeness_yearly_table)
-
-```
-
