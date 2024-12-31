@@ -23,6 +23,7 @@ library(tidyverse)
 library(sf)
 library(rnaturalearth)
 library(viridis)
+library(magick)
 
 # adjust ggplot theme
 theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
@@ -34,7 +35,7 @@ Load the joined, cleaned, interpolated VMS and fish ticket data for specified ye
 ```{r load-data}
 # TODO should yearly filters and summaries be by year or by crab_year?
 # choose years of data to load
-load_years <- c(2014, 2015)
+load_years <- 2021:2023
 
 # load VMS and fish ticket data
 file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
@@ -645,11 +646,7 @@ fishing_activity_map <- function (data_sf, data_col, bbox, log_transform, fill_r
     # adjust legend position
     theme(legend.position="bottom")
   # save the output map
-  ggsave(filename=here("Confidential", "figures", paste0("map_", 
-                                                         data_col_name,
-                                                         "_",
-                                                         png_suffix, 
-                                                         ".png")))
+  ggsave(filename=here("Confidential", "maps", paste0(data_col_name, "_", png_suffix, ".png")))
   # return the output map
   return(map_output)
 }
@@ -714,9 +711,36 @@ for (ym in month_df$year_month) {
 vms_map
 vessels_map
 ```
+
 ```{r}
 # clean up
 remove(ym, y, m, ym_data_sf, month_df, bbox, title, vessels_fill_range, vms_fill_range)
+```
+
+Take static maps created above, and stitch together into an animated gif. Currently, the gif will skip months with no fishing data, rather than show a blank map for that month. It will stitch together all maps in the `Confidential/maps` output directory, even if they weren't generated with this particular run of the script. This is one of the slowest parts of the script.
+
+```{r fishing-activity-gifs}
+# create animation of fishing activity maps
+#   map_directory: character, directory where map PNG files to animate are stored
+#   map_metric_name: character, metric to map, used to search for PNG files in map_directory containing this metric name
+fishing_activity_gif <- function (map_directory, map_metric_name) {
+  # get list of files in the map directory
+  file_list <- list.files(map_directory)
+  # look for PNG files with metric name
+  map_file_list <- file_list[grepl(map_metric_name, file_list) & grepl('.png', file_list)]
+  # read in all images
+  image_list <- lapply(paste0(map_directory, "/", map_file_list), image_read)
+  # join and animate images
+  image_gif <- image_animate(image_join(image_list), fps = 2)
+  # write GIF
+  image_write(image = image_gif, path = paste0(map_directory, "/animation_", map_metric_name, ".gif"))
+  # return GIF
+  return(image_gif)
+}
+
+# create animation for # VMS pings and # unique vessels
+fishing_activity_gif(map_directory = here("Confidential", "maps"), map_metric_name = "n_vms_records")
+fishing_activity_gif(map_directory = here("Confidential", "maps"), map_metric_name = "n_unique_vessels")
 ```
 
 ```{r fishing-activity-time-series}
