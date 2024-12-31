@@ -312,7 +312,7 @@ remove(ticket_df)
 
 If a grid cell in a given month has < 3 unique vessels, it cannot be included in non-confidential maps summarizing the data.
 
-```{r}
+```{r decide-on-confidential-output}
 # set whether to use the non-confidential or confidential gridded summary for output
 confidential_output_flag <- TRUE
 
@@ -367,8 +367,9 @@ The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_c
 remove(numerator_drop_confidential, denominator_drop_confidential, percent_drop_confidential)
 ```
 
-```{r representativeness-table}
+```{r representativeness-tables}
 # TODO use inflation-adjusted revenue
+
 # check monthly VMS representativeness for tickets, landings, revenue and vessels
 representativeness_monthly_table <- dcrb_ticket_df %>%
   group_by(year, month_numeric) %>%
@@ -440,7 +441,7 @@ vms_representativeness_time_series_yearly <- representativeness_yearly_table %>%
   ggplot(aes(x = as.factor(year), y = percent_vms_represented)) +
   geom_col() +
   xlab("year") +
-  facet_grid(metric ~ .)
+  facet_grid(metric ~ ., scales = "free_y")
 ggsave(filename=here("Confidential", "figures", "time_series_representativeness_yearly.png"))
 vms_representativeness_time_series_yearly
 
@@ -455,13 +456,113 @@ vms_representativeness_time_series_monthly <- representativeness_monthly_table %
                values_to ="percent_vms_represented") %>%
   ggplot(aes(x = year_month, y = percent_vms_represented)) +
   geom_col() +
-  facet_grid(metric ~ .)
+  facet_grid(metric ~ ., scales = "free_y")
 ggsave(filename=here("Confidential", "figures", "time_series_representativeness_monthly.png"))
 vms_representativeness_time_series_monthly
 ```
+Repeat the representativeness table summaries and visualizations, now stratified by vessel size. Vessel size will be grouped into small vessels (with vessel length less than or equal to `vessel_size_cutoff` feet) and large vessels (greater than `vessel_size_cutoff` feet).
 
+```{r size-stratified-representativeness-tables}
 
-```{r tables}
+# set a cutoff (in feet) for vessel size stratification in VMS representativeness tables and figures
+vessel_size_cutoff <- 40
+
+# check monthly VMS representativeness for tickets, landings, revenue and vessels
+stratified_representativeness_monthly_table <- dcrb_ticket_df %>%
+  mutate(vessel_size_above_cutoff = FINAL_LENGTH > vessel_size_cutoff) %>%
+  group_by(year, month_numeric, vessel_size_above_cutoff) %>%
+  summarise(
+    # check for tickets
+    vms_represented_tickets          = sum(vms_represented_flag),
+    total_tickets                    = n(),
+    percent_vms_represented_tickets  = trunc(vms_represented_tickets / total_tickets * 10000) / 100,
+    # repeat for landings
+    vms_represented_landings         = sum(vms_represented_flag * DCRB_lbs),
+    total_landings                   = sum(DCRB_lbs),
+    percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
+    # repeat for revenue
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
+    total_revenue                    = sum(DCRB_revenue),
+    percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
+    # repeat for vessels
+    vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
+    total_vessels                    = n_distinct(drvid),
+    percent_vms_represented_vessels  = trunc(vms_represented_vessels / total_vessels * 10000) / 100,
+    .groups = 'keep'
+  ) %>%
+  ungroup() %>%
+  arrange(year, month_numeric, vessel_size_above_cutoff)
+
+# write monthly result
+write.csv(file = here("Confidential", "tables", "table_vms_representativeness_monthly_stratified.csv"),
+          x = stratified_representativeness_monthly_table)
+
+# repeat for yearly
+stratified_representativeness_yearly_table <- dcrb_ticket_df %>%
+  mutate(vessel_size_above_cutoff = FINAL_LENGTH > vessel_size_cutoff) %>%
+  group_by(year, vessel_size_above_cutoff) %>%
+  summarise(
+    # check for tickets
+    vms_represented_tickets          = sum(vms_represented_flag),
+    total_tickets                    = n(),
+    percent_vms_represented_tickets  = trunc(vms_represented_tickets / total_tickets * 10000) / 100,
+    # repeat for landings
+    vms_represented_landings         = sum(vms_represented_flag * DCRB_lbs),
+    total_landings                   = sum(DCRB_lbs),
+    percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
+    # repeat for revenue
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
+    total_revenue                    = sum(DCRB_revenue),
+    percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
+    # repeat for vessels
+    vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
+    total_vessels                    = n_distinct(drvid),
+    percent_vms_represented_vessels  = trunc(vms_represented_vessels / total_vessels * 10000) / 100,
+    .groups = 'keep'
+  ) %>%
+  ungroup() %>%
+  arrange(year, vessel_size_above_cutoff)
+
+# write yearly result
+write.csv(file = here("Confidential", "tables", "table_vms_representativeness_yearly_stratified.csv"),
+          x = stratified_representativeness_yearly_table)
+```
+
+```{r size-stratified-representativeness-time-series}
+# plot % represented by VMS for all four metrics stratified by vessel size category, yearly
+stratified_vms_representativeness_time_series_yearly <- stratified_representativeness_yearly_table %>%
+  select(year,
+         vessel_size_above_cutoff,
+         contains("percent_vms_represented")) %>%
+  pivot_longer(cols = contains("percent_vms_represented"),
+               names_to = "metric",
+               names_prefix = "percent_vms_represented_",
+               values_to ="percent_vms_represented") %>%
+  ggplot(aes(x = as.factor(year), y = percent_vms_represented, fill = vessel_size_above_cutoff)) +
+  geom_col(position = "dodge") +
+  xlab("year") +
+  facet_grid(metric ~ ., scales = "free_y")
+ggsave(filename=here("Confidential", "figures", "time_series_representativeness_yearly_stratified.png"))
+stratified_vms_representativeness_time_series_yearly
+
+# plot % represented by VMS for all four metrics stratified by vessel size category, monthly
+stratified_vms_representativeness_time_series_monthly <- stratified_representativeness_monthly_table %>%
+  mutate(year_month = paste0(year,"_", ifelse(nchar(month_numeric)>1, month_numeric, paste0(0, month_numeric)))) %>%
+  select(year_month,
+         vessel_size_above_cutoff,
+         contains("percent_vms_represented")) %>%
+  pivot_longer(cols = contains("percent_vms_represented"),
+               names_to = "metric",
+               names_prefix = "percent_vms_represented_",
+               values_to ="percent_vms_represented") %>%
+  ggplot(aes(x = year_month, y = percent_vms_represented, fill = vessel_size_above_cutoff)) +
+  geom_col(position = "dodge") +
+  facet_grid(metric ~ ., scales = "free_y")
+ggsave(filename=here("Confidential", "figures", "time_series_representativeness_monthly_stratified.png"))
+stratified_vms_representativeness_time_series_monthly
+```
+
+```{r gridded-summary-tables}
 # create monthly summary of gridded fishing activity
 fishing_activity_monthly_table <- dcrb_5km_output_df %>%
   group_by(year, month_numeric) %>%
@@ -508,7 +609,7 @@ write.csv(file=here("Confidential", "tables", "table_fishing_activity_yearly.csv
           x=fishing_activity_yearly_table)
 ```
 
-```{r maps}
+```{r fishing-activity-maps}
 # map fishing activity, apply to each month of data
 #   data_sf: sf object
 #   data_col: vector from data_sf to log-transform and map
