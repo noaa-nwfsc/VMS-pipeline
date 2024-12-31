@@ -29,7 +29,7 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
               axis.ticks.x=element_blank(),
               axis.ticks.y=element_blank())
 ```
-Load the joined, cleaned, interpolated VMS and fish ticket data for specified years. Also load the cleaned fish ticket data for specified years, which will be used to check how representative the VMS dataset is of all dungeness crab landings. Then load and join the spatial 5km grid, which will be used to generate spatial summaries of fishing activity.
+Load the joined, cleaned, interpolated VMS and fish ticket data for specified years. Also load the cleaned fish ticket data for specified years, which will be used to check how representative the VMS dataset is of all dungeness crab landings. Then load and join the spatial 5km grid, which will be used to generate spatial summaries of fishing activity. Joining the spatial 5km gird is one of the slowest parts of the script.
 
 ```{r load-data}
 # TODO should yearly filters and summaries be by year or by crab_year?
@@ -608,6 +608,8 @@ fishing_activity_yearly_table <- dcrb_5km_output_df %>%
 write.csv(file=here("Confidential", "tables", "table_fishing_activity_yearly.csv"),
           x=fishing_activity_yearly_table)
 ```
+
+Create maps of fishing activity, based on the # of VMS pings and # of unique vessels in the gridded summary. This is one of the slowest parts of the script.
 
 ```{r fishing-activity-maps}
 # map fishing activity, apply to each month of data
