@@ -35,7 +35,7 @@ Load the joined, cleaned, interpolated VMS and fish ticket data for specified ye
 ```{r load-data}
 # TODO should yearly filters and summaries be by year or by crab_year?
 # choose years of data to load
-load_years <- 2020:2023
+load_years <- 2015:2023
 
 # load VMS and fish ticket data
 file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
@@ -231,7 +231,7 @@ dcrb_5km_summary_df <- dcrb_confidential_df %>%
   ungroup()
 
 # write monthly gridded summary
-write.csv(file=here("Confidential", "tables", "dcrb_5km_summary_df.csv"), x=dcrb_5km_summary_df)
+write.csv(file=here("Confidential", "hindcast_output", "tables", "dcrb_5km_summary_df.csv"), x=dcrb_5km_summary_df)
 ```
 
 ```{r}
@@ -311,6 +311,8 @@ remove(ticket_df)
 
 ## Create outputs
 
+Output files will be written to `Confidential/hindcast_output`, into three subdirectories: `figures`, `maps`, and `tables`.
+
 If a grid cell in a given month has < 3 unique vessels, it cannot be included in non-confidential maps summarizing the data.
 
 ```{r decide-on-confidential-output}
@@ -344,7 +346,7 @@ confidential_monthly_table <- dcrb_confidential_df %>% group_by(year, month_nume
   arrange(year, month_numeric)
 
 # write monthly result
-write.csv(file = here("Confidential", "tables", "table_confidentiality_monthly.csv"),
+write.csv(file = here("Confidential", "hindcast_output", "tables", "table_confidentiality_monthly.csv"),
           x = confidential_monthly_table)
 
 # repeat for each year
@@ -357,7 +359,7 @@ confidential_yearly_table <- dcrb_confidential_df %>% group_by(year) %>%
   arrange(year)
 
 # write yearly result
-write.csv(file = here("Confidential", "tables", "table_confidentiality_yearly.csv"),
+write.csv(file = here("Confidential", "hindcast_output", "tables", "table_confidentiality_yearly.csv"),
           x = confidential_yearly_table)
 ```
 
@@ -397,7 +399,7 @@ representativeness_monthly_table <- dcrb_ticket_df %>%
   arrange(year, month_numeric)
 
 # write monthly result
-write.csv(file = here("Confidential", "tables", "table_vms_representativeness_monthly.csv"),
+write.csv(file = here("Confidential", "hindcast_output", "tables", "table_vms_representativeness_monthly.csv"),
           x = representativeness_monthly_table)
 
 # repeat check yearly
@@ -426,7 +428,7 @@ representativeness_yearly_table <- dcrb_ticket_df %>%
   arrange(year)
 
 # write yearly result
-write.csv(file = here("Confidential", "tables", "table_vms_representativeness_yearly.csv"),
+write.csv(file = here("Confidential", "hindcast_output", "tables", "table_vms_representativeness_yearly.csv"),
           x = representativeness_yearly_table)
 ```
 
@@ -443,7 +445,7 @@ vms_representativeness_time_series_yearly <- representativeness_yearly_table %>%
   geom_col() +
   xlab("year") +
   facet_grid(metric ~ ., scales = "free_y")
-ggsave(filename=here("Confidential", "figures", "time_series_representativeness_yearly.png"))
+ggsave(filename=here("Confidential", "hindcast_output", "figures", "time_series_representativeness_yearly.png"))
 vms_representativeness_time_series_yearly
 
 # plot % represented by VMS for all four metrics, monthly
@@ -458,7 +460,7 @@ vms_representativeness_time_series_monthly <- representativeness_monthly_table %
   ggplot(aes(x = year_month, y = percent_vms_represented)) +
   geom_col() +
   facet_grid(metric ~ ., scales = "free_y")
-ggsave(filename=here("Confidential", "figures", "time_series_representativeness_monthly.png"))
+ggsave(filename=here("Confidential", "hindcast_output", "figures", "time_series_representativeness_monthly.png"))
 vms_representativeness_time_series_monthly
 ```
 Repeat the representativeness table summaries and visualizations, now stratified by vessel size. Vessel size will be grouped into small vessels (with vessel length less than or equal to `vessel_size_cutoff` feet) and large vessels (greater than `vessel_size_cutoff` feet).
@@ -495,7 +497,7 @@ stratified_representativeness_monthly_table <- dcrb_ticket_df %>%
   arrange(year, month_numeric, vessel_size_above_cutoff)
 
 # write monthly result
-write.csv(file = here("Confidential", "tables", "table_vms_representativeness_monthly_stratified.csv"),
+write.csv(file = here("Confidential", "hindcast_output", "tables", "table_vms_representativeness_monthly_stratified.csv"),
           x = stratified_representativeness_monthly_table)
 
 # repeat for yearly
@@ -525,7 +527,7 @@ stratified_representativeness_yearly_table <- dcrb_ticket_df %>%
   arrange(year, vessel_size_above_cutoff)
 
 # write yearly result
-write.csv(file = here("Confidential", "tables", "table_vms_representativeness_yearly_stratified.csv"),
+write.csv(file = here("Confidential", "hindcast_output", "tables", "table_vms_representativeness_yearly_stratified.csv"),
           x = stratified_representativeness_yearly_table)
 ```
 
@@ -543,7 +545,7 @@ stratified_vms_representativeness_time_series_yearly <- stratified_representativ
   geom_col(position = "dodge") +
   xlab("year") +
   facet_grid(metric ~ ., scales = "free_y")
-ggsave(filename=here("Confidential", "figures", "time_series_representativeness_yearly_stratified.png"))
+ggsave(filename=here("Confidential", "hindcast_output", "figures", "time_series_representativeness_yearly_stratified.png"))
 stratified_vms_representativeness_time_series_yearly
 
 # plot % represented by VMS for all four metrics stratified by vessel size category, monthly
@@ -559,7 +561,7 @@ stratified_vms_representativeness_time_series_monthly <- stratified_representati
   ggplot(aes(x = year_month, y = percent_vms_represented, fill = vessel_size_above_cutoff)) +
   geom_col(position = "dodge") +
   facet_grid(metric ~ ., scales = "free_y")
-ggsave(filename=here("Confidential", "figures", "time_series_representativeness_monthly_stratified.png"))
+ggsave(filename=here("Confidential", "hindcast_output", "figures", "time_series_representativeness_monthly_stratified.png"))
 stratified_vms_representativeness_time_series_monthly
 ```
 
@@ -592,7 +594,7 @@ fishing_activity_monthly_table <- dcrb_5km_output_df %>%
   ) %>%
   arrange(year, month_numeric)
 # write result
-write.csv(file=here("Confidential", "tables", "table_fishing_activity_monthly.csv"),
+write.csv(file=here("Confidential", "hindcast_output", "tables", "table_fishing_activity_monthly.csv"),
           x=fishing_activity_monthly_table)
 
 # repeat for yearly
@@ -624,7 +626,7 @@ fishing_activity_yearly_table <- dcrb_5km_output_df %>%
   ) %>%
   arrange(year)
 # write result
-write.csv(file=here("Confidential", "tables", "table_fishing_activity_yearly.csv"),
+write.csv(file=here("Confidential", "hindcast_output", "tables", "table_fishing_activity_yearly.csv"),
           x=fishing_activity_yearly_table)
 ```
 
@@ -664,7 +666,7 @@ fishing_activity_map <- function (data_sf, data_col, bbox, log_transform, fill_r
     # adjust legend position
     theme(legend.position="bottom")
   # save the output map
-  ggsave(filename=here("Confidential", "maps", paste0(data_col_name, "_", png_suffix, ".png")))
+  ggsave(filename=here("Confidential", "hindcast_output", "maps", paste0(data_col_name, "_", png_suffix, ".png")))
   # return the output map
   return(map_output)
 }
@@ -770,9 +772,9 @@ fishing_activity_gif <- function (map_directory, map_metric_name) {
 }
 
 # create animation for # VMS pings and # unique vessels
-fishing_activity_gif(map_directory = here("Confidential", "maps"), map_metric_name = "n_vms_records")
-fishing_activity_gif(map_directory = here("Confidential", "maps"), map_metric_name = "dcrb_vessels")
-fishing_activity_gif(map_directory = here("Confidential", "maps"), map_metric_name = "n_unique_vessels")
+fishing_activity_gif(map_directory = here("Confidential", "hindcast_output", "maps"), map_metric_name = "n_vms_records")
+fishing_activity_gif(map_directory = here("Confidential", "hindcast_output", "maps"), map_metric_name = "dcrb_vessels")
+fishing_activity_gif(map_directory = here("Confidential", "hindcast_output", "maps"), map_metric_name = "n_unique_vessels")
 ```
 
 ```{r fishing-activity-time-series}
@@ -791,21 +793,21 @@ time_series_df <- dcrb_confidential_df %>%
 n_vms_records_time_series <- time_series_df %>% 
   ggplot() + 
   geom_col(aes(x = year_month, y = n_vms_records, fill = crab_year))
-ggsave(filename = here("Confidential", "figures", "time_series_n_vms_records.png"))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_vms_records.png"))
 n_vms_records_time_series
 
 # plot # vessels per VMS ping as bar chart
 dcrb_vessels_time_series <- time_series_df %>% 
   ggplot() + 
   geom_col(aes(x = year_month, y = dcrb_vessels, fill = crab_year))
-ggsave(filename = here("Confidential", "figures", "time_series_dcrb_vessels.png"))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_dcrb_vessels.png"))
 dcrb_vessels_time_series
 
 # plot # unique vessels per month as bar chart
 n_unique_vessels_time_series <- time_series_df %>% 
   ggplot() + 
   geom_col(aes(x = year_month, y = n_unique_vessels, fill = crab_year))
-ggsave(filename = here("Confidential", "figures", "time_series_n_unique_vessels.png"))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_unique_vessels.png"))
 n_unique_vessels_time_series
 ```
 
@@ -814,21 +816,20 @@ n_unique_vessels_time_series
 n_vms_records_heatmap <- time_series_df %>%
   ggplot() +
   geom_tile(aes(x = month, y = as.factor(year), fill = n_vms_records))
-ggsave(filename = here("Confidential", "figures", "heatmap_n_vms_records.png"))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_vms_records.png"))
 n_vms_records_heatmap
 
 # plot # vessels per VMS record as heatmap
 dcrb_vessels_heatmap <- time_series_df %>%
   ggplot() +
   geom_tile(aes(x = month, y = as.factor(year), fill = dcrb_vessels))
-ggsave(filename = here("Confidential", "figures", "heatmap_dcrb_vessels.png"))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_dcrb_vessels.png"))
 dcrb_vessels_heatmap
 
 # plot # unique vessels per month as heatmap
 n_unique_vessels_heatmap <- time_series_df %>%
   ggplot() +
   geom_tile(aes(x = month, y = as.factor(year), fill = n_unique_vessels))
-ggsave(filename = here("Confidential", "figures", "heatmap_n_unique_vessels.png"))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_unique_vessels.png"))
 n_unique_vessels_heatmap
 ```
-
