@@ -428,6 +428,38 @@ write.csv(file = here("Confidential", "tables", "table_vms_representativeness_ye
           x = representativeness_yearly_table)
 ```
 
+```{r representativeness-time-series}
+# plot % represented by VMS for all four metrics, yearly
+vms_representativeness_time_series_yearly <- representativeness_yearly_table %>%
+  select(year,
+         contains("percent_vms_represented")) %>%
+  pivot_longer(cols = contains("percent_vms_represented"),
+               names_to = "metric",
+               names_prefix = "percent_vms_represented_",
+               values_to ="percent_vms_represented") %>%
+  ggplot(aes(x = as.factor(year), y = percent_vms_represented)) +
+  geom_col() +
+  xlab("year") +
+  facet_grid(metric ~ .)
+ggsave(filename=here("Confidential", "figures", "time_series_representativeness_yearly.png"))
+vms_representativeness_time_series_yearly
+
+# plot % represented by VMS for all four metrics, monthly
+vms_representativeness_time_series_monthly <- representativeness_monthly_table %>%
+  mutate(year_month = paste0(year,"_", ifelse(nchar(month_numeric)>1, month_numeric, paste0(0, month_numeric)))) %>%
+  select(year_month,
+         contains("percent_vms_represented")) %>%
+  pivot_longer(cols = contains("percent_vms_represented"),
+               names_to = "metric",
+               names_prefix = "percent_vms_represented_",
+               values_to ="percent_vms_represented") %>%
+  ggplot(aes(x = year_month, y = percent_vms_represented)) +
+  geom_col() +
+  facet_grid(metric ~ .)
+ggsave(filename=here("Confidential", "figures", "time_series_representativeness_monthly.png"))
+vms_representativeness_time_series_monthly
+```
+
 
 ```{r tables}
 # create monthly summary of gridded fishing activity
@@ -584,7 +616,7 @@ vessels_map
 remove(ym, y, m, ym_data_sf, month_df, bbox, title, vessels_fill_range, vms_fill_range)
 ```
 
-```{r time-series}
+```{r fishing-activity-time-series}
 # TODO does this section need a confidentiality filter, since not spatial?
 
 # this uses the confidential data, using non-gridded summary to not double count unique vessels
