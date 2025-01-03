@@ -38,36 +38,16 @@ Load the joined, cleaned, interpolated VMS and fish ticket data for specified ye
 load_years <- 2021:2023
 
 # load VMS and fish ticket data
-file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
-                  paste0(load_years[1],'_interpolated.rds'))
-# read the first year of data
-vms_df <- read_rds(file_name)
-# read the remaining years of data
-if (length(load_years) > 1) {
-  for (ly in load_years[2:length(load_years)]) {
-    file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
-                      paste0(ly,'_interpolated.rds'))
-    vms_df <- bind_rows(vms_df, read_rds(file_name))
-  }
-}
+vms_df <- purrr::map(load_years, function(ly) {
+  read_rds(here('Confidential', 'processed', 'matched', 'interpolation',
+                paste0(ly,'_interpolated.rds')))
+}) %>% bind_rows()
 
 # load fish ticket data before it was joined to VMS data, used to check VMS representativeness
-file_name <- here('Confidential', 'processed', 'fish tickets',
-                  paste0(load_years[1],'fishtix_vlengths_withFTID.rds'))
-
-# read the first year of data
-ticket_df <- read_rds(file_name)
-# read the remaining years of data
-if (length(load_years) > 1) {
-  for (ly in load_years[2:length(load_years)]) {
-    file_name <- here('Confidential', 'processed', 'fish tickets',
-                      paste0(ly,'fishtix_vlengths_withFTID.rds'))
-    ticket_df <- bind_rows(ticket_df, read_rds(file_name))
-  }
-}
-
-# clean up
-remove(file_name, ly)
+ticket_df <- purrr::map(load_years, function(ly) {
+  read_rds(here('Confidential', 'processed', 'fish tickets',
+                paste0(ly,'fishtix_vlengths_withFTID.rds')))
+}) %>% bind_rows()
 
 # load 5km grid shape file
 grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
