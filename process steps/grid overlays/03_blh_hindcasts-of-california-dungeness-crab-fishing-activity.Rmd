@@ -823,7 +823,6 @@ fishing_activity_gif(map_directory = here("Confidential", "hindcast_output", "ma
 
 ```{r fishing-activity-time-series}
 # TODO does this section need a confidentiality filter, since not spatial?
-# TODO write these two time series sections as functions
 
 # this uses the confidential data, using non-gridded summary to not double count unique vessels
 time_series_df <- dcrb_confidential_df %>%
@@ -831,49 +830,41 @@ time_series_df <- dcrb_confidential_df %>%
   summarise(n_vms_records = n(),
             dcrb_vessels = sum(dcrb_vessels_per_vms_record),
             n_unique_vessels = n_distinct(drvid),
+            DCRB_lbs = sum(DCRB_lbs),
+            DCRB_revenue_afi = sum(DCRB_revenue_afi),
             .groups = 'keep')
 
 # plot # VMS pings per month as bar chart
-n_vms_records_time_series <- time_series_df %>% 
-  ggplot() + 
-  geom_col(aes(x = year_month, y = n_vms_records, fill = crab_year))
+time_series_df %>% ggplot() + geom_col(aes(x = year_month, y = n_vms_records, fill = crab_year))
 ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_vms_records.png"))
-n_vms_records_time_series
 
 # plot # vessels per VMS ping as bar chart
-dcrb_vessels_time_series <- time_series_df %>% 
-  ggplot() + 
-  geom_col(aes(x = year_month, y = dcrb_vessels, fill = crab_year))
+time_series_df %>% ggplot() + geom_col(aes(x = year_month, y = dcrb_vessels, fill = crab_year))
 ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_dcrb_vessels.png"))
-dcrb_vessels_time_series
 
 # plot # unique vessels per month as bar chart
-n_unique_vessels_time_series <- time_series_df %>% 
-  ggplot() + 
-  geom_col(aes(x = year_month, y = n_unique_vessels, fill = crab_year))
+time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = n_unique_vessels, fill = crab_year))
 ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_unique_vessels.png"))
-n_unique_vessels_time_series
+
+# plot # unique vessels per month as bar chart
+time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_lbs, fill = crab_year))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_DCRB_lbs.png"))
+
+# plot # unique vessels per month as bar chart
+time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_revenue_afi, fill = crab_year))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_DCRB_revenue_afi.png"))
 ```
 
 ```{r fishing-activity-heatmaps}
 # plot # VMS pings per month as heatmap
-n_vms_records_heatmap <- time_series_df %>%
-  ggplot() +
-  geom_tile(aes(x = month, y = as.factor(year), fill = n_vms_records))
+time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_vms_records))
 ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_vms_records.png"))
-n_vms_records_heatmap
 
 # plot # vessels per VMS record as heatmap
-dcrb_vessels_heatmap <- time_series_df %>%
-  ggplot() +
-  geom_tile(aes(x = month, y = as.factor(year), fill = dcrb_vessels))
+time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = dcrb_vessels))
 ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_dcrb_vessels.png"))
-dcrb_vessels_heatmap
 
 # plot # unique vessels per month as heatmap
-n_unique_vessels_heatmap <- time_series_df %>%
-  ggplot() +
-  geom_tile(aes(x = month, y = as.factor(year), fill = n_unique_vessels))
+time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_unique_vessels))
 ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_unique_vessels.png"))
-n_unique_vessels_heatmap
 ```
