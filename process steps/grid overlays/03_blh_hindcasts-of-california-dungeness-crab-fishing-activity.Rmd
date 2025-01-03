@@ -3,6 +3,13 @@ title: "Hindcasts of California Dungeness crab fishing activity, 2011-2023"
 author: "Brooke Hawkins"
 date: "`r Sys.Date()`"
 output: html_document
+knit: |
+  (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_file = paste0(xfun::sans_ext(input), '-', Sys.Date(), '.html')
+    )
+  })
 ---
 
 ## Purpose
