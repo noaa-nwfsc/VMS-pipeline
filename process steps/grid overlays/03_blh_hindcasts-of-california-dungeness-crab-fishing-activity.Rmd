@@ -17,9 +17,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Prep data
 
 ```{r import-libraries}
-library(here)
-library(readr)
 library(tidyverse)
+library(here)
+library(fredr)
 library(sf)
 library(rnaturalearth)
 library(viridis)
@@ -35,7 +35,7 @@ Load the joined, cleaned, interpolated VMS and fish ticket data for specified ye
 ```{r load-data}
 # TODO should yearly filters and summaries be by year or by crab_year?
 # choose years of data to load
-load_years <- 2015:2023
+load_years <- 2021:2023
 
 # load VMS and fish ticket data
 file_name <- here('Confidential', 'processed', 'matched', 'interpolation',
@@ -79,12 +79,50 @@ vms_df <- vms_df %>%
   st_set_geometry(NULL)
 ```
 
+Adjust revenue for inflation using Fred GDP data, adapted from R code by Erin Steiner. This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.
+
+Pre-requisite: Create a FRED account and API key. See https://fred.stlouisfed.org/docs/api/api_key.html.
+
+```{r inflation-adjustment}
+# insert your FRED API key
+fredr_set_key('') 
+
+# download the quarterly inflation adjustments from Fred from 1985 to present
+fred_gdpdefl <- fredr(
+    series_id = "GDPDEF", 
+    observation_start = as.Date(paste0(min(load_years), "-01-01"))
+  )
+
+# TODO should a different reference year be used? Currently set to year the script is run.
+# update by replacing the denominator for mutating inflation_adjustment_factor
+
+# generate the mean annual deflators based on the quarterly values
+gdp_defl <- mutate(fred_gdpdefl, year = year(date)) %>%
+  group_by(year) %>%
+  summarize(defl = mean(value), .groups = 'drop') %>%
+  mutate(inflation_adjustment_factor = defl / defl[year == max(year)]) %>%
+  select(year, inflation_adjustment_factor)
+
+# write inflation adjustment factors
+write.csv(file = here("Confidential", "hindcast_output", "tables", "inflation_adjustment.csv"), x = gdp_defl)
+
+# plot inflation adjustment factors
+gdp_defl %>% ggplot(aes(x = as.factor(year), y = inflation_adjustment_factor)) + geom_point()
+ggsave(here("Confidential", "hindcast_output", "figures", "inflation_adjustment.png"))
+
+# clean up
+rm(fred_gdpdefl)
+```
+
+The reference year for inflation adjustment was `r max(gdp_defl$year)`.
+
 Some commonly used acronyms in variable naming are:
 
 * `dcrb` dungeness crab
 * `rev` revenue
 * `lbs` pounds
 * `VMS` vessel monitoring system
+* `afi` adjusted for inflation
 
 ```{r transform-vms-data}
 # define filters
@@ -116,6 +154,9 @@ dcrb_df <- vms_df %>%
   filter(agency_code == state_agency_code) %>%
   filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>% # TODO should this be for WM_NGDC_M instead?
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
+  # join inflation adjustment factor and adjust revenue
+  left_join(gdp_defl, by = join_by(year)) %>%
+  mutate(DCRB_revenue_afi = DCRB_revenue / inflation_adjustment_factor) %>%
   # select columns
   dplyr::select(
     # identifiers
@@ -140,7 +181,7 @@ dcrb_df <- vms_df %>%
     FINAL_LENGTH,
     # dungeness crab fields
     DCRB_lbs,
-    DCRB_revenue
+    DCRB_revenue_afi
   )
 
 # count total records, trips and years
@@ -188,7 +229,7 @@ trip_df <- dcrb_df %>%
 dcrb_trip_df <- left_join(dcrb_df, trip_df, by="Rec_ID") %>%
   mutate(
     dcrb_lbs_per_vms_record     = DCRB_lbs / trip_n_vms_records,
-    dcrb_rev_per_vms_record     = DCRB_revenue / trip_n_vms_records,
+    dcrb_rev_per_vms_record     = DCRB_revenue_afi / trip_n_vms_records,
     dcrb_vessels_per_vms_record = 1 / trip_n_vms_records
   )
 
@@ -272,6 +313,9 @@ dcrb_ticket_df <- ticket_df %>%
       month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
     )
   ) %>%
+  # join inflation adjustment factor and adjust revenue
+  left_join(gdp_defl, by = join_by(year)) %>%
+  mutate(DCRB_revenue_afi = DCRB_revenue / inflation_adjustment_factor) %>%
   # select columns
   dplyr::select(
     # identifiers
@@ -293,7 +337,7 @@ dcrb_ticket_df <- ticket_df %>%
     FINAL_LENGTH,
     # dungeness crab fields
     DCRB_lbs,
-    DCRB_revenue
+    DCRB_revenue_afi
   ) %>%
   # add column to ticket dataframe for whether that ticket was represented by VMS data
   left_join(dcrb_vms_rec_ids, by = join_by(Rec_ID)) %>%
@@ -386,8 +430,8 @@ representativeness_monthly_table <- dcrb_ticket_df %>%
     total_landings                   = sum(DCRB_lbs),
     percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
     # repeat for revenue
-    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
-    total_revenue                    = sum(DCRB_revenue),
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue_afi),
+    total_revenue                    = sum(DCRB_revenue_afi),
     percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
     # repeat for vessels
     vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
@@ -415,8 +459,8 @@ representativeness_yearly_table <- dcrb_ticket_df %>%
     total_landings                   = sum(DCRB_lbs),
     percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
     # repeat for revenue
-    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
-    total_revenue                    = sum(DCRB_revenue),
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue_afi),
+    total_revenue                    = sum(DCRB_revenue_afi),
     percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
     # repeat for vessels
     vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
@@ -484,8 +528,8 @@ stratified_representativeness_monthly_table <- dcrb_ticket_df %>%
     total_landings                   = sum(DCRB_lbs),
     percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
     # repeat for revenue
-    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
-    total_revenue                    = sum(DCRB_revenue),
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue_afi),
+    total_revenue                    = sum(DCRB_revenue_afi),
     percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
     # repeat for vessels
     vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
@@ -514,8 +558,8 @@ stratified_representativeness_yearly_table <- dcrb_ticket_df %>%
     total_landings                   = sum(DCRB_lbs),
     percent_vms_represented_landings = trunc(vms_represented_landings / total_landings * 10000) / 100,
     # repeat for revenue
-    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue),
-    total_revenue                    = sum(DCRB_revenue),
+    vms_represented_revenue          = sum(vms_represented_flag * DCRB_revenue_afi),
+    total_revenue                    = sum(DCRB_revenue_afi),
     percent_vms_represented_revenue  = trunc(vms_represented_revenue / total_revenue * 10000) / 100,
     # repeat for vessels
     vms_represented_vessels          = n_distinct(vms_represented_drvid, na.rm=TRUE),
