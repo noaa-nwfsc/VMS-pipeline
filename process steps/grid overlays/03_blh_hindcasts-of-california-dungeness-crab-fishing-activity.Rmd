@@ -365,19 +365,6 @@ numerator_drop_confidential <- sum(dcrb_confidential_df$confidential_flag)
 denominator_drop_confidential <- dim(dcrb_confidential_df)[1]
 percent_drop_confidential <- substr(as.character(numerator_drop_confidential / denominator_drop_confidential * 100), 1, 5)
 
-# repeat for each month
-confidential_monthly_table <- dcrb_confidential_df %>% group_by(year, month_numeric) %>%
-  summarise(confidential_vms_records = sum(confidential_flag),
-            total_vms_records = n(),
-            percent_vms_records_confidential = trunc(confidential_vms_records / total_vms_records * 10000) / 100,
-            .groups = 'keep') %>%
-  ungroup() %>%
-  arrange(year, month_numeric)
-
-# write monthly result
-write.csv(file = here("Confidential", "hindcast_output", "tables", "table_confidentiality_monthly.csv"),
-          x = confidential_monthly_table)
-
 # repeat for each year
 confidential_yearly_table <- dcrb_confidential_df %>% group_by(year) %>%
   summarise(confidential_vms_records = sum(confidential_flag),
