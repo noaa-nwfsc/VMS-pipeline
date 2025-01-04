@@ -1,5 +1,5 @@
 ---
-title: "Hindcasts of California Dungeness crab fishing activity, 2011-2023"
+title: "Hindcasts of California Dungeness crab fishing activity, 2015-2023"
 author: "Brooke Hawkins"
 date: "`r Sys.Date()`"
 output: html_document
@@ -13,17 +13,14 @@ knit: |
 ---
 
 ## Purpose
+
 * Integrate interpolated VMS and fish ticket data to produce time series, rasters, and maps of fishing activity, landed weight, and revenue.
-Deliverable:
-* Monthly maps of fishing activity; tables summarizing monthly fishing activity
+* Deliverable: Monthly maps of fishing activity; tables summarizing monthly fishing activity
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-```
 
-## Prep data
-
-```{r import-libraries}
+# import libraries
 library(tidyverse)
 library(here)
 library(fredr)
@@ -37,12 +34,20 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
               axis.ticks.x=element_blank(),
               axis.ticks.y=element_blank())
 ```
-Load the joined, cleaned, interpolated VMS and fish ticket data for specified years. Also load the cleaned fish ticket data for specified years, which will be used to check how representative the VMS dataset is of all dungeness crab landings. Then load and join the spatial 5km grid, which will be used to generate spatial summaries of fishing activity. Joining the spatial 5km gird is one of the slowest parts of the script.
+
+## Load data
+
+1. Load the joined, cleaned, interpolated VMS and fish ticket data for specified years, which will be used to map fishing activity distribution. 
+2. Load the cleaned fish ticket data for specified years, which will be used to check how representative the VMS dataset is of all dungeness crab landings. 
+3. Load and join the spatial 5km grid, which will also be used to map fishing activity distribution.
+
+Joining the spatial 5km gird is one of the slowest parts of the script.
+
+Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2015-2023.
 
 ```{r load-data}
-# TODO should yearly filters and summaries be by year or by crab_year?
 # choose years of data to load
-load_years <- 2021:2023
+load_years <- 2015:2023
 
 # load VMS and fish ticket data
 vms_df <- purrr::map(load_years, function(ly) {
@@ -66,6 +71,8 @@ vms_df <- vms_df %>%
   st_set_geometry(NULL)
 ```
 
+4. Load inflation adjustment factors from FRED.
+
 Adjust revenue for inflation using Fred GDP data, adapted from R code by Erin Steiner. This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.
 
 Pre-requisite: Create a FRED account and API key. See https://fred.stlouisfed.org/docs/api/api_key.html.
@@ -79,9 +86,6 @@ fred_gdpdefl <- fredr(
     series_id = "GDPDEF", 
     observation_start = as.Date(paste0(min(load_years), "-01-01"))
   )
-
-# TODO should a different reference year be used? Currently set to year the script is run.
-# update by replacing the denominator for mutating inflation_adjustment_factor
 
 # generate the mean annual deflators based on the quarterly values
 gdp_defl <- mutate(fred_gdpdefl, year = year(date)) %>%
@@ -101,13 +105,21 @@ ggsave(here("Confidential", "hindcast_output", "figures", "inflation_adjustment.
 rm(fred_gdpdefl)
 ```
 
-The reference year for inflation adjustment was `r max(gdp_defl$year)`.
+The reference year for inflation adjustment is `r max(gdp_defl$year)`.
 
-Some commonly used acronyms in variable naming are:
+## Transform data
+
+Transform the joined, cleaned, interpolated VMS and fish ticket data:
+
+1. Filter for dungeness crab related records, California landings, min/max depth and speed filters.
+2. Add temporal columns.
+3. Adjust revenue for inflation with data from FRED.
+
+Some commonly used acronyms for variable naming in the code include:
 
 * `dcrb` dungeness crab
 * `rev` revenue
-* `lbs` pounds
+* `lbs` landings
 * `VMS` vessel monitoring system
 * `afi` adjusted for inflation
 
@@ -139,7 +151,7 @@ dcrb_df <- vms_df %>%
   # apply filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   filter(agency_code == state_agency_code) %>%
-  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>% # TODO should this be for WM_NGDC_M instead?
+  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
   # join inflation adjustment factor and adjust revenue
   left_join(gdp_defl, by = join_by(year)) %>%
@@ -187,24 +199,24 @@ The dungeness crab VMS dataframe has `r n_records` records (interpolated VMS pin
 remove(vms_df, n_records, n_trips, n_years)
 ```
 
-Create a monthly gridded summary of fishing activity. 
+Next, create a monthly gridded summary of fishing activity. 
 
-Trip-level attributes are added at this step:
+1. Add trip-level attributes:
 
 * `trip_n_vms_records`: the number of VMS records associated with a fishing trip (fish ticket)
 
-VMS-record attributes are then calculated using the trip-level attribute:
+2. Add VMS record attributes, calculated using the trip-level attribute:
 
 * `dcrb_lbs_per_vms_record`: the total landings for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with 1200 lbs landed and 20 VMS records would have 60 lbs per VMS record)
 * `dcrb_rev_per_vms_record`: the total revenue for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with $4000 revenue and 20 VMS pings would have \$200 revenue per VMS record)
 
-Then, the activity is summarized at a monthly gridded level:
+3. Summarize fishing activity at a monthly gridded level:
 
 * `dcrb_lbs`: the total landings per VMS record in a given grid cell in a given month
 * `dcrb_rev`: the total revenue per VMS record in a given grid cell in a given month
 * `n_vms_records`: the number of VMS records in a given grid cell in a given month
 * `n_unique_vessels`: the number of unique vessels in a given grid cell in a given month
-* `confidential_flag`: determines whether the grid cell month has <3 unique vessels; in which case, the data in this grid cell needs to be excluded from non-confidential reports
+* `confidential_flag`: determines whether the grid cell month has <3 unique vessels; in which case, the data in this grid cell and month needs to be excluded from non-confidential reports
 
 ```{r gridded-summary}
 # summarize trip-level attributes
@@ -258,14 +270,12 @@ dcrb_5km_summary_df <- dcrb_confidential_df %>%
 
 # write monthly gridded summary
 write.csv(file=here("Confidential", "hindcast_output", "tables", "dcrb_5km_summary_df.csv"), x=dcrb_5km_summary_df)
-```
 
-```{r}
 # clean up
 remove(trip_df, dcrb_trip_df, confidential_df)
 ```
 
-Repeat the data transformation steps for fish ticket data, which will be used to later on to evaluate the representativeness of the VMS data for dungeness crab fishing activity.
+Repeat the for fish ticket data, which will be used later to evaluate the representativeness of the VMS data for dungeness crab fishing activity.
 
 ```{r transform-ticket-data}
 # select distinct fish ticket IDs from filtered VMS dataframe
@@ -331,9 +341,7 @@ dcrb_ticket_df <- ticket_df %>%
 
 # take a peek at the resulting dataframe
 glimpse(dcrb_ticket_df)
-```
 
-```{r}
 # clean up
 remove(ticket_df)
 ```
@@ -342,49 +350,49 @@ remove(ticket_df)
 
 Output files will be written to `Confidential/hindcast_output`, into three subdirectories: `figures`, `maps`, and `tables`.
 
-If a grid cell in a given month has < 3 unique vessels, it cannot be included in non-confidential maps summarizing the data.
+Create some overall **time series** and **heatmaps** of fishing activity, revenue and landings. This does not currently use the confidential output, since it is not reporting monthly gridded data, but it can be updated to do so.
 
-```{r decide-on-confidential-output}
-# set whether to use the non-confidential or confidential gridded summary for output
-confidential_output_flag <- TRUE
+```{r fishing-activity-time-series}
+# this uses the confidential data, using non-gridded summary to not double count unique vessels
+time_series_df <- dcrb_confidential_df %>%
+  group_by(crab_year, year, year_month, month) %>%
+  summarise(n_vms_records = n(),
+            n_unique_vessels = n_distinct(drvid),
+            DCRB_lbs = sum(DCRB_lbs),
+            DCRB_revenue_afi = sum(DCRB_revenue_afi),
+            .groups = 'keep')
 
-if (confidential_output_flag) {
-  # if confidential output is ok, then don't remove any VMS records
-  dcrb_5km_output_df <- dcrb_5km_summary_df
-} else {
-  # if non-confidential output is needed, then remove any VMS records where the grid cell and month had < 3 unique vessels, where confidential_flag is FALSE
- dcrb_5km_output_df <- dcrb_5km_summary_df %>% filter(!confidential_flag)
-}
+# plot # VMS pings per month as bar chart
+time_series_df %>% ggplot() + geom_col(aes(x = year_month, y = n_vms_records, fill = crab_year))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_vms_records.png"))
+
+# plot # unique vessels per month as bar chart
+time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = n_unique_vessels, fill = crab_year))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_unique_vessels.png"))
+
+# plot # unique vessels per month as bar chart
+time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_lbs, fill = crab_year))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_DCRB_lbs.png"))
+
+# plot # unique vessels per month as bar chart
+time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_revenue_afi, fill = crab_year))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_DCRB_revenue_afi.png"))
+
+# plot # VMS pings per month as heatmap
+time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_vms_records))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_vms_records.png"))
+
+# plot # unique vessels per month as heatmap
+time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_unique_vessels))
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_unique_vessels.png"))
 ```
 
-Regardless of whether you're using confidential or non-confidential output, report how many VMS records are filtered out by the confidentiality flag.
+Create a table and a bar chart that summarize the **representativeness** of VMS data each year. Metrics reported are:
 
-```{r confidentiality-table}
-# calculate the % of VMS records dropped by confidentiality filter, for the entire time period
-numerator_drop_confidential <- sum(dcrb_confidential_df$confidential_flag)
-denominator_drop_confidential <- dim(dcrb_confidential_df)[1]
-percent_drop_confidential <- substr(as.character(numerator_drop_confidential / denominator_drop_confidential * 100), 1, 5)
-
-# repeat for each year
-confidential_yearly_table <- dcrb_confidential_df %>% group_by(year) %>%
-  summarise(confidential_vms_records = sum(confidential_flag),
-            total_vms_records = n(),
-            percent_vms_records_confidential = trunc(confidential_vms_records / total_vms_records * 10000) / 100,
-            .groups = 'keep') %>%
-  ungroup() %>%
-  arrange(year)
-
-# write yearly result
-write.csv(file = here("Confidential", "hindcast_output", "tables", "table_confidentiality_yearly.csv"),
-          x = confidential_yearly_table)
-```
-
-The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
-
-```{r}
-# clean up
-remove(numerator_drop_confidential, denominator_drop_confidential, percent_drop_confidential)
-```
+* *Tickets*: (tickets with matched VMS records) / (tickets)
+* *Landings*: (landings from tickets with matched VMS records) / (landings)
+* *Revenue*: (revenue from tickets with matched VMS records) / (revenue)
+* *Vessels*: (unique vessels on tickets with matched VMS records) / (unique vessels)
 
 ```{r representativeness-tables}
 # check yearly VMS representativeness for tickets, landings, revenue and vessels
@@ -433,7 +441,8 @@ vms_representativeness_time_series_yearly <- representativeness_yearly_table %>%
 ggsave(filename=here("Confidential", "hindcast_output", "figures", "time_series_representativeness_yearly.png"))
 vms_representativeness_time_series_yearly
 ```
-Repeat the representativeness table summaries and visualizations, now stratified by vessel size. Vessel size will be grouped into small vessels (with vessel length less than or equal to `vessel_size_cutoff` feet) and large vessels (greater than `vessel_size_cutoff` feet).
+
+Repeat the representativeness table and bar chart, stratified by **vessel size**. Vessel size will be grouped into small vessels (with vessel length less than or equal to `vessel_size_cutoff` feet) and large vessels (greater than `vessel_size_cutoff` feet).
 
 ```{r size-stratified-representativeness-tables}
 # set a cutoff (in feet) for vessel size stratification in VMS representativeness tables and figures
@@ -488,6 +497,55 @@ ggsave(filename=here("Confidential", "hindcast_output", "figures", "time_series_
 stratified_vms_representativeness_time_series_yearly
 ```
 
+For the remaining figures, decide whether your outputs need to be confidential or not, using the `confidential_output_flag`. Set to `FALSE` to create non-confidential output. If a grid cell in a given month has < 3 unique vessels, it cannot be included in non-confidential maps.
+
+```{r decide-on-confidential-output}
+# set whether to use the non-confidential or confidential gridded summary for output
+confidential_output_flag <- TRUE
+
+if (confidential_output_flag) {
+  # if confidential output is ok, then don't remove any VMS records
+  dcrb_5km_output_df <- dcrb_5km_summary_df
+} else {
+  # if non-confidential output is needed, then remove any VMS records where the grid cell and month had < 3 unique vessels, where confidential_flag is FALSE
+ dcrb_5km_output_df <- dcrb_5km_summary_df %>% filter(!confidential_flag)
+}
+```
+
+Regardless of whether you're using confidential or non-confidential output, create a table summarizing how many VMS records are filtered out by the **confidentiality** flag each year.
+
+```{r confidentiality-table}
+# calculate the % of VMS records dropped by confidentiality filter, for the entire time period
+numerator_drop_confidential <- sum(dcrb_confidential_df$confidential_flag)
+denominator_drop_confidential <- dim(dcrb_confidential_df)[1]
+percent_drop_confidential <- substr(as.character(numerator_drop_confidential / denominator_drop_confidential * 100), 1, 5)
+
+# repeat for each year
+confidential_yearly_table <- dcrb_confidential_df %>% group_by(year) %>%
+  summarise(confidential_vms_records = sum(confidential_flag),
+            total_vms_records = n(),
+            percent_vms_records_confidential = trunc(confidential_vms_records / total_vms_records * 10000) / 100,
+            .groups = 'keep') %>%
+  ungroup() %>%
+  arrange(year)
+
+# write yearly result
+write.csv(file = here("Confidential", "hindcast_output", "tables", "table_confidentiality_yearly.csv"),
+          x = confidential_yearly_table)
+
+# look at table
+confidential_yearly_table
+```
+
+The non-confidential data has `r numerator_drop_confidential` (`r percent_drop_confidential`%) fewer records (VMS pings), where grid cells had <3 unique vessels in a given month.
+
+```{r}
+# clean up
+remove(numerator_drop_confidential, denominator_drop_confidential, percent_drop_confidential)
+```
+
+Create a **fishing activity table** summarizing the monthly and yearly average # of VMS records and # unique vessels across grid cells and months.
+
 ```{r gridded-summary-tables}
 # create monthly summary of gridded fishing activity
 fishing_activity_monthly_table <- dcrb_5km_output_df %>%
@@ -539,9 +597,12 @@ fishing_activity_yearly_table <- dcrb_5km_output_df %>%
 # write result
 write.csv(file=here("Confidential", "hindcast_output", "tables", "table_fishing_activity_yearly.csv"),
           x=fishing_activity_yearly_table)
+
+# look at table
+fishing_activity_yearly_table
 ```
 
-Create maps of fishing activity, based on the # of VMS pings and # of unique vessels in the gridded summary. This is one of the slowest parts of the script.
+Create **fishing activity maps**, based on the gridded summary above. This is one of the slowest parts of the script.
 
 ```{r fishing-activity-maps}
 # map fishing activity, apply to each month of data
@@ -607,8 +668,6 @@ month_df <- dcrb_5km_output_sf %>%
 
 # iterate over months
 for (ym in month_df$year_month) {
-  # print progress
-  print(ym)
   # get title as a combination of year and month
   y <- month_df$year[which(month_df$year_month==ym)]
   m <- month_df$month[which(month_df$year_month==ym)]
@@ -626,14 +685,12 @@ for (ym in month_df$year_month) {
                                   png_suffix = ym,
                                   background_sf = west_coast_states)
 }
-```
 
-```{r}
 # clean up
 remove(ym, y, m, ym_data_sf, month_df, bbox, title, vms_fill_range)
 ```
 
-Take static maps created above, and stitch together into an animated gif. Currently, the gif will skip months with no fishing data, rather than show a blank map for that month. It will stitch together all maps in the `Confidential/maps` output directory, even if they weren't generated with this particular run of the script. This is one of the slowest parts of the script.
+Take static maps created above, and stitch together into an animated gif. Currently, animation gif will skip months with no fishing data, rather than show a blank map for that month - this can be changed. It will stitch together all maps in the `Confidential/maps` output directory for the given metric, even if they weren't generated with this particular run of the script. This is one of the slowest parts of the script.
 
 ```{r fishing-activity-gifs}
 # create animation of fishing activity maps
@@ -656,43 +713,4 @@ fishing_activity_gif <- function (map_directory, map_metric_name) {
 
 # create animation for # VMS pings and # unique vessels
 fishing_activity_gif(map_directory = here("Confidential", "hindcast_output", "maps"), map_metric_name = "n_vms_records")
-```
-
-```{r fishing-activity-time-series}
-# TODO does this section need a confidentiality filter, since not spatial?
-
-# this uses the confidential data, using non-gridded summary to not double count unique vessels
-time_series_df <- dcrb_confidential_df %>%
-  group_by(crab_year, year, year_month, month) %>%
-  summarise(n_vms_records = n(),
-            n_unique_vessels = n_distinct(drvid),
-            DCRB_lbs = sum(DCRB_lbs),
-            DCRB_revenue_afi = sum(DCRB_revenue_afi),
-            .groups = 'keep')
-
-# plot # VMS pings per month as bar chart
-time_series_df %>% ggplot() + geom_col(aes(x = year_month, y = n_vms_records, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_vms_records.png"))
-
-# plot # unique vessels per month as bar chart
-time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = n_unique_vessels, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_n_unique_vessels.png"))
-
-# plot # unique vessels per month as bar chart
-time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_lbs, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_DCRB_lbs.png"))
-
-# plot # unique vessels per month as bar chart
-time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_revenue_afi, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_DCRB_revenue_afi.png"))
-```
-
-```{r fishing-activity-heatmaps}
-# plot # VMS pings per month as heatmap
-time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_vms_records))
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_vms_records.png"))
-
-# plot # unique vessels per month as heatmap
-time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_unique_vessels))
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "heatmap_n_unique_vessels.png"))
 ```
