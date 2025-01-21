@@ -111,7 +111,8 @@ interpolate_flag <- TRUE
 Using the parameters chosen above, write session info to file in the 'log' folder.
 
 ```{r,include=FALSE}
-log_open(file_name=Sys.Date())
+fn <- format(Sys.time(),"%F %H.%M.%S")
+log_open(file_name=fn)
 
 log_print("VMS PIPELINE WAS INITIATED WITH THE FOLLOWING OPTIONS",hide_notes=T)
 log_print(paste0("Process Year: ",process_year),hide_notes=T)

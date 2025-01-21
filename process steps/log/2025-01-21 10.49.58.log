@@ -1,5 +1,5 @@
 =========================================================================
-Log Path: ./log/2025-01-21.log
+Log Path: ./log/2025-01-21 10.49.58.log
 Program Path: C:/Users/Owen.Liu/Documents/github/VMS-pipeline/process
 steps/main_process.Rmd
 Working Directory: C:/Users/Owen.Liu/Documents/github/VMS-pipeline/process
@@ -10,13 +10,10 @@ Machine: NWCLW04787406 x86-64
 Operating System: Windows 10 x64 build 19045
 Base Packages: stats graphics grDevices utils datasets methods base
 Other Packages: here_1.0.1 knitr_1.45 logr_1.3.8 common_1.1.3
-Log Start Time: 2025-01-21 10:16:45.374294
+Log Start Time: 2025-01-21 10:49:58.584674
 =========================================================================
 
 VMS PIPELINE WAS INITIATED WITH THE FOLLOWING OPTIONS
-
-NOTE: Log Print Time:  2025-01-21 10:16:45.390781
-NOTE: Elapsed Time: 0.0145230293273926 secs
 
 Process Year: 2014
 
@@ -32,6 +29,6 @@ PacFIN Revenue Metric: EXVESSEL_REVENUE
 Target Cutoff: 1
 
 =========================================================================
-Log End Time: 2025-01-21 10:16:46.624069
-Log Elapsed Time: 0 00:00:01
+Log End Time: 2025-01-21 10:49:59.025229
+Log Elapsed Time: 0 00:00:00
 =========================================================================
