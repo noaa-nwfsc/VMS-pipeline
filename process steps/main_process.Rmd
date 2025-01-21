@@ -110,19 +110,18 @@ interpolate_flag <- TRUE
 
 Using the parameters chosen above, write session info to file in the 'log' folder.
 
-```{r,include=FALSE}
-fn <- format(Sys.time(),"%F %H.%M.%S")
-log_open(file_name=fn)
+```{r write-log-file, include=FALSE}
+log_open(file_name = format(Sys.time(),"%F %H.%M.%S"))
 
-log_print("VMS PIPELINE WAS INITIATED WITH THE FOLLOWING OPTIONS",hide_notes=T)
-log_print(paste0("Process Year: ",process_year),hide_notes=T)
-log_print(paste0("Species Codes: ",paste(spp_codes,collapse=",")),hide_notes=T)
-log_print(paste0("Gear Codes: ",paste(gear_codes,collapse=", ")),hide_notes=T)
-log_print(paste0("PacFIN Weight Metric: ",paste(pacfin_weight_metric,collapse=", ")),hide_notes=T)
-log_print(paste0("PacFIN Revenue Metric: ",paste(pacfin_revenue_metric,collapse=",")),hide_notes=T)
-log_print(paste0("Target Cutoff: ",target_cutoff),hide_notes=T)
-log_print(paste0("Lookback Window: ",lookback_window, " days"), hide_notes=T)
-log_print(paste0("Include Interpolation Step: ",interpolate_flag), hide_notes=T)
+log_print("VMS PIPELINE WAS INITIATED WITH THE FOLLOWING OPTIONS", hide_notes = T)
+log_print(paste("Process Year:", process_year), hide_notes = T)
+log_print(paste("Species Codes:", paste(spp_codes, collapse = ",")), hide_notes = T)
+log_print(paste("Gear Codes:", paste(gear_codes,collapse = ",")), hide_notes = T)
+log_print(paste("PacFIN Weight Metric:", paste(pacfin_weight_metric, collapse = ",")), hide_notes = T)
+log_print(paste("PacFIN Revenue Metric:",paste(pacfin_revenue_metric, collapse=",")), hide_notes = T)
+log_print(paste("Target Cutoff:", paste(target_cutoff, collapse=",")), hide_notes = T)
+log_print(paste("Lookback Window:",lookback_window, " days"), hide_notes=T)
+log_print(paste("Include Interpolation Step:",interpolate_flag), hide_notes=T)
 
 log_close()
 ```
