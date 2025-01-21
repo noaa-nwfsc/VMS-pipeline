@@ -11,6 +11,7 @@ output:
 ```{r setup}
 library(knitr)
 library(here)
+library(logr)
 ```
 
 # Master VMS and Fish Ticket Processing Workflow
@@ -104,6 +105,25 @@ Optionally, interpolate between geocoordinates for a consistent interval between
 ```{r interpolate}
 interpolate_flag <- TRUE
 ```
+
+# Create Log File
+
+Using the parameters chosen above, write session info to file in the 'log' folder.
+
+```{r,include=FALSE}
+log_open(file_name=Sys.Date())
+
+log_print("VMS PIPELINE WAS INITIATED WITH THE FOLLOWING OPTIONS",hide_notes=T)
+log_print(paste0("Process Year: ",process_year),hide_notes=T)
+log_print(paste0("Species Codes: ",paste(spp_codes,collapse=",")),hide_notes=T)
+log_print(paste0("Gear Codes: ",paste(gear_codes,collapse=",")),hide_notes=T)
+log_print(paste0("PacFIN Weight Metric: ",paste(pacfin_weight_metric,collapse=",")),hide_notes=T)
+log_print(paste0("PacFIN Revenue Metric: ",paste(pacfin_revenue_metric,collapse=",")),hide_notes=T)
+log_print(paste0("Target Cutoff: ",paste(target_cutoff,collapse=",")),hide_notes=T)
+
+log_close()
+```
+
 
 # Step 1: Process Raw Fish Ticket Data
 
