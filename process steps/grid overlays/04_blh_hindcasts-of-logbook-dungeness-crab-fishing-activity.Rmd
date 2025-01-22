@@ -1,0 +1,40 @@
+---
+title: "Hindcasts of Oregon and Washington Dungeness crab fishing logbook activity"
+author: "Brooke Hawkins"
+date: "`r Sys.Date()`"
+output: html_document
+knit: |
+  (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_file = paste0(xfun::sans_ext(input), '-', Sys.Date(), '.html')
+    )
+  })
+---
+
+## Purpose
+
+* Integrate interpolated VMS and fish ticket data to produce time series, rasters, and maps of fishing activity, landed weight, and revenue.
+* Deliverable: Monthly maps of fishing activity; tables summarizing monthly fishing activity
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# import libraries
+library(tidyverse)
+library(here)
+library(sf)
+library(raster)
+library(fasterize)
+library(magrittr)
+library(gridExtra)
+library(nngeo)
+library(rnaturalearth)
+library(viridis)
+
+# adjust ggplot theme
+theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+              axis.ticks.x=element_blank(),
+              axis.ticks.y=element_blank())
+```
+
