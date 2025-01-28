@@ -22,6 +22,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # import libraries
 library(tidyverse)
+library(readxl)
 library(here)
 library(sf)
 library(raster)
@@ -38,3 +39,185 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
               axis.ticks.y=element_blank())
 ```
 
+Clean up excel sheet and save as dataframe.
+
+This is based on https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script1_original_functions.R
+
+```{r load-data}
+
+# load OR logbook
+df <- read_excel(here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), sheet = "CLBR110")
+
+# load season dates
+season_dates_df <- read_excel(here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), 
+                              sheet = "SeasonDates",
+                              col_names = c('crab_season', 'earliest_season_opening_date', 'description', 'season_close_date'),
+                              skip = 1)
+
+# transform date to date field
+df$DetailDate <- mdy(df$DetailDate)
+
+# based on a check I did in Excel, it didn't seem like anything had signs flipped or lat/lon flipped.
+
+# if longitude or latitude set or up points are listed as 0, then convert to NA
+# keep a boolean for whether any or all coordinates related to a string were NA
+df <- df %>% mutate(SetLatDec = ifelse(SetLatDec < 1,  NA, SetLatDec),
+                    UpLatDec  = ifelse(UpLatDec  < 1,  NA, UpLatDec),
+                    SetLonDec = ifelse(SetLonDec > -1, NA, SetLonDec),
+                    UpLonDec  = ifelse(UpLonDec  > -1, NA, UpLonDec),
+                    all_na_coordinate_flag = is.na(SetLatDec) & is.na(SetLonDec) & is.na(UpLatDec) & is.na(UpLonDec),
+                    any_na_coordinate_flag = is.na(SetLatDec) | is.na(SetLonDec) | is.na(UpLatDec) | is.na(UpLonDec))
+
+# how many rows dropped for any NA coordinate? (#, %)
+sum(df$any_na_coordinate_flag)
+sum(df$any_na_coordinate_flag) / nrow(df)
+# how many rows dropped for any NA coordinate? (#, %)
+sum(df$all_na_coordinate_flag)
+sum(df$all_na_coordinate_flag) / nrow(df)
+
+# load bathymetry
+## crop bathymetry to extent of logbook data
+#ex <- logs_v2 %>% select(lat,lon) %>% st_as_sf(coords=c('lon','lat'),crs=4326) %>% extent()
+#bathy <- bathy %>% crop(ex)
+
+# load 5km grid
+grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
+```
+
+```{r explore-logbook-data}
+# how many trips?
+n_distinct(df$LogID)
+# how many strings?
+n_distinct(df$LogDetailID)
+# which crab years?
+sort(unique(df$CrabYear))
+# null count for each field?
+# https://stackoverflow.com/questions/24027605/determine-the-number-of-na-values-in-a-column
+summarise_all(df, ~sum(is.na(.)))
+
+# when are pots pulled?
+df %>% 
+  dplyr::select(LogDetailID, DetailDate) %>% 
+  group_by(DetailDate) %>%
+  summarise(number_strings = n_distinct(LogDetailID)) %>%
+  ggplot(aes(x = DetailDate, y = number_strings)) +
+  geom_line() +
+  scale_x_date(breaks = "6 months", date_labels = "%b %Y")
+
+# what's the distribution of soak time?
+df %>%
+  dplyr::select(LogDetailID, SoakTime) %>%
+  group_by(SoakTime) %>%
+  summarise(number_strings = n_distinct(LogDetailID)) %>%
+  ggplot(aes(x = SoakTime, y = number_strings)) + 
+  geom_col()
+summary(df$SoakTime)
+
+# what's the distribution of coordinates?
+summary(df$SetLatDec)
+summary(df$SetLonDec)
+summary(df$UpLatDec)
+summary(df$UpLonDec)
+
+# what's the distribution of line lengths? Need to calculate line length to do this... need to take points to lines to do this...
+
+# try plotting the set lon/lat
+set_sf <- df %>% 
+  filter(!is.na(SetLonDec) & !is.na(SetLatDec)) %>%
+  st_as_sf(coords = c('SetLonDec', 'SetLatDec'), crs = 4326)
+up_sf <- df %>% 
+  filter(!is.na(UpLonDec) & !is.na(UpLatDec)) %>%
+  st_as_sf(coords = c('UpLonDec', 'UpLatDec'), crs = 4326)
+
+# load west coast states simple features object for background
+west_coast_states <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
+  filter(name %in% c('California','Oregon','Washington')) %>% 
+  st_transform(st_crs(grid_5km))
+
+# create map
+ggplot() + geom_sf(data = west_coast_states, fill='gray80') +
+  geom_sf(data = set_sf, aes(fill = Depth))
+
+# create map
+ggplot() + geom_sf(data = west_coast_states, fill='gray80') +
+  geom_sf(data = up_sf, aes(fill = Depth))
+```
+
+```{r}
+# filter logbook data
+filtered_df <- df %>%
+  filter(!is.na(SetLonDec) & !is.na(SetLatDec) & !is.na(UpLonDec) & !is.na(UpLatDec)) %>%
+  filter(SpatialFlag == "False")
+    
+start_time <- proc.time()
+# pivot from set and up points being in a single row to being in separate rows, with point_type of set or up
+string_df <- filtered_df %>% pivot_longer(c(SetLatDec, SetLonDec, UpLatDec, UpLonDec),
+                             names_to = c("point_type", ".value"),
+                             names_pattern = "(.*)(Lat|Lon)Dec",
+                             values_to = ".value") %>%
+  # now drop point_type
+  dplyr::select(-point_type) %>%
+  # convert from doubles to sf points
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326) %>%
+  # group by logbook string and other columns in dataset
+  group_by(LogID, LogDetailID, CrabPermit, CrabYear, DEP, DocNum, PortCode, DetailDate, Depth, NumPots, SoakTime, EstLbs, AdjLbs, AdjValue, TicketNum) %>%
+  # transform sf points from degrees to meters for length calculations # https://epsg.io/32610
+  st_transform(32610) %>%
+  # convert sf points to sf linestring
+  summarise(do_union = FALSE) %>% 
+  st_cast("LINESTRING")
+# print time
+end_time <- proc.time()
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion')
+
+rm(start_time, end_time)
+
+# how many strings?
+nrow(string_df)
+
+# calculate and store string length in meters
+string_df$string_length_meters <- as.vector(st_length(string_df))
+
+# what is the distribution of string lengths?
+string_df %>% ggplot(aes(string_length_meters/1000)) + geom_histogram()
+summary(string_df$string_length_meters/1000) # summarize in kilometers
+
+# how many 0 line length?
+sum(string_df$string_length_meters == 0) # count
+sum(string_df$string_length_meters == 0) / nrow(string_df) * 100 # percent
+
+# what's the 95th, 99th, 99.9th percentile for line length in kilometers?
+quantile(string_df$string_length_meters, c(0.95, 0.97, 0.98, 0.99, 0.999)) / 1000
+
+# what is the distribution of number of pots?
+string_df %>% ggplot(aes(NumPots)) + geom_histogram()
+summary(string_df$NumPots) 
+
+# how many NA pots?
+sum(is.na(string_df$NumPots)) # count
+sum(is.na(string_df$NumPots)) / nrow(string_df) * 100 # percent
+# what's the 95th, 99th, 99.9th percentile for number pots? (pretend NA's are 0's)
+string_df$NumPots %>% replace_na(replace = 0) %>%
+  quantile(c(0.95, 0.97, 0.98, 0.99, 0.999))
+# what's the 95th, 99th, 99.9th percentile for number pots? (removing NAs)
+quantile(string_df$NumPots, c(0.95, 0.97, 0.98, 0.99, 0.999), na.rm = TRUE)
+# how many records have fractional number of pots?
+sum(string_df$NumPots != round(string_df$NumPots), na.rm = TRUE) # none, amazing
+
+# what to do with 0's? with really long? looks like prior cutoff was 25 km max, >0 km min
+# for now, I'm choosing to keep any strings that have nothing enetered for # pots, since I'm not sure if it's used for scaling or simply replaced
+
+# left off at line 164 of https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script1_original_functions.R
+
+
+```
+
+
+Notes
+
+* It seems suspicious to me there are *exactly* 160,000 strings in the logbook data.
+
+TODOs
+
+* Check # ad % dropped in more systematic way (at each step)
+* Check bathymetry and grid files with Blake
