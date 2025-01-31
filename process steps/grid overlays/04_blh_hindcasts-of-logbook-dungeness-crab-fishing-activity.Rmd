@@ -75,11 +75,6 @@ sum(df$any_na_coordinate_flag) / nrow(df)
 sum(df$all_na_coordinate_flag)
 sum(df$all_na_coordinate_flag) / nrow(df)
 
-# load bathymetry
-## crop bathymetry to extent of logbook data
-#ex <- logs_v2 %>% select(lat,lon) %>% st_as_sf(coords=c('lon','lat'),crs=4326) %>% extent()
-#bathy <- bathy %>% crop(ex)
-
 # load 5km grid
 grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
 ```
@@ -134,6 +129,10 @@ west_coast_states <- rnaturalearth::ne_states(country='United States of America'
   filter(name %in% c('California','Oregon','Washington')) %>% 
   st_transform(st_crs(grid_5km))
 
+oregon <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
+  filter(name %in% c('Oregon')) %>% 
+  st_transform(st_crs(grid_5km))
+
 # create map
 ggplot() + geom_sf(data = west_coast_states, fill='gray80') +
   geom_sf(data = set_sf, aes(fill = Depth))
@@ -168,7 +167,7 @@ string_df <- filtered_df %>% pivot_longer(c(SetLatDec, SetLonDec, UpLatDec, UpLo
   st_cast("LINESTRING")
 # print time
 end_time <- proc.time()
-cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion')
+cat((end_time - start_time)/60, 'minutes to do spatial conversion') # took 1.5 minutes
 
 rm(start_time, end_time)
 
@@ -207,7 +206,121 @@ sum(string_df$NumPots != round(string_df$NumPots), na.rm = TRUE) # none, amazing
 # what to do with 0's? with really long? looks like prior cutoff was 25 km max, >0 km min
 # for now, I'm choosing to keep any strings that have nothing enetered for # pots, since I'm not sure if it's used for scaling or simply replaced
 
-# left off at line 164 of https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script1_original_functions.R
+start_time <- proc.time()
+# distribute traps along the line
+trap_df <- string_df %>%
+  mutate(NumPots = replace_na(NumPots, 0)) %>%
+  ungroup() %>%
+  mutate(trap_locations = pmap(.l = list(NumPots, geometry),
+                               .f = function(pots, string) st_line_sample(string, n = pots))) %>%
+  mutate(trap_coordinates = map(.x = trap_locations,
+                                 .f = function(traps) as_tibble(st_coordinates(traps)))) %>%
+  unnest(trap_coordinates, keep_empty = TRUE) %>% # now, unnest arguments argue. what happens to rows with empty locations?
+  st_set_geometry(NULL) %>%
+  dplyr::select(-trap_locations, -L1) # L1 is an index created when extracting coordaintes, not needed, value is always 1. no longer need trap_locations, since coordinates extracted from it.
+
+# print time
+end_time <- proc.time()
+cat((end_time - start_time)/60, 'minutes to do spatial conversion')
+rm(start_time, end_time)
+
+# quick check, are there NumPots number of trap_coordinates?
+(sum(string_df$NumPots, na.rm = TRUE) + sum(is.na(string_df$NumPots))) == nrow(trap_df)
+
+# string_df has NA for blanks, and trap_df has NA for X and Y
+```
+
+
+```{r}
+# load raster
+bathymetry_raster <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
+# explore raster, note units are in decimeters, divide by 10 to get meters
+bathymetry_raster@extent
+cellStats(bathymetry_raster, 'mean')
+cellStats(bathymetry_raster, 'countNA')
+cellStats(bathymetry_raster, 'max')
+cellStats(bathymetry_raster, 'min')
+
+# TODO bump this line further up, right after unnest
+trap_sf <- trap_df %>%
+  filter(NumPots != 0) %>%
+  st_as_sf(coords = c('X', 'Y'), crs = 32610) %>%
+  st_transform(4326)
+
+# add depth to trap_sf
+start_time <- Sys.time()
+point_depths <- raster::extract(bathymetry_raster, trap_sf)
+end_time <- Sys.time()
+cat((end_time - start_time), 'minutes to do spatial conversion')
+rm(start_time, end_time)
+trap_sf$trap_coords_depth_m <- point_depths / 10 # divide by 10 to convert from decimeters to meters
+
+# left off at line 245
+trap_sf <- trap_sf %>%
+  filter(depth <= 0) %>% # pots must be underwater
+  filter(depth > -200) %>% # maximum depth of 200 meters underwater
+  filter(depth <- 5000) # but also keep ports / embayments # TODO ask Owen about this one
+
+# TODO check drop rate
+
+# TODO ask about grid area key, seems different from current grid 5km? I think the purpose is to have area, so you can divide traps by area to get density (pots / km2)
+# TODO consider renmaing trap_sf between these steps... or combining steps...
+start_time <- Sys.time()
+test_trap_df <- trap_sf %>%
+  st_transform(st_crs(grid_5km)) %>% # transform to same coordinate reference system as grid
+  st_join(grid_5km) %>% # join 5km grid to traps simple features
+  st_set_geometry(NULL)
+end_time <- Sys.time()
+cat((end_time - start_time), 'minutes to do spatial conversion')
+rm(start_time, end_time)
+
+# create gridded summary (TODO figure out... why is this wrong? I think some double counting, need permit data, not sure how confidentiatlity works)
+# TODO rename from test_trap_sf
+crab_year_start <- 11        # month defines start of crab year
+winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
+test_dcrb_5km_summary_df <- test_trap_df %>%
+  mutate(
+    year = year(DetailDate),
+    month = month(DetailDate, label = TRUE, abbr = FALSE),
+    month_numeric = month(DetailDate),
+    year_month = paste0(year(DetailDate),"_", substr(ymd(DetailDate), 6, 7)),
+    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    week_of_year = week(DetailDate),
+    day_of_year = yday(DetailDate)
+  ) %>% # TODO include intermediate step where I write the pre-summarized output (should be for strings and pots)
+  group_by(
+    # grid cell ID, makes this a gridded summary
+    GRID5KM_ID,
+    # temporal columns, makes this a monthly summary
+    year,
+    crab_year,
+    year_month,
+    season,
+    month,
+    month_numeric
+  ) %>%
+  summarise(
+    n_pots = n(),
+    n_strings = n_distinct(LogDetailID),
+    n_unique_vessels = n_distinct(DocNum), # is this equivalent to drvid? if not, why not? should this go to fish tickets?
+    # what was confidential_flag doing here again?
+    .groups = "keep"
+  ) %>% 
+  ungroup()
+# TODO this is super not done, so do not trust. number pots needs more thought, no line length, no confidentiatlity, also just ugly code
+# check out m2 code in script 2 https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script2_M1_M2.R
+```
+
+```{r}
+
+# st_area() computes area, but any gotchas? specific CRS to use?
+
+# background map (coastline)
+coaststates <- ne_states(country = 'United States of America', returnclass = 'sf') %>% 
+  filter(name %in% c('California','Oregon','Washington')) %>%  
+  st_transform(st_crs(grd))
+
 
 
 ```
@@ -219,5 +332,8 @@ Notes
 
 TODOs
 
-* Check # ad % dropped in more systematic way (at each step)
+* Organize explorations more clearly
+* Check # and % dropped in more systematic way (at each step)
 * Check bathymetry and grid files with Blake
+* Revisit depth filter options
+* Figure out how to best place pots... undercount possible if removing on depth after placing, incorrect count possible if using reported instead of permit tier
