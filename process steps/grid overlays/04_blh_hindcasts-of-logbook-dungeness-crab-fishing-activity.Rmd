@@ -39,59 +39,167 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
               axis.ticks.y=element_blank())
 ```
 
-Clean up excel sheet and save as dataframe.
+Reference code:
 
-This is based on https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script1_original_functions.R
+* https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script1_original_functions.R
+
+## Load data
+
+1. Load the logbook data, which contains set and up locations for strings of crab pots.
+  a. Load logbook data, which will be used to map monthly fishing activity distribution.
+  b. Load tab with season dates, which can be used to filter fishing activity, but is not yet.
+2. Load the bathymetry raster, which will be used to join depth information at a pot level.
+3. Load the spatial 5km shapefile, which will be used to map monthly fishing activity distribution.
 
 ```{r load-data}
-
 # load OR logbook
-df <- read_excel(here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), sheet = "CLBR110")
+logbook_df <- read_excel(here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), sheet = "CLBR110")
 
 # load season dates
-season_dates_df <- read_excel(here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), 
-                              sheet = "SeasonDates",
-                              col_names = c('crab_season', 'earliest_season_opening_date', 'description', 'season_close_date'),
-                              skip = 1)
+season_df <- read_excel(
+  here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), 
+  sheet = "SeasonDates",
+  col_names = c('crab_season', 'earliest_season_opening_date', 'description', 'season_close_date'),
+  skip = 1
+)
 
-# transform date to date field
-df$DetailDate <- mdy(df$DetailDate)
-
-# based on a check I did in Excel, it didn't seem like anything had signs flipped or lat/lon flipped.
-
-# if longitude or latitude set or up points are listed as 0, then convert to NA
-# keep a boolean for whether any or all coordinates related to a string were NA
-df <- df %>% mutate(SetLatDec = ifelse(SetLatDec < 1,  NA, SetLatDec),
-                    UpLatDec  = ifelse(UpLatDec  < 1,  NA, UpLatDec),
-                    SetLonDec = ifelse(SetLonDec > -1, NA, SetLonDec),
-                    UpLonDec  = ifelse(UpLonDec  > -1, NA, UpLonDec),
-                    all_na_coordinate_flag = is.na(SetLatDec) & is.na(SetLonDec) & is.na(UpLatDec) & is.na(UpLonDec),
-                    any_na_coordinate_flag = is.na(SetLatDec) | is.na(SetLonDec) | is.na(UpLatDec) | is.na(UpLonDec))
-
-# how many rows dropped for any NA coordinate? (#, %)
-sum(df$any_na_coordinate_flag)
-sum(df$any_na_coordinate_flag) / nrow(df)
-# how many rows dropped for any NA coordinate? (#, %)
-sum(df$all_na_coordinate_flag)
-sum(df$all_na_coordinate_flag) / nrow(df)
+# load bathymetry raster
+bathymetry <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
 
 # load 5km grid
 grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
 ```
 
-```{r explore-logbook-data}
-# how many trips?
-n_distinct(df$LogID)
-# how many strings?
-n_distinct(df$LogDetailID)
-# which crab years?
-sort(unique(df$CrabYear))
-# null count for each field?
-# https://stackoverflow.com/questions/24027605/determine-the-number-of-na-values-in-a-column
-summarise_all(df, ~sum(is.na(.)))
+TODO add pre- and post-filtering data explorations
 
-# when are pots pulled?
-df %>% 
+## Transform data
+
+* Based on a filtering check in Excel, I didn't see any signs flipped for latitude and longitude. Points out of the expected range were due to 0's in one or both coordinate fields, so I removed them.
+* Create pot strings from set and up points (create lines from points)
+
+```{r transform-logbook-data}
+
+logbook_df <- logbook_df %>% 
+  mutate(
+    # transform date to date type
+    DetailDate = mdy(DetailDate),
+    # if longitude or latitude of set or up points are out of range, then convert to NA
+    SetLatDec = ifelse(SetLatDec < 1,  NA, SetLatDec),
+    UpLatDec  = ifelse(UpLatDec  < 1,  NA, UpLatDec),
+    SetLonDec = ifelse(SetLonDec > -1, NA, SetLonDec),
+    UpLonDec  = ifelse(UpLonDec  > -1, NA, UpLonDec),
+    # add booleans for whether any or all coordinates related to a string were NA
+    all_na_coordinate_flag = is.na(SetLatDec) & is.na(SetLonDec) & is.na(UpLatDec) & is.na(UpLonDec),
+    any_na_coordinate_flag = is.na(SetLatDec) | is.na(SetLonDec) | is.na(UpLatDec) | is.na(UpLonDec)
+  )
+
+# remove logbook entries using spatial flag and NA longitude or latitude
+filtered_logbook_df <- logbook_df %>%
+  filter(!is.na(SetLonDec) & !is.na(SetLatDec) & !is.na(UpLonDec) & !is.na(UpLatDec)) %>%
+  filter(SpatialFlag == "False")
+```
+
+```{r transform-points-to-strings}
+# transform set and up points to be in different rows for same logbook entry (each row is a point, with type set or up)
+string_df <- filtered_logbook_df %>% 
+  pivot_longer(
+    c(SetLatDec, SetLonDec, UpLatDec, UpLonDec),
+    names_to = c("point_type", ".value"),
+    names_pattern = "(.*)(Lat|Lon)Dec",
+    values_to = ".value"
+  )
+
+# start time for spatial transformations
+start_time <- proc.time()
+
+# convert from start and end coordinates to strings
+string_df <- string_df %>%
+  # remove point type that distinguished up vs. set points, don't need that information to make lines
+  dplyr::select(-point_type) %>%
+  # convert from doubles to spatial data
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326) %>%
+  # group logbook strings by all variables other than coordinate geometry
+  group_by(LogID, LogDetailID, CrabPermit, CrabYear, DEP, DocNum, PortCode, DetailDate, Depth, NumPots, SoakTime, EstLbs, AdjLbs, AdjValue, TicketNum) %>%
+  # transform sf points from degrees to meters for upcoming length calculations
+  st_transform(32610) %>%
+  # convert sf points to sf linestring
+  summarise(do_union = FALSE) %>% 
+  st_cast("LINESTRING") %>% 
+  ungroup()
+
+# print time
+end_time <- proc.time()
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took 1.3 minutes
+```
+
+```{r transform-strings-to-pots}
+# start time for spatial transformations
+start_time <- proc.time()
+
+# distribute traps along the string (points along line)
+trap_sf <- string_df %>%
+  # remove strings with no pots
+  filter(NumPots != 0) %>%
+  # distribute NumPots points along the line
+  mutate(trap_locations = pmap(.l = list(NumPots, geometry),
+                               .f = function(pots, string) st_line_sample(string, n = pots))) %>%
+  # extract coordinates of points along the line into a tibble
+  mutate(trap_coordinates = map(.x = trap_locations,
+                                 .f = function(traps) as_tibble(st_coordinates(traps)))) %>%
+  # unnest coordinates from tibbles to separate rows
+  unnest(trap_coordinates) %>%
+  # drop linestring information, and L1 created by st_coordinates which isn't needed
+  st_set_geometry(NULL) %>%
+  dplyr::select(-trap_locations, -L1) %>%
+  # convert trap coordinates into simple feature
+  st_as_sf(coords = c('X', 'Y'), crs = 32610) %>%
+  st_transform(4326)
+
+# add depths from bathymetry, divide by 10 to convert from decimeters to meters
+trap_sf$trap_coords_depth_m <- raster::extract(bathymetry, trap_sf) / 10
+
+# end time
+end_time <- proc.time()
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took 1.5 minutes
+
+# filter based on depth
+filtered_trap_sf <- trap_sf %>%
+  filter(trap_coords_depth_m <= 0) %>% # pots must be underwater
+  filter(trap_coords_depth_m > -200 | trap_coords_depth_m < -5000) # maximum depth of 200 meters underwater, but also keep ports / embayments
+# TODO check this keeps the right depths
+```
+
+Note that my experience with the depth filter is that it removes 614 NA depth, and the < -5000 filter has no impact (minimum depth goes from -1159 to -199, no records were present with less than <- 5000 to remove)
+
+``` {r explore-logbook-data-after-filter}
+
+# TODO tidy, not tested after reorganizing data transformation code
+
+# how many rows dropped for any NA coordinate? (#, %)
+sum(logbook_df$any_na_coordinate_flag)
+sum(logbook_df$any_na_coordinate_flag) / nrow(logbook_df)
+# how many rows dropped for any NA coordinate? (#, %)
+sum(logbook_df$all_na_coordinate_flag)
+sum(logbook_df$all_na_coordinate_flag) / nrow(logbook_df)
+# how many rows dropped for SpatialFlag?
+sum(logbook_df$SpatialFlag == "False")
+sum(logbook_df$SpatialFlag == "False") / nrow(logbook_df)
+
+# how many trips before and after filtering?
+n_distinct(logbook_df$LogID)
+n_distinct(filtered_logbook_df$LogID)
+# how many strings before and after filtering?
+n_distinct(logbook_df$LogDetailID)
+n_distinct(filtered_logbook_df$LogDetailID)
+# which crab years before and after filtering?
+sort(unique(logbook_df$CrabYear))
+sort(unique(filtered_logbook_df$CrabYear))
+# null count for each field before and after filtering?
+summarise_all(logbook_df, ~sum(is.na(.)))
+summarise_all(filtered_logbook_df, ~sum(is.na(.)))
+
+# when are pots pulled after filtering?
+filtered_logbook_df %>% 
   dplyr::select(LogDetailID, DetailDate) %>% 
   group_by(DetailDate) %>%
   summarise(number_strings = n_distinct(LogDetailID)) %>%
@@ -99,79 +207,48 @@ df %>%
   geom_line() +
   scale_x_date(breaks = "6 months", date_labels = "%b %Y")
 
-# what's the distribution of soak time?
-df %>%
+# what's the distribution of soak time after filtering?
+filtered_logbook_df %>%
   dplyr::select(LogDetailID, SoakTime) %>%
   group_by(SoakTime) %>%
   summarise(number_strings = n_distinct(LogDetailID)) %>%
   ggplot(aes(x = SoakTime, y = number_strings)) + 
   geom_col()
-summary(df$SoakTime)
+summary(logbook_df$SoakTime)
 
-# what's the distribution of coordinates?
-summary(df$SetLatDec)
-summary(df$SetLonDec)
-summary(df$UpLatDec)
-summary(df$UpLonDec)
+# what's the distribution of coordinates before and after transformation? TODO
+summary(logbook_df$SetLatDec)
+summary(logbook_df$SetLonDec)
+summary(logbook_df$UpLatDec)
+summary(logbook_df$UpLonDec)
 
-# what's the distribution of line lengths? Need to calculate line length to do this... need to take points to lines to do this...
-
-# try plotting the set lon/lat
-set_sf <- df %>% 
-  filter(!is.na(SetLonDec) & !is.na(SetLatDec)) %>%
-  st_as_sf(coords = c('SetLonDec', 'SetLatDec'), crs = 4326)
-up_sf <- df %>% 
-  filter(!is.na(UpLonDec) & !is.na(UpLatDec)) %>%
-  st_as_sf(coords = c('UpLonDec', 'UpLatDec'), crs = 4326)
+# what's the distribution of line lengths? TODO
 
 # load west coast states simple features object for background
 west_coast_states <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
   filter(name %in% c('California','Oregon','Washington')) %>% 
   st_transform(st_crs(grid_5km))
 
-oregon <- rnaturalearth::ne_states(country='United States of America', returnclass='sf') %>% 
-  filter(name %in% c('Oregon')) %>% 
-  st_transform(st_crs(grid_5km))
-
-# create map
+# TODO remove set and up df variables, just pipe through
+# plot set points
+set_sf <- logbook_df %>% 
+  filter(!is.na(SetLonDec) & !is.na(SetLatDec)) %>%
+  st_as_sf(coords = c('SetLonDec', 'SetLatDec'), crs = 4326)
 ggplot() + geom_sf(data = west_coast_states, fill='gray80') +
   geom_sf(data = set_sf, aes(fill = Depth))
 
-# create map
+# plot up points
+up_sf <- logbook_df %>% 
+  filter(!is.na(UpLonDec) & !is.na(UpLatDec)) %>%
+  st_as_sf(coords = c('UpLonDec', 'UpLatDec'), crs = 4326)
 ggplot() + geom_sf(data = west_coast_states, fill='gray80') +
   geom_sf(data = up_sf, aes(fill = Depth))
 ```
 
-```{r}
-# filter logbook data
-filtered_df <- df %>%
-  filter(!is.na(SetLonDec) & !is.na(SetLatDec) & !is.na(UpLonDec) & !is.na(UpLatDec)) %>%
-  filter(SpatialFlag == "False")
-    
-start_time <- proc.time()
-# pivot from set and up points being in a single row to being in separate rows, with point_type of set or up
-string_df <- filtered_df %>% pivot_longer(c(SetLatDec, SetLonDec, UpLatDec, UpLonDec),
-                             names_to = c("point_type", ".value"),
-                             names_pattern = "(.*)(Lat|Lon)Dec",
-                             values_to = ".value") %>%
-  # now drop point_type
-  dplyr::select(-point_type) %>%
-  # convert from doubles to sf points
-  st_as_sf(coords = c("Lon", "Lat"), crs = 4326) %>%
-  # group by logbook string and other columns in dataset
-  group_by(LogID, LogDetailID, CrabPermit, CrabYear, DEP, DocNum, PortCode, DetailDate, Depth, NumPots, SoakTime, EstLbs, AdjLbs, AdjValue, TicketNum) %>%
-  # transform sf points from degrees to meters for length calculations # https://epsg.io/32610
-  st_transform(32610) %>%
-  # convert sf points to sf linestring
-  summarise(do_union = FALSE) %>% 
-  st_cast("LINESTRING")
-# print time
-end_time <- proc.time()
-cat((end_time - start_time)/60, 'minutes to do spatial conversion') # took 1.5 minutes
+```{r explore-string-data}
 
-rm(start_time, end_time)
-
-# how many strings?
+# TODO tidy, not tested after reorganizing data transformation code
+# how many strings now?
 nrow(string_df)
 
 # calculate and store string length in meters
@@ -206,76 +283,29 @@ sum(string_df$NumPots != round(string_df$NumPots), na.rm = TRUE) # none, amazing
 # what to do with 0's? with really long? looks like prior cutoff was 25 km max, >0 km min
 # for now, I'm choosing to keep any strings that have nothing enetered for # pots, since I'm not sure if it's used for scaling or simply replaced
 
-start_time <- proc.time()
-# distribute traps along the line
-trap_df <- string_df %>%
-  mutate(NumPots = replace_na(NumPots, 0)) %>%
-  ungroup() %>%
-  mutate(trap_locations = pmap(.l = list(NumPots, geometry),
-                               .f = function(pots, string) st_line_sample(string, n = pots))) %>%
-  mutate(trap_coordinates = map(.x = trap_locations,
-                                 .f = function(traps) as_tibble(st_coordinates(traps)))) %>%
-  unnest(trap_coordinates, keep_empty = TRUE) %>% # now, unnest arguments argue. what happens to rows with empty locations?
-  st_set_geometry(NULL) %>%
-  dplyr::select(-trap_locations, -L1) # L1 is an index created when extracting coordaintes, not needed, value is always 1. no longer need trap_locations, since coordinates extracted from it.
-
-# print time
-end_time <- proc.time()
-cat((end_time - start_time)/60, 'minutes to do spatial conversion')
-rm(start_time, end_time)
-
 # quick check, are there NumPots number of trap_coordinates?
 (sum(string_df$NumPots, na.rm = TRUE) + sum(is.na(string_df$NumPots))) == nrow(trap_df)
 
 # string_df has NA for blanks, and trap_df has NA for X and Y
 ```
 
+```{r gridded-summary}
 
-```{r}
-# load raster
-bathymetry_raster <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
-# explore raster, note units are in decimeters, divide by 10 to get meters
-bathymetry_raster@extent
-cellStats(bathymetry_raster, 'mean')
-cellStats(bathymetry_raster, 'countNA')
-cellStats(bathymetry_raster, 'max')
-cellStats(bathymetry_raster, 'min')
+# left off at line 245 in script 1
+# need to incorporate m2 code in script 2 https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script2_M1_M2.R
 
-# TODO bump this line further up, right after unnest
-trap_sf <- trap_df %>%
-  filter(NumPots != 0) %>%
-  st_as_sf(coords = c('X', 'Y'), crs = 32610) %>%
-  st_transform(4326)
-
-# add depth to trap_sf
-start_time <- Sys.time()
-point_depths <- raster::extract(bathymetry_raster, trap_sf)
-end_time <- Sys.time()
-cat((end_time - start_time), 'minutes to do spatial conversion')
-rm(start_time, end_time)
-trap_sf$trap_coords_depth_m <- point_depths / 10 # divide by 10 to convert from decimeters to meters
-
-# left off at line 245
-trap_sf <- trap_sf %>%
-  filter(depth <= 0) %>% # pots must be underwater
-  filter(depth > -200) %>% # maximum depth of 200 meters underwater
-  filter(depth <- 5000) # but also keep ports / embayments # TODO ask Owen about this one
-
-# TODO check drop rate
-
-# TODO ask about grid area key, seems different from current grid 5km? I think the purpose is to have area, so you can divide traps by area to get density (pots / km2)
-# TODO consider renmaing trap_sf between these steps... or combining steps...
-start_time <- Sys.time()
-test_trap_df <- trap_sf %>%
+# join to 5km grid
+# TODO rename variables from test_
+start_time <- proc.time()
+test_trap_df <- filtered_trap_sf %>%
   st_transform(st_crs(grid_5km)) %>% # transform to same coordinate reference system as grid
   st_join(grid_5km) %>% # join 5km grid to traps simple features
   st_set_geometry(NULL)
-end_time <- Sys.time()
-cat((end_time - start_time), 'minutes to do spatial conversion')
+end_time <- proc.time()
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion')
 rm(start_time, end_time)
 
-# create gridded summary (TODO figure out... why is this wrong? I think some double counting, need permit data, not sure how confidentiatlity works)
-# TODO rename from test_trap_sf
+# create gridded summary (this is not complete)
 crab_year_start <- 11        # month defines start of crab year
 winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
 test_dcrb_5km_summary_df <- test_trap_df %>%
@@ -288,7 +318,7 @@ test_dcrb_5km_summary_df <- test_trap_df %>%
     season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
     week_of_year = week(DetailDate),
     day_of_year = yday(DetailDate)
-  ) %>% # TODO include intermediate step where I write the pre-summarized output (should be for strings and pots)
+  ) %>%
   group_by(
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
@@ -303,28 +333,11 @@ test_dcrb_5km_summary_df <- test_trap_df %>%
   summarise(
     n_pots = n(),
     n_strings = n_distinct(LogDetailID),
-    n_unique_vessels = n_distinct(DocNum), # is this equivalent to drvid? if not, why not? should this go to fish tickets?
-    # what was confidential_flag doing here again?
+    n_unique_vessels = n_distinct(DocNum), # is this equivalent to drvid?
     .groups = "keep"
   ) %>% 
   ungroup()
-# TODO this is super not done, so do not trust. number pots needs more thought, no line length, no confidentiatlity, also just ugly code
-# check out m2 code in script 2 https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script2_M1_M2.R
 ```
-
-```{r}
-
-# st_area() computes area, but any gotchas? specific CRS to use?
-
-# background map (coastline)
-coaststates <- ne_states(country = 'United States of America', returnclass = 'sf') %>% 
-  filter(name %in% c('California','Oregon','Washington')) %>%  
-  st_transform(st_crs(grd))
-
-
-
-```
-
 
 Notes
 
@@ -332,8 +345,12 @@ Notes
 
 TODOs
 
-* Organize explorations more clearly
-* Check # and % dropped in more systematic way (at each step)
-* Check bathymetry and grid files with Blake
+* Add permit data to use instead of or in combination with number of pots
+* Organize explorations more clearly, check # and % dropped in more systematic way (at each step)
+* Confirm correct bathymetry and grid files with Blake
+* Check on area calculation for grid cells with Blake / Owen, used to compute density
+* Revisit number of pots to distribute on a given line
 * Revisit depth filter options
+* Confidentiality filter
+* Write the intermediate output as CSV (for strings and pots)
 * Figure out how to best place pots... undercount possible if removing on depth after placing, incorrect count possible if using reported instead of permit tier
