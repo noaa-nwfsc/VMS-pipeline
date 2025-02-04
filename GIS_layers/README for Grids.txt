@@ -3,14 +3,17 @@ README for Grids Created for VMS Pipeline Heatmap Generation
 FILENAMES IN REPO
 - master_2km_grid_tmer.shp
 - master_5km_grid_tmer.shp
+- fivekm_grid_polys_shore_lamb.shp
 - fivekm_raster_grid_lamb.tif
 
-master_2km_grid_tmer.shp and master_5km_grid_tmer.shp are both vector format, Esri ArcGIS shapefiles, in a custom Transverse Mercator coordinate reference system (CRS). Note: this is not the same CRS as Universal Transverse Mercator and is not interchangeable. fivekm_raster_grid_lamb.tif is a geotiff raster format grid with a custom Lambert Conformal Conic CRS. The boundaries of all the individual grid cells in the 5km vector and raster grids align perfectly, as do the attribute values for the grid cell IDs. Therefore, spatial and attribute level joining is conserved and fully integrated between the two data formats in the 5km grids.
+master_2km_grid_tmer.shp and master_5km_grid_tmer.shp are both vector format, Esri ArcGIS shapefiles, in a custom Transverse Mercator coordinate reference system (CRS). Note: this is not the same CRS as Universal Transverse Mercator and is not interchangeable. fivekm_grid_polys_shore_lamb.shp is a vector format, Esri ArcGIS shapefile, in a custom Lambert Conformal Conic CRS. fivekm_raster_grid_lamb.tif is a geotiff raster format grid with a custom Lambert Conformal Conic CRS. The boundaries of all the individual grid cells in the 5km vector and raster grids align perfectly, as do the attribute values for the grid cell IDs. Therefore, spatial and attribute level joining is conserved and fully integrated between the two data formats in the 5km grids. NOTE: fivekm_grid_polys_shore_lamb.shp has had the polygons that span the shoreline clipped to the shoreline and areas for those gridcells are <25km2.
 
 DATA PROVENANCE
 master_5km_grid_tmer.shp was created by Blake Feist on 29 Aug 2024, which was based on an existing vector-based 5km grid originally generated for Feist et al. 2021 (DOI:  10.1111/fme.12478). Said grid was created on 13 Dec 2017 and has the same custom Lambert Conformal Conic CRS as the 5km raster format geotiff. That grid was also used to generate the fivekm_raster_grid_lamb.tif geotiff
 
 master_2km_grid_tmer.shp was created by Blake Feist on 19 Aug 2022, which was originally used for offshore wind energy fishing activity mapping by NMFS in support of NCCOS marine spatial planning modeling for BOEM.
+
+fivekm_grid_polys_shore_lamb.shp was created by Blake Feist on 31 Mar 2021, which was originally used by Leena Riekkola in Riekkola et al. 2023 (DOI: 10.1016/j.biocon.2022.109880).
 
 fivekm_raster_grid_lamb.tif was created by Blake Feist on 20 Feb 2020 and was originally named “fivekm_g_lamb.tif”. Subsequent file names for that grid have included “fivekm_grid.tif” and possibly others.
 
