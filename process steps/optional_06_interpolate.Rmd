@@ -45,7 +45,7 @@ rm(list=setdiff(ls(),c('process_year','alltime')))
 Read in the filtered VMS data set from the previous step
 
 ```{r rawdat}
-vms_filtered <- read_rds(here::here('Confidential','processed','matched','filtering',paste0(process_year,'_matched_filtered_withFTID_length.rds')))
+vms_filtered <- read_rds(here::here('Confidential','data','processed','matched','filtering',paste0(process_year,'_matched_filtered_withFTID_length.rds')))
 ```
 
 ## Remove Trips with Large Time Gaps
@@ -280,6 +280,6 @@ Add a final indicator for whether a point was interpolated or not, then save
 # create is_interpolated column based on sensor column, then drop sensor column
 vms_regular %<>% mutate(is_interpolated=ifelse(sensor=="interpolateTime",1,0)) %>% dplyr::select(-sensor)
 # write output
-write_rds(vms_regular, here::here('Confidential','processed','matched','interpolation',paste0(process_year,'_interpolated.rds')))
+write_rds(vms_regular, here::here('Confidential','data','processed','matched','interpolation',paste0(process_year,'_interpolated.rds')))
 ```
 
