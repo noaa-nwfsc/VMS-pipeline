@@ -88,7 +88,7 @@ plot_output <- TRUE
 Load permits data
 
 ```{r}
-permits <- read_csv(here('Confidential','raw','vessel info','2009_2023_vesselreg.csv'))
+permits <- read_csv(here('Confidential','raw','vessel_registration','2009_2023_vesselreg.csv'))
 ```
 
 ## Subset Permit Data
@@ -121,7 +121,7 @@ Read in raw fish ticket `.rds` files for each year of interest to data frame "la
 # import landings data
 #Adjust import file name - use one that has FTID columns
 landings <- purrr::map(process_year, function(y){
-  read_rds(here::here('Confidential','processed','fish tickets',paste0(y,'fishtix_withFTID.rds')))
+  read_rds(here::here('Confidential','processed','fish_tickets',paste0(y,'fishtix_withFTID.rds')))
 }) %>% 
   bind_rows()
 
@@ -311,6 +311,6 @@ for(y in unique(vessel_length_key_df$year)){
     filter(year==y) %>%
     select(-year)
   landings_length <- left_join(landings_subset,vessel_length_key_df_subset, by=c("drvid", "agency_code"))
-  write_rds(landings_length,here::here('Confidential','processed','fish tickets',paste0(y, 'fishtix_vlengths_withFTID.rds')))
+  write_rds(landings_length,here::here('Confidential','processed','fish_tickets',paste0(y, 'fishtix_vlengths_withFTID.rds')))
 }
 ```

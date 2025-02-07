@@ -83,13 +83,13 @@ This should be a .csv file containing raw PacFIN data. We only read in columns t
 
 ```{r rawdata}
 ## for running 2020 and 2021 pipeline, all fish tickets are already together:
-rawdat <- read_rds(here::here('Confidential','raw','fish tickets','all_fishtickets_1994_2023.rds'))
+rawdat <- read_rds(here::here('Confidential','raw','fish_tickets','all_fishtickets_1994_2023.rds'))
 rawdat <- rawdat %>%
   filter(LANDING_YEAR %in%  process_year)
 
 #earlier years:
-#tixfiles <- list.files(here::here('data','raw','fish tickets'),full.names = T)
-# tixfiles <- list.files(here::here('data','raw','fish tickets','has FTID'),full.names = T)
+#tixfiles <- list.files(here::here('data','raw','fish_tickets'),full.names = T)
+# tixfiles <- list.files(here::here('data','raw','fish_tickets','has FTID'),full.names = T)
 # 
 # rawdat <- purrr::map_df(tixfiles,function(fl){
 #   read_csv(fl,col_types= cols_only(
@@ -429,11 +429,11 @@ yrs_of_data <- unique(dat_out$year)
 for(y in 1:length(yrs_of_data)) {
  dat_out %>% 
     filter(year==yrs_of_data[y]) %>% 
-    write_rds(here::here('Confidential','processed','fish tickets',paste0(yrs_of_data[y],"fishtix_withFTID",".rds",collapse=""))) 
+    write_rds(here::here('Confidential','processed','fish_tickets',paste0(yrs_of_data[y],"fishtix_withFTID",".rds",collapse=""))) 
 }
 # for(y in unique(rawdat$LANDING_YEAR)){
 #   year.final.processdat <- filter(final.processdat, year == y )
-#   write_csv(file = paste0(processdir, "fish tickets ", y, " processed_multispecies03.csv"), x = year.final.processdat, row.names = FALSE)
+#   write_csv(file = paste0(processdir, "fish_tickets ", y, " processed_multispecies03.csv"), x = year.final.processdat, row.names = FALSE)
 #   cat("wrote out file for ", y, "\n")
 # }
 ```
