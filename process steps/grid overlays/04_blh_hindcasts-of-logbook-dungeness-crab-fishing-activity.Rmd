@@ -66,6 +66,7 @@ season_df <- read_excel(
 # load bathymetry raster
 bathymetry <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
 
+# TODO load new grid
 # load 5km grid
 grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
 ```
@@ -165,11 +166,11 @@ cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took
 # filter based on depth
 filtered_trap_sf <- trap_sf %>%
   filter(trap_coords_depth_m <= 0) %>% # pots must be underwater
-  filter(trap_coords_depth_m > -200 | trap_coords_depth_m < -5000) # maximum depth of 200 meters underwater, but also keep ports / embayments
+  filter(trap_coords_depth_m > -200) # maximum depth of 200 meters underwater
 # TODO check this keeps the right depths
 ```
 
-Note that my experience with the depth filter is that it removes 614 NA depth, and the < -5000 filter has no impact (minimum depth goes from -1159 to -199, no records were present with less than <- 5000 to remove)
+Note that my experience with the depth filter is that it removes 614 NA depth, and the < -5000 filter has no impact (minimum depth goes from -1159 to -199, no records were present with less than <- 5000 to remove). I removed the < -5000 filter because Leena also didn't mention it in her paper supplementary.
 
 ``` {r explore-logbook-data-after-filter}
 
@@ -305,6 +306,8 @@ end_time <- proc.time()
 cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion')
 rm(start_time, end_time)
 
+# TODO add in vessel-specific permit (pot tier) data, including 33% reduction when in place
+
 # create gridded summary (this is not complete)
 crab_year_start <- 11        # month defines start of crab year
 winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
@@ -353,4 +356,4 @@ TODOs
 * Revisit depth filter options
 * Confidentiality filter
 * Write the intermediate output as CSV (for strings and pots)
-* Figure out how to best place pots... undercount possible if removing on depth after placing, incorrect count possible if using reported instead of permit tier
+* Explore rounding, what's the distribution of set and up coordinates?
