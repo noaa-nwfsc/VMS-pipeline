@@ -260,7 +260,7 @@ Read in the bathymetry SpatialGridDataFrame object
 # bathy.grid <- read_rds(here::here('data','raw','vms_composite_bath_spGrid.RDS'))
 
 # copied / pasted from 03_process_vms.Rmd
-bathy.grid <- rast(here::here('data','bathymetry','composite_bath.tif'))
+bathy.grid <- rast(here::here('spatial_data','bathymetry','composite_bath.tif'))
 ```
 
 Get bathymetry at VMS data points

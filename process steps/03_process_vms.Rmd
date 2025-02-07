@@ -200,7 +200,7 @@ write_rds(vms_dupes, here::here('Confidential','processed','vms',paste0(process_
 Read in the bathymetry object: Blake Feist's 3 arc-second composite bathymetry
 
 ```{r}
-bathy.grid <- rast(here::here('data','bathymetry','composite_bath.tif'))
+bathy.grid <- rast(here::here('spatial_data','bathymetry','composite_bath.tif'))
 ```
 
 Get bathymetry at VMS data points
