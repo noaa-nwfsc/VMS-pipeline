@@ -59,7 +59,7 @@ vms <- read_rds(here::here('Confidential','data','processed','matched','matching
 Latitude/longitude of ports. Coordinates were provided by Blake Feist.
 
 ```{r}
-portlist_coords <- read_csv(here::here('data','port_coords_fromBlake_edited.csv'),col_types='cddd') %>% 
+portlist_coords <- read_csv(here::here('spatial_data','port_coords_fromBlake_edited.csv'),col_types='cddd') %>% 
   select(port_code,Lon,Lat) %>% 
   set_names(c('port_code','portlon','portlat'))
 ```
