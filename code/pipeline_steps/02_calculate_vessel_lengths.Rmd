@@ -73,7 +73,7 @@ options(dplyr.summarise.inform=F)
 
 Source functions for vessel length calculations.
 ```{r source_functions}
-source(here::here('process steps',"Report_Vessel_Length_processedtix_functions.R"))
+source(here::here('code','piipeline_steps',"Report_Vessel_Length_processedtix_functions.R"))
 ```
 
 Enter processing options: Year desired to be processed, whether to only process Dungeness vessels, and whether to plot outputs.
