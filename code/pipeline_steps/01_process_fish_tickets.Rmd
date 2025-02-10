@@ -46,7 +46,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.major = element_line(color="gray50",linetype=3))
 theme_set(plot_theme)
 
-keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag')
+keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
 
 rm(list=setdiff(ls(),keepers))
 
@@ -426,10 +426,22 @@ Save the data!
 ```{r save}
 #Save a separate version of output with FTID still included
 yrs_of_data <- unique(dat_out$year)
+
+# create output directory, if doesn't yet exist
+output_dir <- here('Confidential', 'data', output_dir_name)
+if (!dir.exists(output_dir)) dir.create(output_dir)
+
+# iterate over years of data
 for(y in 1:length(yrs_of_data)) {
- dat_out %>% 
+  
+  # create output subdirectory, if doesn't yet exist
+  output_subdir <- here('Confidential', 'data', output_dir_name, 'fish_tickets')
+  if (!dir.exists(output_subdir)) dir.create(output_subdir)
+  
+  # write output
+  dat_out %>% 
     filter(year==yrs_of_data[y]) %>% 
-    write_rds(here::here('Confidential','data','processed','fish_tickets',paste0(yrs_of_data[y],"fishtix_withFTID",".rds",collapse=""))) 
+    write_rds(here::here('Confidential','data', output_dir_name, 'fish_tickets', paste0("fishtix_withFTID_", yrs_of_data[y], ".rds", collapse=""))) 
 }
 # for(y in unique(rawdat$LANDING_YEAR)){
 #   year.final.processdat <- filter(final.processdat, year == y )

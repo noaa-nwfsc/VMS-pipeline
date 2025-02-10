@@ -38,7 +38,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.minor = element_blank())
 theme_set(plot_theme)
 
-keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag')
+keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
 
 rm(list=setdiff(ls(),keepers))
 options(dplyr.summarise.inform=F)
@@ -49,7 +49,7 @@ options(dplyr.summarise.inform=F)
 First, the full vms data set for `r process_year`.
 
 ```{r data}
-vms <- read_rds(here::here('Confidential','data','processed','matched','matching',paste0(process_year,'_matched_vmstix_only_withFTID.rds')))
+vms <- read_rds(here::here('Confidential', 'data', output_dir_name, 'matched', paste0('matched_vmstix_only_withFTID_', process_year, '.rds')))
 ```
 
 ***
@@ -578,9 +578,13 @@ vms_filtered <- vms_dataloss %>%
 Save the output and the full, non-filtered data set
 
 ```{r}
+# create output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential','data', output_dir_name, 'filtered')
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
 #Save version with FTID and length
-write_rds(vms_filtered,here::here('Confidential','data','processed','matched','filtering',paste0(process_year,'_matched_filtered_withFTID_length.rds')))
-write_rds(vms_wfilters,here::here('Confidential','data','processed','matched','filtering',paste0(process_year,'_matched_unfiltered.rds')))
+write_rds(vms_filtered,here::here('Confidential', 'data', output_dir_name, 'filtered', paste0('matched_filtered_withFTID_length_', process_year, '.rds')))
+write_rds(vms_wfilters,here::here('Confidential', 'data', output_dir_name, 'filtered', paste0('matched_unfiltered_', process_year, '.rds')))
 ```
 
 ```{r}

@@ -52,16 +52,16 @@ The main output of this data analysis pipeline is clean fishery landings data (f
 
 | Output file name suffix | Description | VMS Pipeline Step | 
 | -------- | ------- | :---: |
-| `fish tickets/yyyyfishtix_withFTID.rds` | Cleaned fish tickets with associated target species | 1 |
-| `vessel length keys/vessel_length_key_yyyy.rds` | Derived join key between vessel registration data and PacFIN vessel identifiers to get vessel length | 2 |
-| `fish tickets/yyyyfishtix_vlengths_withFTID.rds` | Cleaned fish tickets joined with vessel lengths | 2 |
-| `vms/yyyy_vms_clean.rds` | Cleaned VMS data that is cropped to US EEZ, includes bathymetry, excludes records on land, and de-duplicate VMS records | 3 |
-| `vms/yyyy_duplicates_only.rds` | Same as `vms_clean`, but includes only duplicate records (generated for QA/QC) | 3 |
-| `matched/matching/yyyy_matched_vmstix_only_withFTID.rds` | Cleaned fish tickets joined to cleaned VMS data, excluding trips with not matched VMS data | 4 |
-| `matched/matching/yyyy_matched_alltix_withFTID.rds` | Same as `matched_vmstix_only_withFTID`, but including trips that are not matched with VMS data (generated for QA/QC) | 4 |
-| `matched/filtering/yyyy_matched_filtered_withFTID_length.rds` | Cleaned fish tickets joined to cleaned VMS data, with filters calculated and applied | 5 |
-| `matched/filtering/yyyy_matched_unfiltered.rds` | Same as `matched_filtered_withFTID_length`, but filters not applied (generated for QA/QC) | 5 |
-| `interpolation/yyyy_interpolated.rds` | Cleaned and filtered fish ticket data joined to VMS data, with interpolation to regularize the VMS ping interval | 6 |
+| `fish_tickets/fishtix_withFTID_yyyy.rds` | Cleaned fish tickets with associated target species | 1 |
+| `vessel_length_ _keys/vessel_length_key_yyyy.rds` | Derived join key between vessel registration data and PacFIN vessel identifiers to get vessel length | 2 |
+| `fish_tickets/fishtix_vlengths_withFTID_yyyy.rds` | Cleaned fish tickets joined with vessel lengths | 2 |
+| `vms/vms_clean_yyyy.rds` | Cleaned VMS data that is cropped to US EEZ, includes bathymetry, excludes records on land, and de-duplicate VMS records | 3 |
+| `vms/duplicates_only_yyyy.rds` | Same as `vms_clean`, but includes only duplicate records (generated for QA/QC) | 3 |
+| `matched/matched_vmstix_only_withFTID_yyyy.rds` | Cleaned fish tickets joined to cleaned VMS data, excluding trips with not matched VMS data | 4 |
+| `matched/matched_alltix_withFTID_yyyy.rds` | Same as `matched_vmstix_only_withFTID`, but including trips that are not matched with VMS data (generated for QA/QC) | 4 |
+| `filtered/matched_filtered_withFTID_length_yyyy.rds` | Cleaned fish tickets joined to cleaned VMS data, with filters calculated and applied | 5 |
+| `filtered/matched_unfiltered_yyyy.rds` | Same as `matched_filtered_withFTID_length`, but filters not applied (generated for QA/QC) | 5 |
+| `interpolated/interpolated_yyyy.rds` | Cleaned and filtered fish ticket data joined to VMS data, with interpolation to regularize the VMS ping interval | 6 |
 
 **Which output file should I use?**
 

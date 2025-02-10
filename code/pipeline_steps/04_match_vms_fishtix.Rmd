@@ -27,7 +27,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.minor = element_blank())
 theme_set(plot_theme)
 
-keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag')
+keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
 
 rm(list=setdiff(ls(),keepers))
 options(dplyr.summarise.inform=F)
@@ -43,11 +43,11 @@ Load fish ticket data (processed), including the last month of the previous year
 
 ```{r load tix}
 #Load in data with FTID and vessel length
-fishtix <- read_rds(here::here('Confidential','data','processed','fish_tickets',paste0(process_year,'fishtix_vlengths_withFTID.rds')))
+fishtix <- read_rds(here::here('Confidential', 'data', output_dir_name, 'fish_tickets', paste0('fishtix_vlengths_withFTID_', process_year, '.rds')))
 
 #Note tho that atm some of the previous years don't have length and FTID as I haven't run that
 if(process_year > first_process_year){
-  fishtix_prev <- read_rds(here::here('Confidential','data','processed','fish_tickets',paste0(process_year-1,'fishtix_withFTID.rds'))) %>% 
+  fishtix_prev <- read_rds(here::here('Confidential', 'data', output_dir_name, 'fish_tickets', paste0('fishtix_withFTID_', process_year-1, '.rds'))) %>% 
     filter(month(date)==max(month(date)))
   fishtix <- bind_rows(fishtix_prev,fishtix)
   rm(fishtix_prev)
@@ -58,10 +58,10 @@ if(process_year > first_process_year){
 Load VMS data, including the last month of the previous year (for handling trips spanning January 1st of the current year)
 
 ```{r load vms}
-vms <- read_rds(here::here('Confidential','data','processed','vms',paste0(process_year,'_vms_clean.rds')))
+vms <- read_rds(here::here('Confidential', 'data', output_dir_name, 'vms', paste0('vms_clean_', process_year, '.rds')))
 
 if(process_year > first_process_year){
-  vms_prev <- read_rds(here::here('Confidential','data','processed','vms',paste0(process_year-1,'_vms_clean.rds'))) %>% 
+  vms_prev <- read_rds(here::here('Confidential', 'data', output_dir_name, 'vms', paste0('vms_clean_', process_year-1, '.rds'))) %>% 
     filter(month(UTCDATETIME)==max(month(UTCDATETIME)))
   vms <- bind_rows(vms_prev,vms)
   rm(vms_prev)
@@ -244,7 +244,12 @@ Save a version that has all fish ticket data, including records with no VMS matc
 fishtix_vms %<>% select(-month)
 fishtix_vms_all <- fishtix_vms
 fishtix_vms_only <- fishtix_vms %>% filter(has_vms==1)
-#Save versions that have FTID and length
-write_rds(fishtix_vms_all,here::here('Confidential','data','processed','matched','matching',paste0(process_year,'_matched_alltix_withFTID.rds')))
-write_rds(fishtix_vms_only,here::here('Confidential','data','processed','matched','matching',paste0(process_year,'_matched_vmstix_only_withFTID.rds')))
+
+# create output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential','data', output_dir_name, 'matched')
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
+# write both versions
+write_rds(fishtix_vms_all, here::here('Confidential', 'data', output_dir_name, 'matched', paste0('matched_alltix_withFTID_', process_year, '.rds')))
+write_rds(fishtix_vms_only, here::here('Confidential', 'data', output_dir_name, 'matched', paste0('matched_vmstix_only_withFTID_', process_year, '.rds')))
 ```

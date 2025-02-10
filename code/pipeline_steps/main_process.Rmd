@@ -22,6 +22,10 @@ This document collates all individual steps of VMS/Fish Ticket processing for a 
 alltime <- proc.time()
 ```
 
+``` {r output directory, include=FALSE}
+output_dir_name <- paste0("processed_", Sys.Date())
+```
+
 ## Choose Fishery
 
 Indicate the PacFIN codes for the fish ticket species you are interested in tracking, as well as the gears. Landings and revenue for these species and gears will be tracked in the pipeline, for both targeted and non-targeted trips. Keep in mind that although the pipeline will record all species that are landed on each fish ticket, exact landings and revenues for these species will ONLY be reported if they are included in `spp_codes`. Likewise, `gear_codes` should be thought of NOT as a filter on which gears you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings, regardless of target species.
@@ -129,7 +133,7 @@ log_close()
 
 # Step 1: Process Raw Fish Ticket Data
 
-```{r step1,message=F,warning=F,child=here::here('code', 'process steps','01_process_fish_tickets.Rmd')}
+```{r step1, message=F, warning=F, child=here::here('code', 'pipeline_steps','01_process_fish_tickets.Rmd')}
 ```
 ```{r}
 x<-proc.time()-alltime
@@ -139,7 +143,7 @@ x<-proc.time()-alltime
 
 # Step 2: Report Vessel Lengths
 
-```{r step2, message=F,warning=F,child=here::here('code', 'process steps','02_calculate_vessel_lengths.Rmd')}
+```{r step2, message=F, warning=F, child=here::here('code', 'pipeline_steps','02_calculate_vessel_lengths.Rmd')}
 ```
 ```{r}
 x<-proc.time()-alltime
@@ -149,7 +153,7 @@ x<-proc.time()-alltime
 
 # Step 3: Process Raw VMS Data
 
-```{r step3, message=F,warning=F,child=here::here('code', 'process steps','03_process_vms.Rmd')}
+```{r step3, message=F, warning=F, child=here::here('code', 'pipeline_steps', '03_process_vms.Rmd')}
 ```
 ```{r}
 x<-proc.time()-alltime
@@ -159,7 +163,7 @@ x<-proc.time()-alltime
 
 # Step 4: Match VMS and Fish Ticket Data
 
-```{r step5, message=F,warning=F,child=here::here('code', 'process steps','04_match_vms_fishtix.Rmd')}
+```{r step5, message=F, warning=F, child=here::here('code', 'pipeline_steps', '04_match_vms_fishtix.Rmd')}
 ```
 ```{r}
 x<-proc.time()-alltime
@@ -170,7 +174,7 @@ x<-proc.time()-alltime
 
 # Step 5: Filter Matched Data by Speed and Proximity to Ports
 
-```{r step5, message=F,warning=F,child=here::here('code', 'process steps','05_filter_matched_data.Rmd')}
+```{r step5, message=F, warning=F, child=here::here('code', 'pipeline_steps', '05_filter_matched_data.Rmd')}
 ```
 ```{r}
 x<-proc.time()-alltime
@@ -180,7 +184,7 @@ x<-proc.time()-alltime
 
 # Step 6: Optional: Interpolate VMS Pings
 
-```{r step6, message=F,warning=F,child=if (interpolate_flag) here::here('code', 'process steps','optional_06_interpolate.Rmd')}
+```{r step6, message=F, warning=F, child=if (interpolate_flag) here::here('code', 'pipeline_steps', 'optional_06_interpolate.Rmd')}
 ```
 ```{r}
 x<-proc.time()-alltime

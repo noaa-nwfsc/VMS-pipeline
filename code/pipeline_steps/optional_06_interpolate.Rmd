@@ -36,7 +36,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.minor = element_blank())
 theme_set(plot_theme)
 
-rm(list=setdiff(ls(),c('process_year','alltime')))
+rm(list=setdiff(ls(),c('process_year', 'alltime', 'output_dir_name')))
 
 #if needed, process_year
 #process_year=2014
@@ -45,7 +45,7 @@ rm(list=setdiff(ls(),c('process_year','alltime')))
 Read in the filtered VMS data set from the previous step
 
 ```{r rawdat}
-vms_filtered <- read_rds(here::here('Confidential','data','processed','matched','filtering',paste0(process_year,'_matched_filtered_withFTID_length.rds')))
+vms_filtered <- read_rds(here::here('Confidential', 'data', output_dir_name, 'filtered', paste0('matched_filtered_withFTID_length_', process_year, '.rds')))
 ```
 
 ## Remove Trips with Large Time Gaps
@@ -279,7 +279,12 @@ Add a final indicator for whether a point was interpolated or not, then save
 ```{r}
 # create is_interpolated column based on sensor column, then drop sensor column
 vms_regular %<>% mutate(is_interpolated=ifelse(sensor=="interpolateTime",1,0)) %>% dplyr::select(-sensor)
+
+# create output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential','data', output_dir_name, 'interpolated')
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
 # write output
-write_rds(vms_regular, here::here('Confidential','data','processed','matched','interpolation',paste0(process_year,'_interpolated.rds')))
+write_rds(vms_regular, here::here('Confidential','data', output_dir_name, 'interpolated', paste0('interpolated_', process_year, '.rds')))
 ```
 
