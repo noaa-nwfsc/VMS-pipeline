@@ -53,11 +53,11 @@ Reference code:
 
 ```{r load-data}
 # load OR logbook
-logbook_df <- read_excel(here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), sheet = "CLBR110")
+logbook_df <- read_excel(here('Confidential', 'data', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), sheet = "CLBR110")
 
 # load season dates
 season_df <- read_excel(
-  here('Confidential', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), 
+  here('Confidential', 'data', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), 
   sheet = "SeasonDates",
   col_names = c('crab_season', 'earliest_season_opening_date', 'description', 'season_close_date'),
   skip = 1
@@ -66,12 +66,9 @@ season_df <- read_excel(
 # load bathymetry raster
 bathymetry <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
 
-# TODO load new grid
 # load 5km grid
-grid_5km <- read_sf(here('GIS_layers', 'master_5km_grid_tmer.shp'))
+grid_5km <- read_sf(here('GIS_layers', 'fivekm_grid_polys_shore_lamb.shp'))
 ```
-
-TODO add pre- and post-filtering data explorations
 
 ## Transform data
 
@@ -167,7 +164,6 @@ cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took
 filtered_trap_sf <- trap_sf %>%
   filter(trap_coords_depth_m <= 0) %>% # pots must be underwater
   filter(trap_coords_depth_m > -200) # maximum depth of 200 meters underwater
-# TODO check this keeps the right depths
 ```
 
 Note that my experience with the depth filter is that it removes 614 NA depth, and the < -5000 filter has no impact (minimum depth goes from -1159 to -199, no records were present with less than <- 5000 to remove). I removed the < -5000 filter because Leena also didn't mention it in her paper supplementary.
@@ -296,7 +292,6 @@ sum(string_df$NumPots != round(string_df$NumPots), na.rm = TRUE) # none, amazing
 # need to incorporate m2 code in script 2 https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script2_M1_M2.R
 
 # join to 5km grid
-# TODO rename variables from test_
 start_time <- proc.time()
 test_trap_df <- filtered_trap_sf %>%
   st_transform(st_crs(grid_5km)) %>% # transform to same coordinate reference system as grid
@@ -305,8 +300,6 @@ test_trap_df <- filtered_trap_sf %>%
 end_time <- proc.time()
 cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion')
 rm(start_time, end_time)
-
-# TODO add in vessel-specific permit (pot tier) data, including 33% reduction when in place
 
 # create gridded summary (this is not complete)
 crab_year_start <- 11        # month defines start of crab year
@@ -345,15 +338,3 @@ test_dcrb_5km_summary_df <- test_trap_df %>%
 Notes
 
 * It seems suspicious to me there are *exactly* 160,000 strings in the logbook data.
-
-TODOs
-
-* Add permit data to use instead of or in combination with number of pots
-* Organize explorations more clearly, check # and % dropped in more systematic way (at each step)
-* Confirm correct bathymetry and grid files with Blake
-* Check on area calculation for grid cells with Blake / Owen, used to compute density
-* Revisit number of pots to distribute on a given line
-* Revisit depth filter options
-* Confidentiality filter
-* Write the intermediate output as CSV (for strings and pots)
-* Explore rounding, what's the distribution of set and up coordinates?
