@@ -111,7 +111,7 @@ string_df <- filtered_logbook_df %>%
 start_time <- proc.time()
 
 # convert from start and end coordinates to strings
-string_df <- string_df %>%
+string_sf <- string_df %>%
   # remove point type that distinguished up vs. set points, don't need that information to make lines
   dplyr::select(-point_type) %>%
   # convert from doubles to spatial data
@@ -127,7 +127,39 @@ string_df <- string_df %>%
 
 # print time
 end_time <- proc.time()
-cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took 1.3 minutes
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took 1.5 minutes
+```
+
+I should check this next part with Owen, not sure if I'm using the right projections here, and assuming they need to be in the same one.
+
+* https://stackoverflow.com/questions/66283488/trying-to-summarize-line-lengths-within-grid-cells-in-r
+
+I get a warning: `Warning: attribute variables are assumed to be spatially constant throughout all geometries`
+I check the sum of line lengths, I get 1.05Mil km for gridded version, and 1.06Mil km for non-gridded version. Rounding error? Or some boundary issue?
+
+```{r get-line-length}
+# transform string_sf to same CRS as grid_5km
+string_sf_projected <- st_transform(string_sf, st_crs(grid_5km))
+
+# get line length, not gridded
+string_sf_projected$line_length_m <- st_length(string_sf_projected)
+
+# get line length, gridded
+line_length_output <- st_intersection(grid_5km, string_sf_projected) %>%
+  mutate(gridded_line_length_m = st_length(.))
+
+# verify that total line length is the same before and after intersection
+sum(line_length_output$gridded_line_length_m) / 1000
+sum(string_sf_projected$line_length_m) / 1000
+
+# create a yearly, monthly, 5km gridded summary of line length
+string_ym5km_df <- line_length_output %>%
+  st_drop_geometry() %>%
+  mutate(year = year(DetailDate), month = month(DetailDate)) %>%
+  group_by(GRID5KM_ID, year, month) %>%
+  summarise(n_vessels = n_distinct(DocNum),
+            line_length_m = sum(gridded_line_length_m),
+            .groups = "drop")
 ```
 
 ```{r transform-strings-to-pots}
@@ -135,7 +167,7 @@ cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took
 start_time <- proc.time()
 
 # distribute traps along the string (points along line)
-trap_sf <- string_df %>%
+trap_sf <- string_sf %>%
   # remove strings with no pots
   filter(NumPots != 0) %>%
   # distribute NumPots points along the line
@@ -175,7 +207,7 @@ Note that my experience with the depth filter is that it removes 614 NA depth, a
 
 # join to 5km grid
 start_time <- proc.time()
-test_trap_df <- filtered_trap_sf %>%
+trap_df <- filtered_trap_sf %>%
   st_transform(st_crs(grid_5km)) %>% # transform to same coordinate reference system as grid
   st_join(grid_5km) %>% # join 5km grid to traps simple features
   st_set_geometry(NULL)
@@ -184,9 +216,9 @@ cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion')
 rm(start_time, end_time)
 
 # create gridded summary (this is not complete)
-crab_year_start <- 11        # month defines start of crab year
+crab_year_start <- 11 # month defines start of crab year
 winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
-test_dcrb_5km_summary_df <- test_trap_df %>%
+dcrb_5km_summary_df <- trap_df %>%
   mutate(
     year = year(DetailDate),
     month = month(DetailDate, label = TRUE, abbr = FALSE),
