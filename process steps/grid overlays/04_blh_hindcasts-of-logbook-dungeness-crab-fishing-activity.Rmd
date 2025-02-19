@@ -46,22 +46,14 @@ Reference code:
 ## Load data
 
 1. Load the logbook data, which contains set and up locations for strings of crab pots.
-  a. Load logbook data, which will be used to map monthly fishing activity distribution.
-  b. Load tab with season dates, which can be used to filter fishing activity, but is not yet.
-2. Load the bathymetry raster, which will be used to join depth information at a pot level.
-3. Load the spatial 5km shapefile, which will be used to map monthly fishing activity distribution.
+2. Load the permit data, which contains the pot limit for a given vessel and year.
+3. Load the bathymetry raster, which will be used to join depth information at a pot level.
+4. Load the spatial 5km shapefile, which will be used to map monthly fishing activity distribution.
 
 ```{r load-data}
 # load OR logbook
 logbook_df <- read_excel(here('Confidential', 'data', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), sheet = "CLBR110")
 
-# load season dates
-season_df <- read_excel(
-  here('Confidential', 'data', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), 
-  sheet = "SeasonDates",
-  col_names = c('crab_season', 'earliest_season_opening_date', 'description', 'season_close_date'),
-  skip = 1
-)
 
 # load bathymetry raster
 bathymetry <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
