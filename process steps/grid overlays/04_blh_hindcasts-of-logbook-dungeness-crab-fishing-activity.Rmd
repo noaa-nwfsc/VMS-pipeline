@@ -43,6 +43,11 @@ Reference code:
 
 * https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script1_original_functions.R
 
+```{r parameters}
+# decide whether to plot explorations
+plot_explorations <- TRUE
+```
+
 ## Load data
 
 1. Load the logbook data, which contains set and up locations for strings of crab pots.
@@ -52,8 +57,20 @@ Reference code:
 
 ```{r load-data}
 # load OR logbook
-logbook_df <- read_excel(here('Confidential', 'data', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'), sheet = "CLBR110")
+logbook_df <- 
+  read_excel(
+    here('Confidential', 'data', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'),
+    sheet = "CLBR110"
+  ) %>%
+  mutate(
+    # convert date to date type
+    DetailDate = mdy(DetailDate),
+    # convert crab permit number from character to double
+    CrabPermit = as.double(CrabPermit)
+  )
 
+# load OR permit data with pot limits
+permit_df <- read_excel(here('Confidential', 'data', 'raw', 'logbook', 'OregonCrabPermitData2007-2020.xlsx'), sheet = "CrabPermitData")
 
 # load bathymetry raster
 bathymetry <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
@@ -62,36 +79,110 @@ bathymetry <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
 grid_5km <- read_sf(here('GIS_layers', 'fivekm_grid_polys_shore_lamb.shp'))
 ```
 
+## Explore data
+
+```{r explore-logbook-data, include = plot_explorations}
+# how many rows? are IDs distinct?
+nrow(logbook_df)
+n_distinct(logbook_df$LogDetailID)
+n_distinct(logbook_df$LogID)
+
+# how many nulls?
+summarise_all(logbook_df, ~sum(is.na(.)))
+
+# what's the distribution of number of reported pots?
+logbook_df %>% ggplot(aes(x = NumPots)) + geom_histogram(na.rm = TRUE)
+summary(logbook_df$NumPots)
+
+# where are set and up points? are there points outside of OR waters and US EEZ?
+# TODO quick maps
+```
+```{r explore-permit-data, include = plot_explorations}
+# how many rows? are IDs distinct?
+nrow(permit_df)
+n_distinct(permit_df$Number)
+  
+# how many nulls?
+summarise_all(permit_df, ~sum(is.na(.)))
+
+# how long are permits?
+permit_df$PermitLengthDays <- difftime(permit_df$Enddate, permit_df$Begindate, units = "days")
+permit_df %>% ggplot(aes(x = PermitLengthDays)) + geom_histogram()
+summary(as.numeric(permit_df$PermitLengthDays))
+sum(permit_df$PermitLengthDays >= 365)
+
+# when do they start in the year?
+permit_df$BeginDateYearday <- yday(permit_df$Begindate)
+permit_df %>% ggplot(aes(x = BeginDateYearday)) + geom_histogram()
+summary(permit_df$BeginDateYearday)
+sum(permit_df$BeginDateYearday == 0)
+
+# when do they end in the year?
+permit_df$EndDateYearday <- yday(permit_df$Enddate)
+permit_df %>% ggplot(aes(x = EndDateYearday)) + geom_histogram()
+summary(permit_df$EndDateYearday)
+sum(permit_df$EndDateYearday >= 365)
+```
+Data cleaning question: What to do with negative permit length? (Enddate < Begindate)
+
 ## Transform data
 
-* Based on a filtering check in Excel, I didn't see any signs flipped for latitude and longitude. Points out of the expected range were due to 0's in one or both coordinate fields, so I removed them.
-* Create pot strings from set and up points (create lines from points)
-
-```{r transform-logbook-data}
-
-logbook_df <- logbook_df %>% 
-  mutate(
-    # transform date to date type
-    DetailDate = mdy(DetailDate),
-    # if longitude or latitude of set or up points are out of range, then convert to NA
-    SetLatDec = ifelse(SetLatDec < 1,  NA, SetLatDec),
-    UpLatDec  = ifelse(UpLatDec  < 1,  NA, UpLatDec),
-    SetLonDec = ifelse(SetLonDec > -1, NA, SetLonDec),
-    UpLonDec  = ifelse(UpLonDec  > -1, NA, UpLonDec),
-    # add booleans for whether any or all coordinates related to a string were NA
-    all_na_coordinate_flag = is.na(SetLatDec) & is.na(SetLonDec) & is.na(UpLatDec) & is.na(UpLonDec),
-    any_na_coordinate_flag = is.na(SetLatDec) | is.na(SetLonDec) | is.na(UpLatDec) | is.na(UpLonDec)
-  )
-
-# remove logbook entries using spatial flag and NA longitude or latitude
-filtered_logbook_df <- logbook_df %>%
-  filter(!is.na(SetLonDec) & !is.na(SetLatDec) & !is.na(UpLonDec) & !is.na(UpLatDec)) %>%
-  filter(SpatialFlag == "False")
+```{r filter-logbook-data}
+# filter based on ODFW spatial flag
+filtered_logbook_df <- logbook_df %>% filter(SpatialFlag == "False")
+nrow(filtered_logbook_df)
+# filter based on strings with 0 pots reported
+filtered_logbook_df <- filtered_logbook_df %>% filter(NumPots > 0)
+nrow(filtered_logbook_df)
 ```
 
-```{r transform-points-to-strings}
+```{r join-permit-logbook}
+# join permit data to logbook data
+joined_logbook_df <- filtered_logbook_df %>%
+  left_join(permit_df, by = join_by(CrabPermit == Number, DetailDate >= Begindate, DetailDate <= Enddate))
+nrow(joined_logbook_df)
+# for some reason, 121 records duplicated. going to check why there were multiple joins. are overlapping permits possible?
+```
+```{r explore-duplicate-joins, include = plot_explorations}
+# find duplicated IDs and visually inspect in joined dataframe
+test_duped_ids_tbl <- joined_logbook_df %>% group_by(LogDetailID) %>% summarise(record_count = n()) %>% arrange(desc(record_count)) %>% filter(record_count > 1)
+test_duped_ids <- pull(test_duped_ids_tbl, LogDetailID)
+joined_logbook_df %>% filter(LogDetailID %in% test_duped_ids) %>% dplyr::select(LogDetailID, DocNum, DetailDate, Begindate, Enddate, Potlimit) %>% View()
+rm(test_duped_ids_tbl, test_duped_ids)
+```
+
+Based on a quick visual inspection, there are 121 strings from 2 vessels that had a period of time with overlapping permits with the same pot limit. For example, two 500 pot tier permits starting on Jan. 1, 2019, with one ending May 21, 2019 and another ending Dec. 31, 2019.
+
+```{r explore-permit-overlaps}
+test_permit_df <- permit_df %>% 
+  dplyr::select(Number, Docnum, Begindate, Enddate, Potlimit) %>% 
+  group_by(Docnum) %>% 
+  arrange(Begindate, Enddate) %>% 
+  mutate(next_permit_start = lead(Begindate), 
+         next_permit_end_date = lead(Enddate), 
+         next_pot_limit = lead(Potlimit),
+         overlap = next_permit_start <= Enddate,
+         change_pot_limit = Potlimit != next_pot_limit)
+# quick visual inspection
+test_permit_df %>% filter(overlap == TRUE) %>% View()
+# how many permits have an overlapping permit?
+sum(test_permit_df$overlap == TRUE, na.rm = TRUE)
+# how many unique permits overlap?
+test_permit_df %>% filter(overlap == TRUE) %>% dplyr::select(Docnum) %>% n_distinct()
+# how many unique vessels have permits that overlap?
+test_permit_df %>% filter(overlap == TRUE) %>% dplyr::select(Number) %>% n_distinct()
+# does the overlap impact the pot limit?
+sum(test_permit_df$overlap == TRUE & test_permit_df$change_pot_limit == TRUE, na.rm = TRUE)
+rm(test_permit_df)
+```
+
+Data cleaning question: What to do with overlapping permit dates? It can impact pot limit for 12 out of 7194 permits.
+
+```{r transform-logbook-to-spatial}
 # transform set and up points to be in different rows for same logbook entry (each row is a point, with type set or up)
-string_df <- filtered_logbook_df %>% 
+
+# TODO this section needs updates for joined_logbook_df
+string_df <- joined_logbook_df %>% 
   pivot_longer(
     c(SetLatDec, SetLonDec, UpLatDec, UpLonDec),
     names_to = c("point_type", ".value"),
@@ -193,9 +284,9 @@ filtered_trap_sf <- trap_sf %>%
 Note that my experience with the depth filter is that it removes 614 NA depth, and the < -5000 filter has no impact (minimum depth goes from -1159 to -199, no records were present with less than <- 5000 to remove). I removed the < -5000 filter because Leena also didn't mention it in her paper supplementary.
 
 ```{r gridded-summary}
-
-# left off at line 245 in script 1
-# need to incorporate m2 code in script 2 https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script2_M1_M2.R
+# TODO need to incorporate m2 code in script 2 https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script2_M1_M2.R
+# relevant portions are lines 60-75, and 110-118. then just map it.
+# still need to add limits for when permit tier was cut 30%
 
 # join to 5km grid
 start_time <- proc.time()
