@@ -64,7 +64,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.major = element_line(color="gray50",linetype=3))
 theme_set(plot_theme)
 
-keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
+keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
 
 rm(list=setdiff(ls(),keepers))
 
@@ -120,10 +120,7 @@ Read in raw fish ticket `.rds` files for each year of interest to data frame "la
 ```{r}
 # import landings data
 #Adjust import file name - use one that has FTID columns
-landings <- purrr::map(process_year, function(y){
-  read_rds(here::here('Confidential','data', output_dir_name, 'fish_tickets', paste0('fishtix_withFTID_', y, '.rds')))
-}) %>% 
-  bind_rows()
+landings <- read_rds(here::here('Confidential','data', output_dir_name, 'fish_tickets', paste0('fishtix_withFTID_', process_year, '.rds')))
 
 # find relevant vessels
 vessels <- landings %>%
@@ -150,67 +147,62 @@ vessel_length_key_df <- tibble("drvid" = character(),
 Do the calculation of vessel lengths.
 
 ```{r calc_lengths_multiyr,message=F,warning=F}
-for(y in unique(vessels$year)){
-  # take only the vessels fishing in year "y"
-  year_vessels <- filter(vessels, year == y)
-  
-  # identify the years of regulation data to pull
-  target_reg_years <- seq(y-2, y)
-  
-  # subset for target registration years and summarise permits for each vessel
-  cat("Calculating 3yr summary statistics for vessels in ", y, "\n")
-  pthin_sumstats <- pthin_length_filter %>%
-    filter(REGISTRATION_YEAR %in% target_reg_years,!is.na(VESSEL_LENGTH)) %>%
-    group_by(VESSEL_NUM, AGENCY_CODE) %>%
-    arrange(desc(REGISTRATION_YEAR)) %>%
-    summarise(n_lengths = length(VESSEL_LENGTH),
-              n_unique = length(unique(VESSEL_LENGTH)),
-              max_length = max(VESSEL_LENGTH),
-              min_length = min(VESSEL_LENGTH),
-              mean2yr = get2yrmean(x=VESSEL_LENGTH, years=REGISTRATION_YEAR)) %>% 
-    ungroup()
-  
-  # create empty vectors for this year
-  final_vessel_lengths <- c()
-  length_calc_vec <- c()
-  n_unique_vec <- c()
-  n_lengths_vec <- c()
-  historic_vec <- c()
-  processed <- 0
-  
-  cat("Calculating vessel lengths for fishing vessels in ", y, "...\n")
-  # for each vessel fishing in this year #
-  for(i in seq(1:length(year_vessels$drvid))){
-    ## use the calc_length function (loaded from the "functions.R" file) to calculate vessel length
-    tmp_vessel_length_info <- calc_length(permits=permits, vesseldat = year_vessels, lengthdat = pthin_length_filter, summarydat = pthin_sumstats, index = i)
-    ## save the calc_length output to the appropriate position ("i") in the output vectors for this year
-    n_lengths_vec[i] <- tmp_vessel_length_info[1] %>% as.numeric()
-    n_unique_vec[i] <- tmp_vessel_length_info[2] %>% as.numeric()
-    final_vessel_lengths[i] <- tmp_vessel_length_info[3] %>% as.numeric()
-    length_calc_vec[i] <- tmp_vessel_length_info[4]
-    ## if the vessel had to be calculated with historical data from over 5 years ago, a warning message will be saved in the calc_length output
-    if(length(tmp_vessel_length_info) > 4){
-      ### print the warning message
-      print(tmp_vessel_length_info[5])
-      ### save "Y" to the historic_vec for this year
-      historic_vec[i] <- "Y"
-    } else{ historic_vec[i] <- "N" }
-    processed <- processed + 1
-  }
-  cat("Done processing", processed, "vessels for", y, "\n")
-  # save allof the output vectors to a data frame for this year
-  tmp_vessel_length_key_df <- tibble("drvid" = year_vessels$drvid,
-                                     "agency_code" = year_vessels$agency_code,
-                                     "year" = year_vessels$year,
-                                     "FINAL_LENGTH" = final_vessel_lengths,
-                                     "TYPE_CALC" = length_calc_vec,
-                                     "UNIQUE_LENGTHS" = n_unique_vec,
-                                     "N_YEARS_LENGTH_RECORDED" = n_lengths_vec,
-                                     "HISTORIC_DATA" = historic_vec)
-  ## bind this year's data frame to the end of the full data frame
-  vessel_length_key_df <- bind_rows(vessel_length_key_df, tmp_vessel_length_key_df)
-  cat("Wrote out", dim(tmp_vessel_length_key_df)[1], "lengths for", y, " to final data frame\n\n")
+# identify the years of regulation data to pull
+target_reg_years <- seq(process_year - 2, process_year)
+
+# subset for target registration years and summarise permits for each vessel
+cat("Calculating 3yr summary statistics for vessels in ", process_year, "\n")
+pthin_sumstats <- pthin_length_filter %>%
+  filter(REGISTRATION_YEAR %in% target_reg_years,!is.na(VESSEL_LENGTH)) %>%
+  group_by(VESSEL_NUM, AGENCY_CODE) %>%
+  arrange(desc(REGISTRATION_YEAR)) %>%
+  summarise(n_lengths = length(VESSEL_LENGTH),
+            n_unique = length(unique(VESSEL_LENGTH)),
+            max_length = max(VESSEL_LENGTH),
+            min_length = min(VESSEL_LENGTH),
+            mean2yr = get2yrmean(x=VESSEL_LENGTH, years=REGISTRATION_YEAR)) %>% 
+  ungroup()
+
+# create empty vectors for this year
+final_vessel_lengths <- c()
+length_calc_vec <- c()
+n_unique_vec <- c()
+n_lengths_vec <- c()
+historic_vec <- c()
+processed <- 0
+
+cat("Calculating vessel lengths for fishing vessels in ", process_year, "...\n")
+# for each vessel fishing in this year #
+for(i in seq(1:length(vessels$drvid))){
+  ## use the calc_length function (loaded from the "functions.R" file) to calculate vessel length
+  tmp_vessel_length_info <- calc_length(permits=permits, vesseldat = vessels, lengthdat = pthin_length_filter, summarydat = pthin_sumstats, index = i, y = process_year)
+  ## save the calc_length output to the appropriate position ("i") in the output vectors for this year
+  n_lengths_vec[i] <- tmp_vessel_length_info[1] %>% as.numeric()
+  n_unique_vec[i] <- tmp_vessel_length_info[2] %>% as.numeric()
+  final_vessel_lengths[i] <- tmp_vessel_length_info[3] %>% as.numeric()
+  length_calc_vec[i] <- tmp_vessel_length_info[4]
+  ## if the vessel had to be calculated with historical data from over 5 years ago, a warning message will be saved in the calc_length output
+  if(length(tmp_vessel_length_info) > 4){
+    ### print the warning message
+    print(tmp_vessel_length_info[5])
+    ### save "Y" to the historic_vec for this year
+    historic_vec[i] <- "Y"
+  } else{ historic_vec[i] <- "N" }
+  processed <- processed + 1
 }
+cat("Done processing", processed, "vessels for", process_year, "\n")
+# save allof the output vectors to a data frame for this year
+tmp_vessel_length_key_df <- tibble("drvid" = vessels$drvid,
+                                   "agency_code" = vessels$agency_code,
+                                   "year" = vessels$year,
+                                   "FINAL_LENGTH" = final_vessel_lengths,
+                                   "TYPE_CALC" = length_calc_vec,
+                                   "UNIQUE_LENGTHS" = n_unique_vec,
+                                   "N_YEARS_LENGTH_RECORDED" = n_lengths_vec,
+                                   "HISTORIC_DATA" = historic_vec)
+## bind this year's data frame to the end of the full data frame
+vessel_length_key_df <- bind_rows(vessel_length_key_df, tmp_vessel_length_key_df)
+cat("Wrote out", dim(tmp_vessel_length_key_df)[1], "lengths for", process_year, " to final data frame\n\n")
 ```
 
 ## Explore Vessel Lengths
@@ -221,15 +213,12 @@ How many fishing vessels WITH Vessel Numbers are missing calculated lengths?
 cat(sum(is.na(vessel_length_key_df$FINAL_LENGTH)), 'vessels with Vessel ID numbers are missing calculated lengths, or', sum(is.na(vessel_length_key_df$FINAL_LENGTH)) / length(vessel_length_key_df$FINAL_LENGTH)*100, 'percent.')
 ```
 ```{r}
-for(y in unique(vessel_length_key_df$year)){
-  for(a in unique(vessel_length_key_df$agency_code)){
-    tmp_dat <- vessel_length_key_df %>%
-      filter(agency_code == a) %>%
-      filter(year == y)
-    missing <- sum(is.na(tmp_dat$FINAL_LENGTH))
-    cat("Number", y, "Vessels Missing Vessel Lengths for", a, ":", missing, "\n")
-    cat("Proportion:", missing/length(tmp_dat$FINAL_LENGTH), "\n\n")
-  }
+for(a in unique(vessel_length_key_df$agency_code)){
+  tmp_dat <- vessel_length_key_df %>%
+    filter(agency_code == a)
+  missing <- sum(is.na(tmp_dat$FINAL_LENGTH))
+  cat("Number", process_year, "Vessels Missing Vessel Lengths for", a, ":", missing, "\n")
+  cat("Proportion:", missing/length(tmp_dat$FINAL_LENGTH), "\n\n")
 }
 ```
 
@@ -246,7 +235,7 @@ vessel_length_key_df %>%
   kable(col.names = c("Number of Records","Number of Vessels"))
 ```
 
-If plotting option above is `TRUE`, make some informative plots.
+If plotting option above is `TRUE`, make some informative plots. The plots include some data for the year before `process_year`, because of the `lookback_window.`
 ```{r length freq}
 if(plot_output){
   vessel_length_key_df %>% 
@@ -275,16 +264,12 @@ if(plot_output){
 For each year, join vessel length data with landings. How many fish tickets are missing a vessel length, by agency? Non-specific.
 
 ```{r}
-for(y in unique(vessel_length_key_df$year)){
-  landings_subset <- landings %>%
-    filter(year == y)
-  dcrb_landings_length <- left_join(landings_subset, filter(vessel_length_key_df, year == y), by=c("drvid", "agency_code"))
-  for(a in unique(dcrb_landings_length$agency_code)){
-    tmp_dat <- filter(dcrb_landings_length, agency_code == a)
-    missing <- sum(is.na(tmp_dat$FINAL_LENGTH))
-    cat("Number of", y, "fish tickets missing vessel lengths for", a, ":", missing, "\n")
-    cat("Proportion:", missing/length(tmp_dat$FINAL_LENGTH), "\n\n")
-  }
+dcrb_landings_length <- left_join(landings, vessel_length_key_df, by=c("drvid", "agency_code"))
+for(a in unique(dcrb_landings_length$agency_code)){
+  tmp_dat <- filter(dcrb_landings_length, agency_code == a)
+  missing <- sum(is.na(tmp_dat$FINAL_LENGTH))
+  cat("Number of", process_year, "fish tickets missing vessel lengths for", a, ":", missing, "\n")
+  cat("Proportion:", missing/length(tmp_dat$FINAL_LENGTH), "\n\n")
 }
 ```
 
@@ -293,31 +278,21 @@ for(y in unique(vessel_length_key_df$year)){
 Vessel lengths key
 
 ```{r eval=TRUE}
-# iterate over years of data
-for(y in unique(vessel_length_key_df$year)){
-  
-  # create output subdirectory, if doesn't yet exist
-  output_subdir <- here('Confidential','data', output_dir_name, 'vessel_length_keys')
-  if (!dir.exists(output_subdir)) dir.create(output_subdir)
-  
-  # write output
-  key_subset <- vessel_length_key_df %>%
-    filter(year == y)
-  write_rds(key_subset, here::here('Confidential', 'data', output_dir_name, 'vessel_length_keys', paste0('vessel_length_key_', y, '.rds')))
-}
+# create output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential','data', output_dir_name, 'vessel_length_keys')
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
+# write output
+key_subset <- vessel_length_key_df %>%
+  filter(year == process_year)
+write_rds(key_subset, here::here('Confidential', 'data', output_dir_name, 'vessel_length_keys', paste0('vessel_length_key_', process_year, '.rds')))
 ```
 
 Landings matched to vessel lengths
 
 ```{r eval=TRUE}
 #save output with diff name to indicate FTID still in data
-for(y in unique(vessel_length_key_df$year)){
-  landings_subset <- landings %>%
-    filter(year == y)
-  vessel_length_key_df_subset <- vessel_length_key_df %>%
-    filter(year==y) %>%
-    select(-year)
-  landings_length <- left_join(landings_subset,vessel_length_key_df_subset, by=c("drvid", "agency_code"))
-  write_rds(landings_length,here::here('Confidential', 'data', output_dir_name, 'fish_tickets', paste0('fishtix_vlengths_withFTID_', y, '.rds')))
-}
+vessel_length_key_df <- vessel_length_key_df %>% select(-year)
+landings_length <- left_join(landings, vessel_length_key_df, by=c("drvid", "agency_code"))
+write_rds(landings_length,here::here('Confidential', 'data', output_dir_name, 'fish_tickets', paste0('fishtix_vlengths_withFTID_', process_year, '.rds')))
 ```
