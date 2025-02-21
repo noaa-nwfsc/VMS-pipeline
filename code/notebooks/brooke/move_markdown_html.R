@@ -2,9 +2,9 @@
 library(here)
 
 # copy and paste from main_process.Rmd
-output_dir_name <- 'processed_2025-02-10'
+output_dir_name <- 'processed_2025-02-20'
 spp_codes <- c("DCRB")
-process_year <- 2014
+process_year <- 2020
 
 # create output subdirectory, if doesn't yet exist
 output_subdir <- here('Confidential', 'data', output_dir_name, 'markdowns')
