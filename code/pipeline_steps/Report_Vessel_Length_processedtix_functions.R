@@ -73,7 +73,7 @@ get_historic_length <- function(tmp_vessel_info){
 ##############################################################################################################################
       # DEFINE FUNCTION TO CALCULATE LENGTH WHEN LOOPING OVER MULTIPLE YEARS OF FISH TICKET DATA #
 ##############################################################################################################################
-calc_length <- function(permits, vesseldat, lengthdat, summarydat, index){
+calc_length <- function(permits, vesseldat, lengthdat, summarydat, index, y){
   ## subset vessel data for vessel_num / agency_code / registration_year for new vessel
   tmp_vessel <- vesseldat[index,]
   

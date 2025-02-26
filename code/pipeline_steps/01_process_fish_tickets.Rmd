@@ -46,7 +46,7 @@ plot_theme <-   theme_minimal()+
         panel.grid.major = element_line(color="gray50",linetype=3))
 theme_set(plot_theme)
 
-keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
+keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
 
 rm(list=setdiff(ls(),keepers))
 
@@ -82,10 +82,9 @@ Choose directories and set objects
 This should be a .csv file containing raw PacFIN data. We only read in columns that we need.
 
 ```{r rawdata}
-## for running 2020 and 2021 pipeline, all fish tickets are already together:
+# read in fish ticket data for current process year, and prior year to catch lookback window (i.e. fish tickets on Jan. 1, process_year that have fishing activity in prior )
 rawdat <- read_rds(here::here('Confidential','data','raw','fish_tickets','all_fishtickets_1994_2023.rds'))
-rawdat <- rawdat %>%
-  filter(LANDING_YEAR %in%  process_year)
+rawdat <- rawdat %>% filter(LANDING_DATE >= lookback_begin & LANDING_DATE <= year_end)
 
 #earlier years:
 #tixfiles <- list.files(here::here('data','raw','fish_tickets'),full.names = T)
@@ -424,25 +423,17 @@ dat_out %<>%
 Save the data!
 
 ```{r save}
-#Save a separate version of output with FTID still included
-yrs_of_data <- unique(dat_out$year)
-
 # create output directory, if doesn't yet exist
 output_dir <- here('Confidential', 'data', output_dir_name)
 if (!dir.exists(output_dir)) dir.create(output_dir)
 
-# iterate over years of data
-for(y in 1:length(yrs_of_data)) {
-  
-  # create output subdirectory, if doesn't yet exist
-  output_subdir <- here('Confidential', 'data', output_dir_name, 'fish_tickets')
-  if (!dir.exists(output_subdir)) dir.create(output_subdir)
-  
-  # write output
-  dat_out %>% 
-    filter(year==yrs_of_data[y]) %>% 
-    write_rds(here::here('Confidential','data', output_dir_name, 'fish_tickets', paste0("fishtix_withFTID_", yrs_of_data[y], ".rds", collapse=""))) 
-}
+# create output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential', 'data', output_dir_name, 'fish_tickets')
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
+# write output
+dat_out %>% write_rds(here::here('Confidential','data', output_dir_name, 'fish_tickets', paste0("fishtix_withFTID_", process_year, ".rds", collapse="")))
+
 # for(y in unique(rawdat$LANDING_YEAR)){
 #   year.final.processdat <- filter(final.processdat, year == y )
 #   write_csv(file = paste0(processdir, "fish_tickets ", y, " processed_multispecies03.csv"), x = year.final.processdat, row.names = FALSE)

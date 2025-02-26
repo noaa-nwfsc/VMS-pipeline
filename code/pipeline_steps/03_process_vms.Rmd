@@ -36,7 +36,7 @@ library(janitor)
 library(rnaturalearth)
 library(sp)
 
-keepers <- c('process_year','first_process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
+keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
 
 rm(list=setdiff(ls(),keepers))
 options(dplyr.summarise.inform=F)
@@ -58,10 +58,16 @@ bathy_upper = 100
 ```{r read data}
 # Updated 2/21/2024 with new VMS files
 vms_fn <- list.files(here('Confidential','data','raw','vms'),full.names = T)
-vms_we_want <- vms_fn[grepl("chunk",vms_fn)&grepl(process_year,vms_fn)]
+vms_we_want <- vms_fn[grepl("chunk", vms_fn) & (grepl(process_year, vms_fn) | grepl(process_year - 1, vms_fn))]
 
-vms_raw <- purrr::map_df(vms_we_want,read_rds) %>% 
-  filter(year==process_year)
+vms_raw <- purrr::map_df(vms_we_want, read_rds) %>%
+  # convert date and time to Pacific time zone
+  mutate(westcoastdate = with_tz(UTCDATETIME, tzone = "America/Los_Angeles")) %>%
+  mutate(westcoastdate_notime = as_date(westcoastdate)) %>%
+  # filter based on Pacific time zone
+  filter(westcoastdate_notime >= lookback_begin & westcoastdate_notime <= year_end) %>%
+  # remove new date and time columns
+  select(-westcoastdate, -westcoastdate_notime)
 ```
 
 ## Check for Missing Data
