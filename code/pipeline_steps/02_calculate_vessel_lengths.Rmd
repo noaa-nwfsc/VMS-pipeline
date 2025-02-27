@@ -261,10 +261,16 @@ if(plot_output){
 
 ## Assess Missing Data for Fish Tickets
 
-For each year, join vessel length data with landings. How many fish tickets are missing a vessel length, by agency? Non-specific.
+Join vessel length data with landings for the focal process year. How many fish tickets are missing a vessel length, by agency? Non-specific.
 
 ```{r}
-dcrb_landings_length <- left_join(landings, vessel_length_key_df, by=c("drvid", "agency_code"))
+key_subset <- vessel_length_key_df %>%
+  filter(year == process_year)
+```
+
+
+```{r}
+dcrb_landings_length <- left_join(landings, key_subset, by=join_by(drvid,agency_code,year))
 for(a in unique(dcrb_landings_length$agency_code)){
   tmp_dat <- filter(dcrb_landings_length, agency_code == a)
   missing <- sum(is.na(tmp_dat$FINAL_LENGTH))
@@ -283,16 +289,12 @@ output_subdir <- here('Confidential','data', output_dir_name, 'vessel_length_key
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output
-key_subset <- vessel_length_key_df %>%
-  filter(year == process_year)
+
 write_rds(key_subset, here::here('Confidential', 'data', output_dir_name, 'vessel_length_keys', paste0('vessel_length_key_', process_year, '.rds')))
 ```
 
 Landings matched to vessel lengths
 
 ```{r eval=TRUE}
-#save output with diff name to indicate FTID still in data
-vessel_length_key_df <- vessel_length_key_df %>% select(-year)
-landings_length <- left_join(landings, vessel_length_key_df, by=c("drvid", "agency_code"))
-write_rds(landings_length,here::here('Confidential', 'data', output_dir_name, 'fish_tickets', paste0('fishtix_vlengths_withFTID_', process_year, '.rds')))
+write_rds(dcrb_landings_length,here::here('Confidential', 'data', output_dir_name, 'fish_tickets', paste0('fishtix_vlengths_withFTID_', process_year, '.rds')))
 ```

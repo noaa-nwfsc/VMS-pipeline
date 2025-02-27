@@ -64,6 +64,10 @@ vms %<>%
   mutate(westcoastdate = with_tz(UTCDATETIME, tzone = "America/Los_Angeles")) %>%
   # without time
   mutate(westcoastdate_notime = as_date(westcoastdate))
+
+# check time ranges
+vms %>% pull(UTCDATETIME) %>% range() %>% as.character()
+vms %>% pull(westcoastdate) %>% range() %>% as.character()
 ```
 
 ## Prep Fish Ticket Data for Matching
@@ -125,7 +129,9 @@ join_vms_fishtix <- function(mth){
   tmptix <- fishtix %>% 
     filter(month==mth)
   
-  tmpvms <- vms %>% filter(month(westcoastdate)%in%c(mth-1,mth))
+  last_mth <- ifelse(mth==1,12,mth-1)
+  
+  tmpvms <- vms %>% filter(month(westcoastdate)%in%c(mth,last_mth))
   
   tmptix %>%
     # Left-join the VMS data by Vessel ID (drvid/DOCNUM)

@@ -70,6 +70,11 @@ vms_raw <- purrr::map_df(vms_we_want, read_rds) %>%
   select(-westcoastdate, -westcoastdate_notime)
 ```
 
+```{r}
+# report date range of pulled vms
+cat('Range of UTCDATETIME in VMS:', vms_raw %>% pull(UTCDATETIME) %>% range() %>% as.character())
+```
+
 ## Check for Missing Data
 
 Are any records missing lat/lon?
