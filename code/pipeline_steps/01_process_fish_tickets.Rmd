@@ -83,7 +83,7 @@ This should be a .csv file containing raw PacFIN data. We only read in columns t
 
 ```{r rawdata}
 # read in fish ticket data for current process year, and prior year to catch lookback window (i.e. fish tickets on Jan. 1, process_year that have fishing activity in prior )
-rawdat <- read_rds(here::here('Confidential','data','raw','fish_tickets','all_fishtickets_1994_2023.rds'))
+rawdat <- read_rds(here::here('Confidential', 'raw_data', 'fish_tickets', 'all_fishtickets_1994_2023.rds'))
 rawdat <- rawdat %>% filter(LANDING_DATE >= lookback_begin & LANDING_DATE <= year_end)
 
 #earlier years:
@@ -432,7 +432,7 @@ output_subdir <- here('Confidential', 'data', output_dir_name, 'fish_tickets')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output
-dat_out %>% write_rds(here::here('Confidential','data', output_dir_name, 'fish_tickets', paste0("fishtix_withFTID_", process_year, ".rds", collapse="")))
+dat_out %>% write_rds(here::here('Confidential','processed_data', output_dir_name, 'fish_tickets', paste0("fishtix_withFTID_", process_year, ".rds", collapse="")))
 
 # for(y in unique(rawdat$LANDING_YEAR)){
 #   year.final.processdat <- filter(final.processdat, year == y )

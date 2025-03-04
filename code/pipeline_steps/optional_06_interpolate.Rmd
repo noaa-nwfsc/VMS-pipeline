@@ -45,7 +45,7 @@ rm(list=setdiff(ls(),c('process_year', 'alltime', 'output_dir_name')))
 Read in the filtered VMS data set from the previous step
 
 ```{r rawdat}
-vms_filtered <- read_rds(here::here('Confidential', 'data', output_dir_name, 'filtered', paste0('matched_filtered_withFTID_length_', process_year, '.rds')))
+vms_filtered <- read_rds(here::here('Confidential', 'processed_data', output_dir_name, 'filtered', paste0('matched_filtered_withFTID_length_', process_year, '.rds')))
 ```
 
 ## Remove Trips with Large Time Gaps
@@ -281,10 +281,10 @@ Add a final indicator for whether a point was interpolated or not, then save
 vms_regular %<>% mutate(is_interpolated=ifelse(sensor=="interpolateTime",1,0)) %>% dplyr::select(-sensor)
 
 # create output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential','data', output_dir_name, 'interpolated')
+output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'interpolated')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output
-write_rds(vms_regular, here::here('Confidential','data', output_dir_name, 'interpolated', paste0('interpolated_', process_year, '.rds')))
+write_rds(vms_regular, here::here('Confidential', 'processed_data', output_dir_name, 'interpolated', paste0('interpolated_', process_year, '.rds')))
 ```
 

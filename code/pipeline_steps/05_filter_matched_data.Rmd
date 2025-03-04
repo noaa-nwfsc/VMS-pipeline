@@ -49,7 +49,7 @@ options(dplyr.summarise.inform=F)
 First, the full vms data set for `r process_year`.
 
 ```{r data}
-vms <- read_rds(here::here('Confidential', 'data', output_dir_name, 'matched', paste0('matched_vmstix_only_withFTID_', process_year, '.rds')))
+vms <- read_rds(here::here('Confidential', 'processed_data', output_dir_name, 'matched', paste0('matched_vmstix_only_withFTID_', process_year, '.rds')))
 ```
 
 ***
@@ -583,8 +583,8 @@ output_subdir <- here('Confidential','data', output_dir_name, 'filtered')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 #Save version with FTID and length
-write_rds(vms_filtered,here::here('Confidential', 'data', output_dir_name, 'filtered', paste0('matched_filtered_withFTID_length_', process_year, '.rds')))
-write_rds(vms_wfilters,here::here('Confidential', 'data', output_dir_name, 'filtered', paste0('matched_unfiltered_', process_year, '.rds')))
+write_rds(vms_filtered,here::here('Confidential', 'processed_data', output_dir_name, 'filtered', paste0('matched_filtered_withFTID_length_', process_year, '.rds')))
+write_rds(vms_wfilters,here::here('Confidential', 'processed_data', output_dir_name, 'filtered', paste0('matched_unfiltered_', process_year, '.rds')))
 ```
 
 ```{r}

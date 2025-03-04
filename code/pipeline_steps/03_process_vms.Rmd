@@ -57,7 +57,7 @@ bathy_upper = 100
 
 ```{r read data}
 # Updated 2/21/2024 with new VMS files
-vms_fn <- list.files(here('Confidential','data','raw','vms'),full.names = T)
+vms_fn <- list.files(here('Confidential', 'raw_data', ,'vms'), full.names = T)
 vms_we_want <- vms_fn[grepl("chunk", vms_fn) & (grepl(process_year, vms_fn) | grepl(process_year - 1, vms_fn))]
 
 vms_raw <- purrr::map_df(vms_we_want, read_rds) %>%
@@ -208,7 +208,7 @@ output_subdir <- here('Confidential','data', output_dir_name, 'vms')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output
-write_rds(vms_dupes, here::here('Confidential', 'data', output_dir_name, 'vms', paste0('vms_duplicates_', process_year, '.rds')))
+write_rds(vms_dupes, here::here('Confidential', 'processed_data', output_dir_name, 'vms', paste0('vms_duplicates_', process_year, '.rds')))
 ```
 
 ## Add Bathymetry
@@ -273,5 +273,5 @@ vms_ordered <- vms_nodup_bathy %>%
 ## Save Results
 
 ```{r save rds}
-write_rds(vms_ordered,here::here('Confidential','data', output_dir_name, 'vms', paste0('vms_clean_', process_year, '.rds')))
+write_rds(vms_ordered,here::here('Confidential', 'processed_data', output_dir_name, 'vms', paste0('vms_clean_', process_year, '.rds')))
 ```

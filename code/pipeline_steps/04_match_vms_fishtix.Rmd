@@ -43,13 +43,13 @@ Load fish ticket data (processed), which includes the `lookback_window` days of 
 
 ```{r load tix}
 #Load in data with FTID and vessel length
-fishtix <- read_rds(here::here('Confidential', 'data', output_dir_name, 'fish_tickets', paste0('fishtix_vlengths_withFTID_', process_year, '.rds')))
+fishtix <- read_rds(here::here('Confidential', 'processed_data', output_dir_name, 'fish_tickets', paste0('fishtix_vlengths_withFTID_', process_year, '.rds')))
 ```
 
 Load VMS data, which includes the `lookback_window` days of data from the prior year (for handling trips spanning January 1st of the current year)
 
 ```{r load vms}
-vms <- read_rds(here::here('Confidential', 'data', output_dir_name, 'vms', paste0('vms_clean_', process_year, '.rds')))
+vms <- read_rds(here::here('Confidential', 'processed_data', output_dir_name, 'vms', paste0('vms_clean_', process_year, '.rds')))
 ```
 
 ## Prep VMS Data for Matching
@@ -240,6 +240,6 @@ output_subdir <- here('Confidential','data', output_dir_name, 'matched')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write both versions
-write_rds(fishtix_vms_all, here::here('Confidential', 'data', output_dir_name, 'matched', paste0('matched_alltix_withFTID_', process_year, '.rds')))
-write_rds(fishtix_vms_only, here::here('Confidential', 'data', output_dir_name, 'matched', paste0('matched_vmstix_only_withFTID_', process_year, '.rds')))
+write_rds(fishtix_vms_all, here::here('Confidential', 'processed_data', output_dir_name, 'matched', paste0('matched_alltix_withFTID_', process_year, '.rds')))
+write_rds(fishtix_vms_only, here::here('Confidential', 'processed_data', output_dir_name, 'matched', paste0('matched_vmstix_only_withFTID_', process_year, '.rds')))
 ```
