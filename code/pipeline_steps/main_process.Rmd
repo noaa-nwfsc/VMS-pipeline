@@ -23,7 +23,12 @@ alltime <- proc.time()
 ```
 
 ``` {r output directory, include=FALSE}
+# create output directory name based on system date
 output_dir_name <- paste0("processed_", Sys.Date())
+
+# make output directory, if doesn't yet exist
+output_dir <- here('Confidential', 'processed_data', output_dir_name)
+if (!dir.exists(output_dir)) dir.create(output_dir)
 ```
 
 ## Choose Fishery
@@ -105,7 +110,8 @@ interpolate_flag <- TRUE
 Using the parameters chosen above, write session info to file in the 'log' folder.
 
 ```{r write-log-file, include=FALSE}
-log_open(file_name = format(Sys.time(),"%F %H.%M.%S"))
+log_file_name = format(Sys.time(),"%F %H.%M.%S")
+log_open(file_name = log_file_name)
 
 log_print("VMS PIPELINE WAS INITIATED WITH THE FOLLOWING OPTIONS", hide_notes = T)
 log_print(paste("Process Year:", process_year), hide_notes = T)
@@ -118,6 +124,13 @@ log_print(paste("Lookback Window:",lookback_window, " days"), hide_notes=T)
 log_print(paste("Include Interpolation Step:",interpolate_flag), hide_notes=T)
 
 log_close()
+```
+
+Copy the log file into the output directory.
+
+```{r copy-log-file, include=FALSE}
+file.copy(from = here('code', 'pipeline_steps', 'log', paste0(log_file_name, '.log')),
+          to = here('Confidential', 'processed_data', output_dir_name))
 ```
 
 

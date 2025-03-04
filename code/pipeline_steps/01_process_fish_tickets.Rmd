@@ -423,10 +423,6 @@ dat_out %<>%
 Save the data!
 
 ```{r save}
-# create output directory, if doesn't yet exist
-output_dir <- here('Confidential', 'data', output_dir_name)
-if (!dir.exists(output_dir)) dir.create(output_dir)
-
 # create output subdirectory, if doesn't yet exist
 output_subdir <- here('Confidential', 'data', output_dir_name, 'fish_tickets')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
