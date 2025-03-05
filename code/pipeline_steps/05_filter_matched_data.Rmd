@@ -579,7 +579,7 @@ Save the output and the full, non-filtered data set
 
 ```{r}
 # create output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential','data', output_dir_name, 'filtered')
+output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'filtered')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 #Save version with FTID and length

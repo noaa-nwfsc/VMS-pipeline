@@ -81,7 +81,7 @@ This parameter will get passed through all processing steps
 alltime <- proc.time()
 
 # choose year of data to process
-process_year <- 2019
+process_year <- 2020
 ```
 
 ## Lookback Window
@@ -129,7 +129,6 @@ log_close()
 file.copy(from = here('code', 'pipeline_steps', 'log', paste0(log_file_name, '.log')),
           to = here('Confidential', 'processed_data', output_dir_name))
 ```
-
 
 # Step 1: Process Raw Fish Ticket Data
 
@@ -184,7 +183,7 @@ x<-proc.time()-alltime
 
 # Step 6: Optional: Interpolate VMS Pings
 
-```{r step6, message=F, warning=F, child=if (interpolate_flag) here::here('code', 'pipeline_steps', 'optional_06_interpolate.Rmd')}
+```{r step6, message=F, warning=F, child=if (interpolate_flag) here::here('code', 'pipeline_steps', '06_interpolate.Rmd')}
 ```
 ```{r}
 x<-proc.time()-alltime

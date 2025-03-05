@@ -424,7 +424,7 @@ Save the data!
 
 ```{r save}
 # create output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential', 'data', output_dir_name, 'fish_tickets')
+output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'fish_tickets')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output

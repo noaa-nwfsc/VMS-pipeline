@@ -236,7 +236,7 @@ fishtix_vms_all <- fishtix_vms
 fishtix_vms_only <- fishtix_vms %>% filter(has_vms==1)
 
 # create output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential','data', output_dir_name, 'matched')
+output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'matched')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write both versions

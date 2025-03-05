@@ -8,12 +8,13 @@ library(readr)
 # find most recent log file and read lines
 log_files <- list.files(here('code', 'pipeline_steps', 'log'))
 most_recent_log_file <- log_files[length(log_files)]
+log_lines <- read_lines(here('code', 'pipeline_steps', 'log', most_recent_log_file), skip = 15, n_max = 2)
 
 # find output directory name and process year from most recent log file
 log_line_output_dir_name <- log_lines[which(startsWith(log_lines, "output_dir_name"))]
 log_line_process_year    <- log_lines[which(startsWith(log_lines, "process_year"))]
 output_dir_name <- strsplit(log_line_output_dir_name, split = " ")[[1]][2]
-process_year    <- strsplit(log_process_year, split = " ")[[1]][2]
+process_year    <- strsplit(log_line_process_year, split = " ")[[1]][2]
 
 # create output subdirectory, if doesn't yet exist
 output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'markdowns')

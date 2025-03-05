@@ -285,7 +285,7 @@ Vessel lengths key
 
 ```{r eval=TRUE}
 # create output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential','data', output_dir_name, 'vessel_length_keys')
+output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'vessel_length_keys')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output

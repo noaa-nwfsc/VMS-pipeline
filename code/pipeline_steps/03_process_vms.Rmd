@@ -57,7 +57,7 @@ bathy_upper = 100
 
 ```{r read data}
 # Updated 2/21/2024 with new VMS files
-vms_fn <- list.files(here('Confidential', 'raw_data', ,'vms'), full.names = T)
+vms_fn <- list.files(here('Confidential', 'raw_data', 'vms'), full.names = T)
 vms_we_want <- vms_fn[grepl("chunk", vms_fn) & (grepl(process_year, vms_fn) | grepl(process_year - 1, vms_fn))]
 
 vms_raw <- purrr::map_df(vms_we_want, read_rds) %>%
@@ -204,7 +204,7 @@ vms_dupes <- vms %>%
 proc.time()-tm
 
 # create output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential','data', output_dir_name, 'vms')
+output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'vms')
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output
