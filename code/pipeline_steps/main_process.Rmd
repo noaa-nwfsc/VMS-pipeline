@@ -107,28 +107,25 @@ interpolate_flag <- TRUE
 
 # Create Log File
 
-Using the parameters chosen above, write session info to file in the 'log' folder.
+Using the parameters chosen above, write session info to a log file. This log file is used to track the parameters for each run publicly in the `log` folder, and for each run in the confidential output directory. It is also used to move the knit markdown file after running `main_process.Rmd`, when running `move_markdown_html.R`.
 
 ```{r write-log-file, include=FALSE}
+# write log file in log directory
 log_file_name = format(Sys.time(),"%F %H.%M.%S")
 log_open(file_name = log_file_name)
-
-log_print("VMS PIPELINE WAS INITIATED WITH THE FOLLOWING OPTIONS", hide_notes = T)
-log_print(paste("Process Year:", process_year), hide_notes = T)
-log_print(paste("Species Codes:", paste(spp_codes, collapse = ",")), hide_notes = T)
-log_print(paste("Gear Codes:", paste(gear_codes,collapse = ",")), hide_notes = T)
-log_print(paste("PacFIN Weight Metric:", paste(pacfin_weight_metric, collapse = ",")), hide_notes = T)
-log_print(paste("PacFIN Revenue Metric:",paste(pacfin_revenue_metric, collapse=",")), hide_notes = T)
-log_print(paste("Target Cutoff:", paste(target_cutoff, collapse=",")), hide_notes = T)
-log_print(paste("Lookback Window:",lookback_window, " days"), hide_notes=T)
-log_print(paste("Include Interpolation Step:",interpolate_flag), hide_notes=T)
-
+log_print("VMS piepeline was initiated with the following parameters:", hide_notes = T)
+log_print(paste("output_dir_name", output_dir_name), hide_notes = T, blank_after = F)
+log_print(paste("process_year", process_year), hide_notes = T, blank_after = F)
+log_print(paste("spp_codes", paste(spp_codes, collapse = "; ")), hide_notes = T, blank_after = F)
+log_print(paste("gear_codes", paste(gear_codes, collapse = "; ")), hide_notes = T, blank_after = F)
+log_print(paste("pacfin_weight_metric", paste(pacfin_weight_metric, collapse = ",")), hide_notes = T, blank_after = F)
+log_print(paste("pacfin_revenue_metric",paste(pacfin_revenue_metric, collapse=",")), hide_notes = T, blank_after = F)
+log_print(paste("target_cutoff", paste(target_cutoff, collapse=",")), hide_notes = T, blank_after = F)
+log_print(paste("lookback_window", lookback_window), hide_notes = T, blank_after = F)
+log_print(paste("interpolate_flag", interpolate_flag), hide_notes = T)
 log_close()
-```
 
-Copy the log file into the output directory.
-
-```{r copy-log-file, include=FALSE}
+# copy log file to output directory
 file.copy(from = here('code', 'pipeline_steps', 'log', paste0(log_file_name, '.log')),
           to = here('Confidential', 'processed_data', output_dir_name))
 ```
