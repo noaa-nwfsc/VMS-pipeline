@@ -8,14 +8,15 @@ format:
 
 **Author**: Brooke Hawkins
 
-**Date**: Started Feb. 21, 2025
+**Date**: March 5, 2025
 
-**Purpose**: Parity test to compare data from before and after repository reorganization. I ran the pipeline for 2019 and 2020 data for Dungeness crab in the *main* and *24 reorganize repository* branches, and I want to make sure the outputs are the same in all the ways I expect. I expect some differences for output up to step 4, which will now include data from the lookback window of the prior year. From step 4 onwards, output should all be the same.
+**Purpose**: Parity test to compare data from before and after repository reorganization. I ran the pipeline for 2019 and 2020 data for Dungeness crab in the *main* and *24 reorganize repository* branches. This is after a fix from Owen. I expect some differences in the output since it will now include data from the lookback window of the prior year.
 
 This script will print entire file names and column names of dataframes, so *make sure there are no confidential file names or dataframes if you push the output onto GitHub*.
 
 ```{r}
 library(here)
+library(dplyr)
 ```
 
 # Helper functions
@@ -120,10 +121,12 @@ compare_file_list <- function (file_vector_1, file_vector_2, date_colname_vector
 
 Main files will read in the main branch files. Branch files will read in the reorganized branch files.
 
+I have added a filter on years for `main_files` in each step, because I only ran 2019 and 2020 to test in the branch. Two years should be a sufficient check.
+
 ```{r}
 # list directories
-main_dir   <- here("Confidential", "processed")
-branch_dir <- here("Confidential", "data", "processed_2025-02-20")
+main_dir   <- here("Confidential", "data", "archive_processed_main")
+branch_dir <- here("Confidential", "processed_data", "processed_2025-03-04")
 # get vector of file names
 main_files   <- list.files(path = main_dir, full.names = TRUE, recursive = TRUE)
 branch_files <- list.files(path = branch_dir, full.names = TRUE, recursive = TRUE)
@@ -136,6 +139,9 @@ branch_files <- list.files(path = branch_dir, full.names = TRUE, recursive = TRU
 main_files_step1   <- main_files[grepl("fishtix_withFTID", main_files)]
 branch_files_step1 <- branch_files[grepl("fishtix_withFTID", branch_files)]
 
+# filter for years I want to check
+main_files_step1 <- main_files_step1[grepl("2019|2020", main_files_step1)]
+
 # compare files
 compare_file_list(
   file_vector_1 = main_files_step1, 
@@ -145,7 +151,7 @@ compare_file_list(
 )
 ```
 
-For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data. That makes sense. Passes check.
+For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data. Passes check.
 
 ## Step 2
 
@@ -153,6 +159,9 @@ For 2019 and 2020 runs, the reorganized branch has more rows of data and a longe
 # list relevant files
 main_files_step2   <- main_files[grepl("vessel_length_key|fishtix_vlengths_withFTID", main_files)]
 branch_files_step2 <- branch_files[grepl("vessel_length_key|fishtix_vlengths_withFTID", branch_files)]
+
+# filter for years I want to check
+main_files_step2 <- main_files_step2[grepl("2019|2020", main_files_step2)]
 
 # compare files
 compare_file_list(
@@ -163,7 +172,11 @@ compare_file_list(
 )
 ```
 
-For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data for fish ticket data. The dimensions and date ranges are the same for the vessel length keys, though. That makes sense. Passes check.
+For fish tickets, the reorganized branch has more rows of data and a longer date range to include the lookback window for fish ticket data.
+
+The vessel length keys have the same dimensions and date ranges. This was not the case before, Owen fixed this in commit [ced6a21](https://github.com/noaa-nwfsc/VMS-pipeline/pull/39/commits/ced6a21399a4e40b90daa4fa554bf5e497607c94).
+
+Passes check.
 
 ## Step 3
 
@@ -174,6 +187,9 @@ For 2019 and 2020 runs, the reorganized branch has more rows of data and a longe
 main_files_step3a   <- main_files[grepl("vms_clean", main_files)]
 branch_files_step3a <- branch_files[grepl("vms_clean", branch_files)]
 
+# filter for years I want to check
+main_files_step3a <- main_files_step3a[grepl("2019|2020", main_files_step3a)]
+
 # compare files
 compare_file_list(
   file_vector_1 = main_files_step3a, 
@@ -183,7 +199,7 @@ compare_file_list(
 )
 ```
 
-For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data for fish ticket data. That makes sense. Passes check.
+For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data for fish ticket data. Passes check.
 
 ### Duplicates
 
@@ -191,6 +207,9 @@ For 2019 and 2020 runs, the reorganized branch has more rows of data and a longe
 # list relevant files
 main_files_step3b   <- main_files[grepl("duplicates_only", main_files)]
 branch_files_step3b <- branch_files[grepl("duplicates", branch_files)]
+
+# filter for years I want to check
+main_files_step3b <- main_files_step3b[grepl("2019|2020", main_files_step3b)]
 
 # compare files
 compare_file_list(
@@ -201,7 +220,7 @@ compare_file_list(
 )
 ```
 
-For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data for fish ticket data. That makes sense. Passes check.
+For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data for fish ticket data. There is also a new 8 hour offset to convert UTC time zone into Pacific time zone. I fixed this in commit [6965b52](https://github.com/noaa-nwfsc/VMS-pipeline/commit/6965b52fff00eb432f9c2a3a58809116538bc731). Passes check.
 
 ## Step 4
 
@@ -212,6 +231,9 @@ For 2019 and 2020 runs, the reorganized branch has more rows of data and a longe
 main_files_step4a   <- main_files[grepl("matched_alltix", main_files)]
 branch_files_step4a <- branch_files[grepl("matched_alltix", branch_files)]
 
+# filter for years I want to check
+main_files_step4a <- main_files_step4a[grepl("2019|2020", main_files_step4a)]
+
 # compare files
 compare_file_list(
   file_vector_1 = main_files_step4a, 
@@ -221,12 +243,17 @@ compare_file_list(
 )
 ```
 
+For 2019 and 2020 runs, the reorganized branch has more rows of data, which makes sense since we're capturing more data with the lookback window at the start of the year. Passes check.
+
 #### VMS
 
 ```{r}
 # list relevant files
 main_files_step4b   <- main_files[grepl("matched_vmstix", main_files)]
 branch_files_step4b <- branch_files[grepl("matched_vmstix", branch_files)]
+
+# filter for years I want to check
+main_files_step4b <- main_files_step4b[grepl("2019|2020", main_files_step4b)]
 
 # compare files
 compare_file_list(
@@ -237,7 +264,7 @@ compare_file_list(
 )
 ```
 
-For 2019 and 2020 runs, the reorganized branch has more rows of data, despite being filtered to have only the one year of data (no lookback window). They should be the same by step 4, especially for 2020. Fail check.
+For 2019 and 2020 runs, the reorganized branch has more rows of data, which makes sense since we're capturing more data with the lookback window at the start of the year. Passes check.
 
 ## Step 5
 
@@ -248,6 +275,9 @@ For 2019 and 2020 runs, the reorganized branch has more rows of data, despite be
 main_files_step5a   <- main_files[grepl("unfiltered", main_files)]
 branch_files_step5a <- branch_files[grepl("unfiltered", branch_files)]
 
+# filter for years I want to check
+main_files_step5a <- main_files_step5a[grepl("2019|2020", main_files_step5a)]
+
 # compare files
 compare_file_list(
   file_vector_1 = main_files_step5a, 
@@ -257,12 +287,17 @@ compare_file_list(
 )
 ```
 
+For 2019 and 2020 runs, the reorganized branch has more rows of data, which makes sense since we're capturing more data with the lookback window at the start of the year. Passes check.
+
 ### Filtered
 
 ```{r}
 # list relevant files
 main_files_step5b   <- main_files[grepl("_filtered", main_files)]
 branch_files_step5b <- branch_files[grepl("_filtered", branch_files)]
+
+# filter for years I want to check
+main_files_step5b <- main_files_step5b[grepl("2019|2020", main_files_step5b)]
 
 # compare files
 compare_file_list(
@@ -273,7 +308,60 @@ compare_file_list(
 )
 ```
 
-For 2019 and 2020 runs, the reorganized branch has more rows of data, despite being filtered to have only the one year of data (no lookback window). They should be the same by step 4, especially for 2020. Fail check.
+For 2019 and 2020 runs, the reorganized branch has more rows of data, which makes sense since we're capturing more data with the lookback window at the start of the year. Passes check.
+
+## Deeper Dive
+
+```{r}
+# deeper dive into the differences for 2020 processed data - when are the new records from?
+
+# what join IDs can I use? since VMS_RECNO is randomly generated, I can't use that
+# a combination of Rec_ID, FTID, drvid, and westcoastdate should be useful
+df_1 <- readRDS(main_files_step5b[2])
+df_2 <- readRDS(branch_files_step5b[2])
+joined_df <- full_join(df_1, df_2, by = join_by(Rec_ID, FTID, drvid, UTCDATETIME))
+
+# compare VMS date ranges
+range(df_1$UTCDATETIME)
+range(df_2$UTCDATETIME)
+
+# what records are in main version that aren't in branch version?
+df_1_only <- joined_df %>%
+  filter(!is.na(VMS_RECNO.x) & is.na(VMS_RECNO.y))
+
+# what records are in branch version that aren't in main version?
+df_2_only <- joined_df %>%
+  filter(is.na(VMS_RECNO.x) & !is.na(VMS_RECNO.y))
+
+# what records are in both versions?
+df_1_and_2 <- joined_df %>%
+  filter(!is.na(VMS_RECNO.x) & !is.na(VMS_RECNO.y))
+
+# deep dive into df_1_and_2
+length(unique(df_1_and_2$FTID)) # 17051 fish tickets
+nrow(df_1_and_2) # 1,048,382 VMS pings
+range(df_1_and_2$UTCDATETIME) # VMS pings start Jan. 1, 2020 at 8am UTC and end Dec. 31, 2021 ~11pm UTC
+range(df_1_and_2$begin.y) # tickets start on Dec. 25, 2019 through Dec. 30, 2020
+range(df_1_and_2$end.y) # tickets end on Jan. 1, 2020 through Dec. 31, 2020
+
+# deep dive into df_1_only
+length(unique(df_1_only$FTID)) # 14 fish tickets
+nrow(df_1_only) # 332 VMS pings
+range(df_1_only$UTCDATETIME) # VMS pings start Jan. 1, 2020 at 8am UTC and end Jan. 4, 2020 ~8am UTC
+sort(unique(df_1_only$begin.x)) # tickets start on days within the lookback window
+sort(unique(df_1_only$end.x)) # tickets end in the first 3 days of the year
+
+# deep dive into df_2_only
+length(unique(df_2_only$FTID)) # 192 fish tickets
+nrow(df_2_only) # 14,583 VMS pings
+range(df_2_only$UTCDATETIME) # VMS pings start Dec. 26, 2019 at 8am UTC and end Jan. 1, 2021 ~8am UTC
+sort(unique(df_2_only$begin.y)) # tickets start on days within the lookback window, and at the very end of 2020
+sort(unique(df_2_only$end.y)) # tickets end in the first 6 days of the year, and at the very end of 2020
+```
+
+We are losing a small number of records (332) and gaining a larger number of records (14583). The majority of records are still the same between old and new methods (1048382). The reorganized pipeline is capturing ~1% more VMS pings than the main branch version ((14583-332)/1048382 * 100 = 1.36%).
+
+For these comparisons, it's important to note the difference between `date` which is from the fish ticket, and `UTCDATETIME` which is from the VMS ping. The difference in new data in the reorganized pipeline is due to capturing VMS pings at the end of the prior year within the lookback window of fish tickets at the start of the year.
 
 ## Step 6
 
@@ -281,6 +369,9 @@ For 2019 and 2020 runs, the reorganized branch has more rows of data, despite be
 # list relevant files
 main_files_step6   <- main_files[grepl("interpolated", main_files)]
 branch_files_step6 <- branch_files[grepl("interpolated", branch_files)]
+
+# filter for years I want to check
+main_files_step6 <- main_files_step6[grepl("2019|2020", main_files_step6)]
 
 # compare files
 compare_file_list(
@@ -291,13 +382,11 @@ compare_file_list(
 )
 ```
 
-For 2019 and 2020 runs, after interpolation, there are the same number of records for 2020 only. Ideally it would be the same for 2019 too. Fail check.
+For 2019 and 2020 runs, the reorganized branch has more rows of data, which makes sense since we're capturing more data with the lookback window. Passes check.
 
 # Conclusion
 
-The refactor may need some debugging. I partly wonder if the difference is so small because it's due to a filtering in UTC vs. PST date time.
-
-I also would expect some differences in 2019 data for step 4, since it would not read in the prior year for lookback window in the main branch where I pulled from with `first_year_process` set to 2019. But I would not expect any differences in 2020 data.
+I'm going to check out the main branch and re run that one more time. Vessel keys are now the same, which is good. I'm not sure why there's ~0.5% increase in records in the reorganized branch. The date range seems correct. And I'm unsure if that's because the date range was somehow incorrect in the main branch previously.
 
 ```{r, include=FALSE}
 # I ran this to figure out manually what the names of the date columns were as I added steps
