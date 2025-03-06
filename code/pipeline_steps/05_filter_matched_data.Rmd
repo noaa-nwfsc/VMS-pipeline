@@ -1,0 +1,594 @@
+---
+title: "Filter Matched Data"
+author: "Owen Liu"
+date: "12/12/2019"
+output: html_document
+---
+
+## Purpose
+
+This final step cleans up the matched fish ticket/VMS records spatially through filtering. The script:
+
+* Removes outlier trips where the Port of Landing is > 50km from the last VMS point of the associated trip
+
+* Recalculates average speed for each trip and filters out segments with unrealistically large speed. This speed cutoff is set by default at 20 m/s, but can be altered in this script.
+
+* Flags VMS points that have a bathymetry value > 0
+
+* Flags VMS points that are within a 3-kilometer buffer of a port, so we can remove points that are not directly associated with a fishing trip (e.g., because the boat is sitting in port between trips)
+
+## Setup and Data Import
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(magrittr)
+library(here)
+library(sf)
+library(geosphere)
+library(lubridate)
+library(rnaturalearth)
+
+# ggplot theme
+plot_theme <-   theme_minimal()+
+  theme(text=element_text(family="sans",size=12,color="black"),
+        legend.text = element_text(size=14),
+        axis.title=element_text(family="sans",size=14,color="black"),
+        axis.text=element_text(family="sans",size=8,color="black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+theme_set(plot_theme)
+
+keepers <- c('process_year','alltime','spp_codes','gear_codes','pacfin_weight_metric','pacfin_revenue_metric','target_cutoff','lookback_window','year_begin','year_end','lookback_begin', 'interpolate_flag', 'output_dir_name')
+
+rm(list=setdiff(ls(),keepers))
+options(dplyr.summarise.inform=F)
+```
+
+### Read in the data
+
+First, the full vms data set for `r process_year`.
+
+```{r data}
+vms <- read_rds(here::here('Confidential', 'processed_data', output_dir_name, 'matched', paste0('matched_vmstix_only_withFTID_', process_year, '.rds')))
+```
+
+***
+
+## Remove trips where Port of Landing > 50km from last VMS data point
+
+Latitude/longitude of ports. Coordinates were provided by Blake Feist.
+
+```{r}
+portlist_coords <- read_csv(here::here('spatial_data','port_coords_fromBlake_edited.csv'),col_types='cddd') %>% 
+  select(port_code,Lon,Lat) %>% 
+  set_names(c('port_code','portlon','portlat'))
+```
+
+Filter VMS data to include only the last VMS data point for each trip
+
+```{r}
+fishtix_lastVMS <- vms %>%
+  group_by(Rec_ID) %>%
+  top_n(1, wt=westcoastdate) %>%
+  ungroup()
+```
+
+Add port locations to last VMS points
+
+```{r port_coords}
+fishtix_lastVMS <- left_join(fishtix_lastVMS, portlist_coords, by=c("pacfin_port_code" = "port_code"))
+```
+
+How many port lat/lon coordinates are NA? For `r process_year`, `r round(sum(is.na(fishtix_lastVMS$portlat)) / length(fishtix_lastVMS$portlat)*100,2)` percent of trips are missing coordinates. We remove these observations.
+
+Note: why is this happening?
+
+```{r}
+fishtix_lastVMS %<>% filter(!is.na(portlat),!is.na(portlon))
+```
+
+
+### Find distance between end VMS and port
+
+Calculate distance with geosphere
+
+```{r calc_dist}
+
+port_dists <- geosphere::distHaversine(p1=cbind(fishtix_lastVMS$portlon, fishtix_lastVMS$portlat),
+                                    p2=cbind(fishtix_lastVMS$LON, fishtix_lastVMS$LAT))
+```
+
+Add the distances as another column
+
+```{r}
+fishtix_lastVMS %<>%
+  mutate(port_to_VMS = port_dists / 1000)
+```
+
+### Sort Trips to Keep or Remove
+
+```{r filter_retain}
+trips_keep_remove_portdist <- fishtix_lastVMS %>% 
+  mutate(keep_remove_portdist= ifelse(port_to_VMS <= 50, 'keep','remove'))
+trips_to_keep <-trips_keep_remove_portdist %>% 
+  filter(keep_remove_portdist=='keep')
+trips_to_remove <- trips_keep_remove_portdist %>% 
+  filter(keep_remove_portdist=='remove')
+```
+
+For `r process_year`, if we filter using this criterion, we retain `r length(unique(trips_to_keep$Rec_ID))` trips, and remove `r length(unique(trips_to_remove$Rec_ID))` trips, which is about `r round(length(unique(trips_to_remove$Rec_ID))/length(unique(fishtix_lastVMS$Rec_ID))*100,2)` percent of all trips.
+
+```{r}
+retained_trips_plot <- trips_to_keep %>% 
+  select(Rec_ID, pacfin_port_code) %>% 
+  distinct() %>%
+  ggplot(aes(x=pacfin_port_code)) +
+  geom_bar() +
+  labs(x="Port",y="Number of Unique Trips",title="Retained Trips Ending <= 50km from a Port")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle=90,vjust=0.5))
+retained_trips_plot
+```
+```{r}
+trips_removed_plot <- trips_to_remove %>% 
+  select(Rec_ID, pacfin_port_code) %>% 
+  distinct() %>%
+  ggplot(aes(x=pacfin_port_code)) +
+  geom_bar() +
+  labs(x="Port",y="Number of Trips Removed",title="Removed Trips Ending > 50km from a Port")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle=90,vjust=0.5))
+trips_removed_plot
+```
+
+Sort the VMS and fish ticket data by the output of this filtering exercise.
+
+Default behavior for calculations that return `NA` is to keep the record.
+
+```{r}
+vms_wfilters <- vms %<>% 
+  left_join(trips_keep_remove_portdist %>% select(Rec_ID,keep_remove_portdist),by='Rec_ID') %>%
+  distinct(VMS_RECNO,UTCDATETIME,.keep_all = T) %>% 
+  mutate(keep_remove_portdist=replace_na(keep_remove_portdist,'keep'))
+```
+
+***
+
+## Calculate Speeds
+
+We calculate speeds by lagging observations (grouped by vessel) by 1 time step, then calculating distance and dividing by time. Note, then, that these are looking backwards, not forwards. In other words, the distance and time duration for a given VMS ping are the values associated with the segment *ending* at that ping.
+
+```{r}
+vms_speeds <- vms_wfilters %>% 
+  ungroup() %>% 
+  group_by(drvid) %>% 
+  # lag latitude and longitude by 1 time step
+  mutate(laglon=lag(LON,1,order_by=westcoastdate),laglat=lag(LAT,1,order_by=westcoastdate)) %>% 
+  # lag time by 1 time step
+  mutate(lagdate=lag(westcoastdate,1,order_by=westcoastdate)) %>% 
+  # calculate duration since last ping, in seconds
+  mutate(segment_dur=as.duration(lagdate %--% westcoastdate)/dseconds()) %>% 
+  ungroup()
+
+# Calculate distance (Note: geosphere seems much faster than doing this with sf())
+segment_dists <- geosphere::distHaversine(p1=cbind(vms_speeds$LON, vms_speeds$LAT),
+                                    p2=cbind(vms_speeds$laglon, vms_speeds$laglat))
+
+vms_speeds %<>% 
+  mutate(segment_dist=segment_dists)
+
+# Speed is just segment distance (default in meters) divided by segment duration (in seconds)
+vms_speeds %<>%
+  mutate(avg_speed_recalc=segment_dist/segment_dur) %>% 
+  # some calculations will be NaN or Inf because of 0 distance or time. Fix these as zeroes
+  mutate(avg_speed_recalc=ifelse(segment_dist==0|segment_dur==0,0,avg_speed_recalc))
+```
+
+### Compare Reported and Calculated Speeds
+
+Using a subsample of 100 thousand records here.
+
+```{r}
+set.seed(0401)
+vms_subsample <- vms_speeds %>% 
+  sample_n(100000) %>% 
+  mutate(speed_diff=avg_speed_recalc-AVG_SPEED)
+vms_subsample %>% 
+  ggplot(aes(AVG_SPEED,avg_speed_recalc))+
+  geom_point()+
+  geom_smooth(method='lm')+
+  coord_equal(xlim=c(0,500),ylim=c(0,500))+
+  labs(x='Original Average Speed',y="Average Speed Recalculated")
+```
+
+Zoom in a bit more
+
+```{r}
+vms_subsample %>% 
+  ggplot(aes(AVG_SPEED,avg_speed_recalc))+
+  geom_point()+
+  geom_smooth(method='lm')+
+  coord_equal(xlim=c(0,50),ylim=c(0,50))+
+  labs(x='Original Average Speed',y="Average Speed Recalculated")
+```
+
+Distribution of differences
+
+```{r}
+vms_subsample %>% 
+  mutate(speed_diff=avg_speed_recalc-AVG_SPEED) %>% 
+  ggplot(aes(speed_diff))+
+  geom_density(fill='seagreen',col=NA)+
+  geom_vline(xintercept=0,linetype=2)+
+  labs(x="Calculated minus Reported Speed (m/s)",y='kernel density')+
+  xlim(-5,5)
+```
+
+`r round(sum(vms_subsample$speed_diff<=1 & vms_subsample$speed_diff>=-1,na.rm=T)/nrow(vms_subsample)*100,2)` percent of our re-calculations are within 1 m/s of the reported average speeds. Beyond that, it seems that the reported average speeds tend on average to be greater than our calculated speeds.
+
+### Sort Trips to Keep or Remove
+
+```{r}
+max_speed <- 20 # meters per second
+```
+
+
+This time, indicate whether our recalculated speed is greater than `r max_speed` m/s. Add these indicators to the master, matched dataset. Default behavior when calculation returns `NA` is to keep the record.
+
+```{r}
+vms_wfilters <- vms_speeds %>% mutate(keep_remove_speed=ifelse(avg_speed_recalc>max_speed,'remove','keep')) %>% 
+  mutate(keep_remove_speed=replace_na(keep_remove_speed,"keep"))
+```
+
+If we filter using the speed criterion, we would remove `r round(sum(vms_wfilters$keep_remove_speed=='remove',na.rm=T)/nrow(vms_wfilters)*100,2)` percent of all observations for `r process_year`.
+
+***
+
+## Indicate Pings on Land
+
+Add another `keep_remove` indicator showing whether a given VMS ping may be on land.
+
+```{r}
+vms_wfilters %<>% mutate(keep_remove_bathy=ifelse(NGDC_M<=0,"keep","remove"))
+```
+
+If we filter using the on-land criterion, we would remove `r round(sum(vms_wfilters$keep_remove_bathy=='remove',na.rm=T)/nrow(vms_wfilters)*100,2)` percent of all observations for `r process_year`.
+
+***
+
+## Remove In-Port VMS Records
+
+In this piece, we flag all "in-port" VMS records, using a buffer zone of 1.5km or 3km, depending on the port. In-port records that also have an average speed of < 1 m/s are marked for removal. Only those records marked for removal before and after the fishing trip were actually removed from the filtered output data.
+
+```{r}
+## width of buffer circle (in meters). applies to all ports but those that require smaller buffers
+r = 3000
+
+## port codes for any ports that require reduced buffer sizes. Default is only COS
+ports_lowbuffer <- c("COS")
+
+## width of buffer circle (in meters) for reduced buffer size
+r2 = 1500
+
+## cutoff value for speed (m/s) -- 1m/s ~ 2 knots
+speed_cutoff <- 1
+```
+
+Using port coordinates from above, indicated whether they are in the "smaller buffer" category
+
+```{r}
+portlist_coords %<>%
+  mutate(small_buffer=ifelse(port_code %in% ports_lowbuffer,1,0) %>% as.logical())
+```
+
+### Buffer Ports
+
+```{r}
+# convert ports to sf() object and buffer
+ports_sf <- portlist_coords %>% 
+  st_as_sf(coords=c('portlon','portlat'),crs=4326) %>% 
+  #project to UTM zone 10
+  st_transform(crs = "+proj=utm +north +zone=10 +ellps=WGS84")
+
+# buffer large ports
+large_ports_buffer <- ports_sf %>%
+  filter(!small_buffer) %>% 
+  st_buffer(r)
+
+# buffer small ports
+small_ports_buffer <- ports_sf %>% 
+  filter(small_buffer) %>% 
+  st_buffer(r2)
+
+ports_buffer <- rbind(large_ports_buffer,small_ports_buffer)
+```
+
+### Plot Port Buffers
+
+```{r, message=F,warning=FALSE}
+# import a background/land layer from rnaturalearth package
+coaststates <- ne_states(country='United States of America',returnclass = 'sf') %>% 
+  filter(name %in% c('California','Oregon','Washington')) %>% 
+  
+  # make sure CRS is the same as the port layer
+  st_transform(st_crs(ports_buffer))
+
+# sections of coastline
+cutcoast <- list(c(-124, -125, 47.5, 48.5), #upper WA
+                 c(-123.5, -124.5, 46.7, 47.7), #lower WA p1
+                 c(-123.5, -124.5, 45.7, 46.7), #lower WA / upper OR [WLB, NHL]
+                 c(-123.5, -124.5,45.6, 44.6), # OR [TLL, NEW]
+                 c(-123.5, -124.5,44.5, 43.5), # OR [WLD, WIN]
+                 c(-124, -125, 43.5, 42.25), # OR [COS,GLD]
+                 c(-123.75, -124.75, 42.2, 40.5), #OR to CA [BRK, FLN]
+                 c(-123, -124, 40, 38.5), # CA [BRG, ARE]
+                 c(-122, -123.5, 38.5, 36.6), # CA [BDG, CRZ]
+                 c(-120.5, -122, 37, 35), # CA [MOS, AVL]
+                 c(-117, -120, 35, 32.5)) # CA[SB, OCN]
+
+# Plot
+buffer_plots <- purrr::map(1:length(cutcoast), function(i){
+  seg=cutcoast[[i]]
+  bx=c(xmin=seg[2],xmax=seg[1],ymin=seg[3],ymax=seg[4])%>% st_bbox(crs=st_crs(4326))
+  bbox <- bx %>% st_as_sfc() %>% st_transform(st_crs(ports_buffer)) %>% st_bbox()
+  plotout <- ggplot()+
+    geom_sf(data=coaststates,fill='gray50')+
+    geom_sf(data=ports_buffer,aes(fill=small_buffer),alpha=0.5)+
+    geom_sf_text(data=ports_buffer,aes(label=port_code),size=3,hjust=1)+
+    xlim(bbox[1],bbox[3])+ylim(bbox[2],bbox[4])+
+    labs(x='',y='',title="Port Buffers",fill="Small Buffer")+
+    theme(axis.text.x = element_text(angle=90))
+  print(plotout)
+})
+```
+
+
+### Do Spatial Overlay
+
+Calculate whether points overlap buffers
+
+```{r}
+vms_sf <- vms_wfilters %>% 
+  select(VMS_RECNO,X_COORD,Y_COORD) %>%
+  st_as_sf(coords=c("X_COORD","Y_COORD"),crs = "+proj=utm +north +zone=10 +ellps=WGS84")
+
+# do the overlay, which results in a list of buffer indices into which a VMS point falls
+#https://github.com/r-spatial/sf/wiki/migrating
+port_names <- ports_buffer$port_code
+# vms_ports_over_list <- st_intersects(vms_sf,ports_buffer)
+vms_ports_over <- sapply(st_intersects(vms_sf,ports_buffer), function(z) if (length(z)==0) NA_integer_ else z[1])
+
+# Overlay returned integers. Pull out the appropriate port names from the list of ports
+vms_ports_over_names <- port_names[vms_ports_over]
+```
+
+Add the port names back to the master dataset for each VMS point.
+
+```{r}
+vms_wfilters %<>%
+  mutate(in_port=vms_ports_over_names)
+```
+
+### Check Output
+
+```{r}
+## Plot a sample of VMS points
+vms_sf %<>%
+  mutate(in_port=vms_ports_over_names)
+
+test_port<-vms_sf %>% 
+  filter(in_port=='BDG') %>% 
+  #subsample for quicker plotting
+  sample_n(.,min(nrow(.),1000))
+testbbox <- st_bbox(ports_buffer %>% filter(port_code=='BDG'))
+# testbbox <- st_bbox(test_port)
+ggplot()+
+  geom_sf(data=coaststates,fill='gray50')+
+  geom_sf(data=ports_buffer,fill='seagreen',alpha=0.5)+
+  geom_sf(data=test_port,size=1)+
+  xlim(testbbox[1],testbbox[3])+ylim(testbbox[2],testbbox[4])+
+  labs(x='',y='',title="Points within Bodega Buffer")+
+  theme(axis.text.x = element_text(angle=90))
+```
+
+What is the avg speed when vessels are marked as in port?
+
+```{r}
+inport_dat <- vms_wfilters %>% mutate(in_port_binary = ifelse(is.na(in_port), FALSE,TRUE))
+
+ggplot(data=filter(inport_dat, avg_speed_recalc < 50), aes(x=avg_speed_recalc,fill=factor(in_port_binary))) +
+  geom_histogram() +
+  facet_wrap(~in_port_binary)+
+  labs(x="Average Speed (Calculated)",y="Number of Records",fill="In Port")
+```
+
+
+### Sort In-Port Segments to Keep or Remove
+
+Mark "remove" if the record is in port *and* the avg speed is < 1 m/s. For this filter, we use our recalculated speeds from the previous step.
+
+```{r remove_flag}
+vms_wfilters %<>% 
+  mutate(keep_remove_inport = ifelse(!is.na(in_port) & avg_speed_recalc < speed_cutoff, "remove", "keep"))
+
+round(sum(vms_wfilters$keep_remove_inport=='remove',na.rm=T)/nrow(vms_wfilters)*100,2)
+```
+
+If we filter using the in-port criterion, we would remove `r round(sum(vms_wfilters$keep_remove_inport=='remove',na.rm=T)/nrow(vms_wfilters)*100,2)` percent of all observations for `r process_year`.
+
+We want to remove all 'remove' points *except* the last in-port record before the fishing trip and the first in-port record after the fishing trip. For now, we will retain all mid-trip "remove" points.
+
+We find these records for each trip. We sort by date and by whether the vessel is in port. We can then sort all of the records that are before or after the fishing trip. We add a final `keep_remove_` column that indicates whether a VMS ping is truly part of a "trip" according to the criterion described here.
+
+*As a default, we retain pings. That is, if a trip does not have a first or last in-port indicator, it is marked as in-trip*
+
+```{r}
+vms_wfilters %<>%
+  
+  # organize by trip and date
+  group_by(Rec_ID) %>% 
+  arrange(westcoastdate) %>% 
+  
+  # indicate the dates of the first and last non-in-port records
+  mutate(first_keep=first(westcoastdate[keep_remove_inport=='keep']),
+         last_keep=last(westcoastdate[keep_remove_inport=='keep'])) %>% 
+  
+  # indicate the dates of the last pre-trip in-port record and the first post-trip in-port record
+  mutate(last_pretrip=last(westcoastdate[westcoastdate<first_keep]),
+         first_posttrip=first(westcoastdate[westcoastdate>last_keep])) %>% 
+  
+  # add a filtering column indicating whether a ping is part of the trip
+  ungroup() %>% 
+  mutate(keep_remove_not_intrip=ifelse(westcoastdate >= last_pretrip & westcoastdate <= first_posttrip,'keep','remove')) %>%
+  # change NAs to default behavior of keep
+  mutate(keep_remove_not_intrip=replace_na(keep_remove_not_intrip,'keep'))
+
+```
+
+### View flagged points
+
+For a random set of 5 trips, view the results of these filters.
+
+```{r}
+set.seed(0401)
+random_trips <- vms_wfilters %>% filter(TARGET_rev %in% spp_codes) %>% distinct(Rec_ID) %>% sample_n(5) %>% pull(Rec_ID)
+testtrips <- vms_wfilters %>% 
+  filter(Rec_ID %in% random_trips) %>% 
+  select(Rec_ID,VMS_RECNO,X_COORD,Y_COORD,contains('keep_remove')) %>% 
+  select(-keep_remove_inport) %>% 
+  #pivot to indicate, if a point was removed, which step it was removed in
+  pivot_longer(contains('keep_remove'),names_to = 'category',values_to = 'keep_remove') %>% 
+  group_by(VMS_RECNO) %>% 
+  # pull out the FIRST reason why a point is flagged for removal (port distance, speed, bathymetry, or in-port)
+  mutate('reason_removed'=first(category[keep_remove=='remove'],default='kept')) %>% 
+  ungroup() %>% 
+  mutate(reason_removed=str_replace(reason_removed,'keep_remove_','')) %>% 
+  mutate(reason_removed=as.factor(reason_removed)) %>% 
+  select(Rec_ID,VMS_RECNO,X_COORD,Y_COORD,reason_removed) %>% 
+  distinct() %>% 
+  #convert to spatial
+  st_as_sf(coords=c("X_COORD","Y_COORD"),crs = "+proj=utm +north +zone=10 +ellps=WGS84") %>% 
+  # jitter a tiny bit
+  st_jitter()
+
+#plot
+testtrip_plots <- purrr::map(random_trips, function(x){
+  testtrip <- testtrips %>% filter(Rec_ID==x)
+  bbox <- st_bbox(testtrip)
+  plotout <- ggplot()+ 
+    geom_sf(data=coaststates,fill='gray50')+
+    geom_sf(data=ports_buffer,fill='purple',alpha=0.2)+
+    geom_sf(data=testtrip,aes(col=reason_removed),key_glyph='point',alpha=1)+
+    xlim(bbox[1],bbox[3])+ylim(bbox[2],bbox[4])+
+    labs(x="",y="",color="Reason\nRemoved")+
+    scale_color_discrete(drop=FALSE)+
+    theme(axis.text.x = element_text(angle=90)) 
+  print(plotout)
+})
+
+```
+
+## Check Effects of Filters
+
+We now have a list of all VMS points with indicators of whether they are/will be filtered out because of the four reasons described above (port distance of last ping, ludicrous speeds, positive bathymetry, and/or between-trip pings within ports).
+
+We can organize these reasons and look at the overall effects of filtering.
+
+```{r}
+# on the individual ping level, measure reasons for removal
+vms_dataloss <- vms_wfilters %>%
+  select(Rec_ID,VMS_RECNO,X_COORD,Y_COORD,contains('keep_remove')) %>% 
+  select(-keep_remove_inport) %>% 
+  distinct() %>% 
+  #pivot to indicate, if a point was removed, which step it was removed in
+  pivot_longer(contains('keep_remove'),names_to = 'category',values_to = 'keep_remove') %>% 
+  group_by(VMS_RECNO) %>% 
+  # pull out the FIRST reason why a point is flagged for removal (port distance, speed, bathymetry, or in-port)
+  mutate('reason_removed'=first(category[keep_remove=='remove'],default='kept'),
+         num_removals=sum(keep_remove=='remove',na.rm=T)) %>% 
+  ungroup() %>% 
+  mutate(reason_removed=str_replace(reason_removed,'keep_remove_','')) %>% 
+  select(Rec_ID,VMS_RECNO,X_COORD,Y_COORD,reason_removed,num_removals) %>% 
+  distinct()
+
+vms_dataloss_table <- vms_dataloss %>% 
+  mutate(total_records=n()) %>% 
+  group_by(reason_removed,total_records) %>% 
+  summarise(n_removed=n()) %>% 
+  ungroup() %>% 
+  filter(reason_removed!='kept') %>% 
+  mutate(stepnum=case_when(
+    reason_removed=="portdist" ~ 1,
+    reason_removed=="speed" ~2,
+    reason_removed=="bathy"~3,
+    reason_removed=="not_intrip"~4
+    )) %>% 
+  arrange(stepnum) %>% 
+  mutate(tot_removed=cumsum(n_removed)) %>% 
+  mutate(n_left=total_records-tot_removed) %>% 
+  mutate(prop_remain=1-tot_removed/total_records) %>% 
+  add_row(reason_removed='start',stepnum=0,prop_remain=1)
+
+vms_dataloss_table %>% 
+  ggplot(aes(stepnum,prop_remain))+
+  geom_point()+
+  geom_line()+
+  scale_y_continuous(limits=c(0,1))+
+  labs(x="Filtering Step",y="Proportion Remaining Observations")+
+  theme(panel.grid.major = element_line())
+vms_dataloss_table %>% 
+  ggplot(aes(reorder(reason_removed,stepnum),prop_remain))+
+  geom_col(width=0.5)+
+  scale_y_continuous(limits=c(0,1))+
+  labs(x="Filtering Step",y="Proportion Remaining Observations")+
+  theme(panel.grid.major = element_line())
+```
+
+Have we removed > 99% of records from any trips?
+
+```{r}
+check_removes <- vms_dataloss %>% 
+  group_by(Rec_ID) %>% 
+  mutate(remove=num_removals>0) %>% 
+  summarise(prop_removed=sum(remove)/n()) %>% 
+  ungroup()
+```
+
+`r sum(check_removes$prop_removed==1)` trips were removed entirely, and `r sum(check_removes$prop_removed>=0.99)` had more than 99 percent of their records removed, out of `r length(unique(vms_wfilters$Rec_ID))` total trips.
+
+
+## Do Filter and Save Results
+
+Finally, we do the actual filtering. We save a filtered version of the data for the next steps, but retain the full VMS-matched dataset with the filtering tags we've produced here, for later QA/QC.
+
+```{r}
+vms_filtered <- vms_dataloss %>% 
+  select(VMS_RECNO,num_removals) %>% 
+  right_join(vms_wfilters,by=join_by(VMS_RECNO)) %>% 
+  mutate(remove=num_removals>0) %>% 
+  #final filter
+  filter(!remove) %>% 
+  distinct(Rec_ID,UTCDATETIME,.keep_all = T) %>% 
+  
+  # clean up, removing filtering columns
+  select(VMS_RECNO:multispecies,segment_dur,avg_speed_recalc,in_port) %>% 
+  select(-num_removals)
+```
+
+Save the output and the full, non-filtered data set
+
+```{r}
+# create output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'filtered')
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
+#Save version with FTID and length
+write_rds(vms_filtered,here::here('Confidential', 'processed_data', output_dir_name, 'filtered', paste0('matched_filtered_withFTID_length_', process_year, '.rds')))
+write_rds(vms_wfilters,here::here('Confidential', 'processed_data', output_dir_name, 'filtered', paste0('matched_unfiltered_', process_year, '.rds')))
+```
+
+```{r}
+# distribution of segment duration? in minutes
+vms_filtered %>% ggplot(aes(segment_dur))+geom_density()+xlim(0,100)
+```
+

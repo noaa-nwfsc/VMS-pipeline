@@ -1,1 +1,0 @@
-WARNING: depth units are in decimeters, so divide by 10 to get meters
