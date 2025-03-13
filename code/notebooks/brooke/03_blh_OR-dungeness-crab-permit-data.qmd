@@ -1,0 +1,122 @@
+---
+title: "03_blh_OR-dungeness-crab-permit-data"
+format: html
+  html:
+    embed-resources: true
+editor: visual
+---
+
+## Purpose
+
+Explore permit tier data.
+
+## Set up
+
+```{r}
+# import libraries
+library(here)
+library(readxl)
+library(tidyverse)
+library(scales)
+```
+
+```{r}
+# import data
+permit_df <- read_excel(here('Confidential', 'data', 'raw', 'logbook', 'OregonCrabPermitData2007-2020.xlsx'), sheet = "CrabPermitData")
+```
+
+## Explorations
+
+How many permits and vessels per year? does permit pot limit vary from year to year for the same vessel? does a single vessel have overlapping permits? are those permits unique or the same? does one permit only ever have one boat? does one vessel only have one permit id?
+
+-   `Number` = Permit ID
+-   `Docnum` = Vessel ID
+
+```{r}
+# how big is it?
+dim(permit_df)
+
+# what's in here?
+glimpse(permit_df)
+
+# which years?
+sort(unique(permit_df$Year))
+
+# what types of permits?
+unique(permit_df$Type)
+
+# how many nulls?
+summarise_all(permit_df, ~sum(is.na(.)))
+
+# how many unique permit identifiers?
+n_distinct(permit_df$Number)
+
+# how many unique vessel identifiers?
+n_distinct(permit_df$Docnum)
+
+# what's the distribution of permit start dates?
+permit_df %>% ggplot(aes(x = Begindate)) +
+  geom_histogram(bins = 100) + scale_x_datetime(labels = date_format("%Y"), date_breaks = "year")
+
+# what's the distribution of permit end dates?
+permit_df %>% ggplot(aes(x = Enddate)) +
+  geom_histogram(bins = 100) + scale_x_datetime(labels = date_format("%Y"), date_breaks = "year")
+
+# add columns to explore permit length, begin and end dates
+permit_df <- permit_df %>%
+  mutate(
+    permit_length_days = as.numeric(difftime(Enddate, Begindate, units = "days")),
+    begin_year_day = yday(Begindate),
+    end_year_day = yday(Enddate)
+  )
+
+# what's the distribution of permit length?
+permit_df %>%
+  ggplot(aes(x = permit_length_days)) + 
+  geom_histogram(binwidth = 7)
+
+# are any permits longer than a year?
+sum(permit_df$permit_length_days > 365)
+
+# how many records have a begin date after an end date?
+sum(permit_df$Begindate > permit_df$Enddate)
+
+# how many records have the same begin and end dates?
+sum(permit_df$Begindate == permit_df$Enddate)
+
+# when do permits begin in the year?
+range(permit_df$begin_year_day)
+permit_df %>% 
+  ggplot(aes(x = begin_year_day)) + 
+  geom_histogram()
+
+# how many permits begin on the first day of the year?
+sum(permit_df$begin_year_day == 1)
+
+# when do permits end in the year?
+range(permit_df$end_year_day)
+permit_df %>% 
+  ggplot(aes(x = end_year_day)) + 
+  geom_histogram()
+
+# how many permits end on the last day of the year?
+# (not perfect, but including 266 for leap years. the 365 number may be an over estimate, 2nd to last day in leap year.)
+sum(permit_df$end_year_day == 365)
+sum(permit_df$end_year_day == 366)
+
+# do permits overlap calendar years?
+sum(year(permit_df$Begindate) == year(permit_df$Enddate))
+```
+
+Takeaways
+
+-   This dataset is pretty small.
+-   There is no unique identifier in the dataset, the permit number doesn't necessarily change.
+-   Permits are maximum one year in length.
+-   The majority of permits begin at the beginning of the calendar year, and end at the end of the calendar year.
+-   The majority of permits begin and end in the same calendar year.
+-   Some permits have begin date after end date, which is presumably a data entry error.
+
+Cleaning decisions
+
+-   If the permit begin date is after end date, then swap the dates
