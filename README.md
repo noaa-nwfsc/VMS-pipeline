@@ -4,13 +4,38 @@
 This repository collates the code used to process Vessel Monitoring System (VMS) data and join it to PacFIN fishery landings (i.e., "fish ticket") data for the U.S. West Coast to produce spatial information on fishing activity. These outputs are useful for a wide array of applications in west coast fishery management, such as describing spatial fishing behavior and dynamics, assessing fisheries overlap with protected resources, and attributing drivers of change in west coast fisheries.
 
 ## Structure
-The repository is structured into multiple required steps in the processing of VMS and fish ticket  data from raw inputs into useful outputs. This process has a number of steps, including multiple QA/QC steps. These steps are described in detail in the associated `.Rmd` files in the `process steps` folder. The scripts are organized hierarchically, wherein individual data processing steps have their own associated scripts, which are then knit into the overall process file. This is to facilitate editing of individual steps, while maintaining the overall framework in one document.
+The repository is structured into multiple required steps in the processing of VMS and fish ticket  data from raw inputs into useful outputs. This process has a number of steps, including multiple QA/QC steps. These steps are described in detail in the associated `.Rmd` files in the `code/pipeline_steps` folder. You will run the `main_process.Rmd` file, which will call each individual data processing step in its own script, which will create a `processed_data` folder with your output, and a knit document. You can then run `move_markdown_html.R` to move the knit document to be with the rest of the output. This organization provides separate modules of the individual steps, which makes it easier to develop and debug, while maintaining the overall framework in one document.
 
-Most raw data in this project are large in size and confidential. This repository therefore does not include any raw data, but refers to these data using the relational command from the `here` package `here::here()`. Therefore, authorized users of the data that wish to run or utilize specific pieces of the workflow should obtain the relevant data from one of the moderators of this repository and place it in the `data` folder. Then, all of the code herein should run without needing to change any file path references.
+Most raw data in this project are large and confidential. This repository therefore does not include any raw data, but refers to these data using the relational command from the `here` package `here::here()`. Authorized data users that wish to run or utilize specific pieces of the workflow should obtain the relevant data from one of the moderators of this repository and place it in the `raw_data` folder. Then, all of the code herein should run without needing to change any file path references.
+
+## Pre-requisites
+
+If it’s your first time running the pipeline (ever or after a break), you will need to:
+1. Pull from main branch on GitHub
+2. Adjust files and directory structure that are not tracked on GitHub
+
+The directory structure you have will mostly be set up from pulling these changes, but there are some exceptions that are not tracked on GitHub (they are in `.gitignore`) that you will have to set up yourself. Those files are:
+
+* `spatial_data/composite_bath.tif` This file is quite large and is therefore not tracked on GitHub. Visit the link in `spatial_data/README_bathymetry-file-link.txt` to download it.
+* `Confidential/raw_data` This directory contains confidential information and is therefore not tracked on GitHub. Here are the files and file structure you will need to run the pipeline:
+  * `raw_data/fish_tickets/all_fishtickets_1994_2023.rds`
+  * `raw_data/vessel_registration/2009_2023_vesselreg.csv`
+  * `raw_data/vms/`
+    * `vms chunk 1 2009 2010.rds`
+    * `vms chunk 2 2010 2011 2012.rds`
+    * `vms chunk 3 2012 2013.rds`
+    * `vms chunk 4 2013 2014 2015.rds`
+    * `vms chunk 5 2015 2016.rds`
+    * `vms chunk 6 2016 2017 2018.rds`
+    * `vms chunk 7 2018 2019.rds`
+    * `vms chunk 8 2019 2020.rds`
+    * `vms chunk 9 2020 2021 2022.rds`
+    * `vms chunk 10 2022 2023.rds`
+    * `vms chunk 11 2023.rds`
 
 ## Pipeline Flow
 
-This VMS-fish ticket data processing pipeline is organized in six steps required to clean, match, and interpolate the data for each year. Each step is briefly described here, with the details and step-by-step code available for each year in the `process steps` folder.
+This VMS-fish ticket data processing pipeline is organized in six steps required to clean, match, and interpolate the data for each year. Each step is briefly described here, with the details and step-by-step code available for each year in the `pipeline_steps` folder.
 
 1. **Clean and organize PacFIN fish tickets**. This step takes the raw PacFIN fish tickets, checks for errors, extracts and renames the variables of interest (such as gear type and catches of various species), and, most importantly, defines target species for each ticket based on both landed pounds and revenue.
 
@@ -29,7 +54,7 @@ Here is a flowchart of the VMS pipeline, indicating each step in the pipeline wi
 
 ## Pipeline Options
 
-Each individual process step (i.e., Steps 01-06 in the `process steps` folder) contains descriptive details on the analytical choices in various steps of the pipeline. However, overall, the pipeline is designed to be general, and the number of choices to be made by the analyst are few. The key initial choices on data processing are contained in the beginning of the `main_process` file:
+Each individual process step (i.e., Steps 01-06 in the `pipeline_steps` folder) contains descriptive details on the analytical choices in various steps of the pipeline. However, overall, the pipeline is designed to be general, and the number of choices to be made by the analyst are few. The key initial choices on data processing are contained in the beginning of the `main_process` file:
 
 | Choice  | Parameter | Description |
 | ---- | :-----: | ------- |
@@ -52,16 +77,16 @@ The main output of this data analysis pipeline is clean fishery landings data (f
 
 | Output file name suffix | Description | VMS Pipeline Step | 
 | -------- | ------- | :---: |
-| `fish tickets/yyyyfishtix_withFTID.rds` | Cleaned fish tickets with associated target species | 1 |
-| `vessel length keys/vessel_length_key_yyyy.rds` | Derived join key between vessel registration data and PacFIN vessel identifiers to get vessel length | 2 |
-| `fish tickets/yyyyfishtix_vlengths_withFTID.rds` | Cleaned fish tickets joined with vessel lengths | 2 |
-| `vms/yyyy_vms_clean.rds` | Cleaned VMS data that is cropped to US EEZ, includes bathymetry, excludes records on land, and de-duplicate VMS records | 3 |
-| `vms/yyyy_duplicates_only.rds` | Same as `vms_clean`, but includes only duplicate records (generated for QA/QC) | 3 |
-| `matched/matching/yyyy_matched_vmstix_only_withFTID.rds` | Cleaned fish tickets joined to cleaned VMS data, excluding trips with not matched VMS data | 4 |
-| `matched/matching/yyyy_matched_alltix_withFTID.rds` | Same as `matched_vmstix_only_withFTID`, but including trips that are not matched with VMS data (generated for QA/QC) | 4 |
-| `matched/filtering/yyyy_matched_filtered_withFTID_length.rds` | Cleaned fish tickets joined to cleaned VMS data, with filters calculated and applied | 5 |
-| `matched/filtering/yyyy_matched_unfiltered.rds` | Same as `matched_filtered_withFTID_length`, but filters not applied (generated for QA/QC) | 5 |
-| `interpolation/yyyy_interpolated.rds` | Cleaned and filtered fish ticket data joined to VMS data, with interpolation to regularize the VMS ping interval | 6 |
+| `fish_tickets/fishtix_withFTID_yyyy.rds` | Cleaned fish tickets with associated target species | 1 |
+| `vessel_length_ _keys/vessel_length_key_yyyy.rds` | Derived join key between vessel registration data and PacFIN vessel identifiers to get vessel length | 2 |
+| `fish_tickets/fishtix_vlengths_withFTID_yyyy.rds` | Cleaned fish tickets joined with vessel lengths | 2 |
+| `vms/vms_clean_yyyy.rds` | Cleaned VMS data that is cropped to US EEZ, includes bathymetry, excludes records on land, and de-duplicate VMS records | 3 |
+| `vms/duplicates_only_yyyy.rds` | Same as `vms_clean`, but includes only duplicate records (generated for QA/QC) | 3 |
+| `matched/matched_vmstix_only_withFTID_yyyy.rds` | Cleaned fish tickets joined to cleaned VMS data, excluding trips with not matched VMS data | 4 |
+| `matched/matched_alltix_withFTID_yyyy.rds` | Same as `matched_vmstix_only_withFTID`, but including trips that are not matched with VMS data (generated for QA/QC) | 4 |
+| `filtered/matched_filtered_withFTID_length_yyyy.rds` | Cleaned fish tickets joined to cleaned VMS data, with filters calculated and applied | 5 |
+| `filtered/matched_unfiltered_yyyy.rds` | Same as `matched_filtered_withFTID_length`, but filters not applied (generated for QA/QC) | 5 |
+| `interpolated/interpolated_yyyy.rds` | Cleaned and filtered fish ticket data joined to VMS data, with interpolation to regularize the VMS ping interval | 6 |
 
 **Which output file should I use?**
 

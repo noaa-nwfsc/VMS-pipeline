@@ -1,0 +1,347 @@
+---
+title: "Quick Parity Test - Compare Processed Data"
+format: 
+  html:
+    toc: true
+    embed-resources: true
+---
+
+**Author**: Brooke Hawkins, adapted by Owen Liu
+
+**Date**: Feb. 26, 2025
+
+**Purpose**: Parity test to compare data from before and after repository reorganization. I ran the pipeline for 2019 and 2020 data for Dungeness crab in the *main* and *24 reorganize repository* branches, and I want to make sure the outputs are the same in all the ways I expect. I expect some differences for output up to step 4, which will now include data from the lookback window of the prior year. From step 4 onwards, output should all be the same.
+
+This script will print entire file names and column names of dataframes, so *make sure there are no confidential file names or dataframes if you push the output onto GitHub*.
+
+```{r}
+library(here)
+library(tidyverse)
+```
+
+# Helper functions
+
+Write a function to read in two RDS files and compare their names, dimensions, column names, and year ranges.
+
+Inputs:
+
+-   `file_name_1`: RDS file name for first dataframe to read in
+-   `file_name_2`: RDS file name for second dataframe to read in
+-   `date_colname_1`: column name for date field in first dataframe
+-   `date_colname_2`: column name for date field in second dataframe
+
+Outputs: None
+
+The function doesn't return anything, it will print if there are or are not differences. If there are differences, it will print whatever differs for the first and second file, in that order. It assumes there are the same number of columns in each dataframe.
+
+```{r}
+compare_dataframes <- function(file_name_1, file_name_2, date_colname_1, date_colname_2) {
+  # print file names
+  print(paste("Comparing", file_name_1))
+  print(paste("to", file_name_2))
+  
+  # load data
+  df_1 <- readRDS(file_name_1)
+  df_2 <- readRDS(file_name_2)
+  
+  # are the dimensions the same?
+  same_dim <- (dim(df_1) == dim(df_2))
+  # if any of the dimensions differ, print the dimensions
+  if (any(!same_dim)) {
+    print("Different dimensions:")
+    print(dim(df_1))
+    print(dim(df_2))
+  } else {
+    print("Same dimensions.")
+  }
+  
+  # are the column names the same?
+  same_colnames <- (colnames(df_1) == colnames(df_2))
+  # if any of the column names differ, print the dimensions
+  if (any(!same_colnames)) {
+    print("Different column names:")
+    print(colnames(df_1))
+    print(colnames(df_2))
+  } else {
+    print("Same column names.")
+  }
+  
+  # are the date ranges the same?
+  same_dates <- (range(df_1[[date_colname_1]]) == range(df_2[[date_colname_2]]))
+  if (any(!same_dates)) {
+    print("Different date ranges:")
+    print(range(df_1[[date_colname_1]]))
+    print(range(df_2[[date_colname_2]]))
+  } else {
+    print(paste("Same date ranges:", range(df_1[[date_colname_1]])))
+  }
+}
+```
+
+Write a function to compare two lists of files.
+
+Inputs:
+
+-   `file_vector_1`: first vector of RDS file names of dataframes to compare
+-   `file_vector_2`: second vector of RDS file names of dataframes to compare
+-   `date_colname_vector_1`: first vector of date column names, same length as `file_vector_1`
+-   `date_colname_vector_2`: second vector of date column names, same length as `file_vector_2`
+
+Outputs: None
+
+The function doesn't return anything, it will print if there are or are not differences. If there are a different number of files, it will run no additional checks. It runs a for loop using the function above. It assumes the files should be compared in the order they are listed in (e.g. first element of `file_vector_1` is compared to the first element of `file_vector_2`). To compare date ranges, it will call column names provided in `date_colname_vector_1` and `date_colname_vector_2`.
+
+```{r}
+compare_file_list <- function (file_vector_1, file_vector_2, date_colname_vector_1, date_colname_vector_2) {
+  # check same number of files
+  same_file_number <- (length(file_vector_1) == length(file_vector_2))
+  print("-----")
+  if (!same_file_number) {
+    print("Different number of files. The files are:")
+    print(file_vector_1)
+    print(branch_files_step1)
+  } else {
+    print("Same number of files.")
+    # iterate over files
+    for (file_index in 1:length(file_vector_1)) {
+      # compare files
+      compare_dataframes(
+        file_name_1 = file_vector_1[file_index], 
+        file_name_2 = file_vector_2[file_index], 
+        date_colname_1 = date_colname_vector_1[file_index], 
+        date_colname_2 = date_colname_vector_2[file_index]
+      )
+      print("-----")
+    }
+  }
+}
+```
+
+# Comparisons
+
+Main files will read in the main branch files. Branch files will read in the reorganized branch files.
+
+```{r}
+# list directories
+main_dir   <- here("Confidential", "processed")
+branch_dir <- here("Confidential", "data", "processed_2025-02-26")
+# get vector of file names
+main_files   <- list.files(path = main_dir, full.names = TRUE, recursive = TRUE)
+branch_files <- list.files(path = branch_dir, full.names = TRUE, recursive = TRUE)
+```
+
+## Step 1
+
+```{r}
+# list relevant files
+main_files_step1   <- main_files[grepl("fishtix_withFTID", main_files)]
+branch_files_step1 <- branch_files[grepl("fishtix_withFTID", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step1, 
+  file_vector_2 = branch_files_step1, 
+  date_colname_vector_1 = c("date", "date"),
+  date_colname_vector_2 = c("date", "date")
+)
+```
+
+For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data. That makes sense. Passes check.
+
+## Step 2
+
+```{r}
+# list relevant files
+main_files_step2   <- main_files[grepl("vessel_length_key|fishtix_vlengths_withFTID", main_files)]
+branch_files_step2 <- branch_files[grepl("vessel_length_key|fishtix_vlengths_withFTID", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step2, 
+  file_vector_2 = branch_files_step2, 
+  date_colname_vector_1 = c("date", "date", "year", "year"),
+  date_colname_vector_2 = c("date", "date", "year", "year")
+)
+```
+
+For 2019 and 2020 runs, the reorganized branch has many more rows of data and a longer date range to include the lookback window data for fish ticket data. The dimensions and date ranges are the same for the vessel length keys, though. We've now fixed an issue with duplicate tickets, so all observations in the fish tickets are unique. You can see this in the difference between the 2019 comparison and the 2020 comparison (which has not yet been run with the update). Passes check.
+
+## Step 3
+
+### Clean
+
+```{r}
+# list relevant files
+main_files_step3a   <- main_files[grepl("vms_clean", main_files)]
+branch_files_step3a <- branch_files[grepl("vms_clean", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step3a, 
+  file_vector_2 = branch_files_step3a, 
+  date_colname_vector_1 = c("UTCDATETIME", "UTCDATETIME"),
+  date_colname_vector_2 = c("UTCDATETIME", "UTCDATETIME")
+)
+```
+
+For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data for fish ticket data. That makes sense. Passes check.
+
+### Duplicates
+
+```{r}
+# list relevant files
+main_files_step3b   <- main_files[grepl("duplicates_only", main_files)]
+branch_files_step3b <- branch_files[grepl("duplicates", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step3b, 
+  file_vector_2 = branch_files_step3b, 
+  date_colname_vector_1 = c("UTCDATETIME", "UTCDATETIME"),
+  date_colname_vector_2 = c("UTCDATETIME", "UTCDATETIME")
+)
+```
+
+For 2019 and 2020 runs, the reorganized branch has more rows of data and a longer date range to include the lookback window data for fish ticket data. That makes sense. Passes check.
+
+## Step 4
+
+#### All
+
+```{r}
+# list relevant files
+main_files_step4a   <- main_files[grepl("matched_alltix", main_files)]
+branch_files_step4a <- branch_files[grepl("matched_alltix", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step4a, 
+  file_vector_2 = branch_files_step4a, 
+  date_colname_vector_1 = c("date", "date"),
+  date_colname_vector_2 = c("date", "date")
+)
+```
+
+#### VMS
+
+```{r}
+# list relevant files
+main_files_step4b   <- main_files[grepl("matched_vmstix", main_files)]
+branch_files_step4b <- branch_files[grepl("matched_vmstix", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step4b, 
+  file_vector_2 = branch_files_step4b, 
+  date_colname_vector_1 = c("date", "date"),
+  date_colname_vector_2 = c("date", "date")
+)
+```
+
+For 2019 and 2020 runs, the reorganized branch has more rows of data in the joined data, despite being filtered to have only the one year of data (no lookback window). Let's check to make sure that the additional rows are related to the lookback window.
+
+```{r}
+d1 <- read_rds(main_files_step4a[1])
+d2 <- read_rds(branch_files_step4a[1])
+
+d1_ftid <- sort(unique(d1$Rec_ID))
+d2_ftid <- sort(unique(d2$Rec_ID))
+
+# check the number of unique values across all variables
+map(names(d1),function(x){
+  t1 <- d1 %>% pull(x) %>% unique() %>% length()
+  t2 <- d2 %>% pull(x) %>% unique() %>% length()
+  paste(x,":",t1,t2,"; difference of",t2-t1)
+})
+
+```
+
+The branch version actually has one fewer unique fish ticket. The branch version has slight more `UTCDATETIME`s, spatial coordinates, and VMS records, but the same number of unique dates. Let's try to dig in a little more.
+
+```{r}
+# find unique Lat/Lons for each
+d1_ll <- d1 %>% distinct(LAT,LON)
+d2_ll <- d2 %>% distinct(LAT,LON)
+ll_diff <- d2_ll %>% 
+  # find the unique lat/lons that are shared between the two versions of the data
+  left_join(d1_ll %>% mutate(in_main=1)) %>% 
+  # filter for the lat/lons that are NOT shared (i.e., are in the branch version only)
+  filter(is.na(in_main)) %>% 
+  mutate(vms_in_branch_only=1)
+
+#now join and filter again to isolate the records that are in branch but not main
+vms_recs_d2_only <- d2 %>% 
+  left_join(ll_diff) %>% 
+  filter(vms_in_branch_only==1)
+range(vms_recs_d2_only$date)
+range(vms_recs_d2_only$westcoastdate)
+
+```
+
+
+## Step 5
+
+### Unfiltered
+
+```{r}
+# list relevant files
+main_files_step5a   <- main_files[grepl("unfiltered", main_files)]
+branch_files_step5a <- branch_files[grepl("unfiltered", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step5a, 
+  file_vector_2 = branch_files_step5a, 
+  date_colname_vector_1 = c("date", "date"),
+  date_colname_vector_2 = c("date", "date")
+)
+```
+
+### Filtered
+
+```{r}
+# list relevant files
+main_files_step5b   <- main_files[grepl("_filtered", main_files)]
+branch_files_step5b <- branch_files[grepl("_filtered", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step5b, 
+  file_vector_2 = branch_files_step5b, 
+  date_colname_vector_1 = c("date", "date"),
+  date_colname_vector_2 = c("date", "date")
+)
+```
+
+For 2019 and 2020 runs, the reorganized branch has more rows of data, despite being filtered to have only the one year of data (no lookback window). They should be the same by step 4, especially for 2020. Fail check.
+
+## Step 6
+
+```{r}
+# list relevant files
+main_files_step6   <- main_files[grepl("interpolated", main_files)]
+branch_files_step6 <- branch_files[grepl("interpolated", branch_files)]
+
+# compare files
+compare_file_list(
+  file_vector_1 = main_files_step6, 
+  file_vector_2 = branch_files_step6, 
+  date_colname_vector_1 = c("date", "date"),
+  date_colname_vector_2 = c("date", "date")
+)
+```
+
+For 2019 and 2020 runs, after interpolation, there are the same number of records for 2020 only. Ideally it would be the same for 2019 too. Fail check.
+
+# Conclusion
+
+The refactor may need some debugging. I partly wonder if the difference is so small because it's due to a filtering in UTC vs. PST date time.
+
+I also would expect some differences in 2019 data for step 4, since it would not read in the prior year for lookback window in the main branch where I pulled from with `first_year_process` set to 2019. But I would not expect any differences in 2020 data.
+
+```{r, include=FALSE}
+# I ran this to figure out manually what the names of the date columns were as I added steps
+test_file <- main_files_step5b[1]
+test_df <- readRDS(test_file)
+colnames(test_df)
+```

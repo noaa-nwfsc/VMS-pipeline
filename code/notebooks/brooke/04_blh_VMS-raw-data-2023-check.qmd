@@ -1,0 +1,65 @@
+---
+title: "04_blh_VMS-raw-data-2023-check"
+format: 
+  html:
+    embed-resources: true
+    df-print: paged
+---
+
+Load libraries.
+
+```{r}
+library(here)
+library(tidyverse)
+```
+
+Read in 2022 and 2023 data, check how many records by month. I'm wondering if we have the complete 2023 data, or if I need to pull it from OLE. I'd also like to get the VMS data split by year, rather than multi-year chunks of data.
+
+```{r}
+df_chunk_1 <- read_rds(here('Confidential', 'raw_data', 'vms', 'vms chunk 9 2020 2021 2022.rds'))
+df_chunk_2 <- read_rds(here('Confidential', 'raw_data', 'vms', 'vms chunk 10 2022 2023.rds'))
+df_chunk_3 <- read_rds(here('Confidential', 'raw_data', 'vms', 'vms chunk 11 2023.rds'))
+
+dim(df_chunk_1)
+dim(df_chunk_2)
+dim(df_chunk_3)
+```
+
+I didn't realize Owen's chunking script `split raw VMS by year` split the data based on 10M record chunks. Good to know.
+
+How many records are in 2022 vs. 2023? How is it split by month? Note that I'm using the year column here, which might be UTC time zone instead of Pacific. I don't think that will impact the results for this check though.
+
+```{r}
+# combine into single dataframe
+df_list <- list(df_chunk_1, df_chunk_2, df_chunk_3)
+vms_df <- list_rbind(df_list)
+vms_df_filtered <- vms_df %>% filter(year %in% c(2022, 2023))
+rm(df_list, df_chunk_1, df_chunk_2, df_chunk_3)
+```
+
+Data seems complete, around 6.8M records in each year.
+
+```{r}
+# check split by year
+vms_df_filtered %>% group_by(year) %>% count()
+
+# check split by year and month
+vms_df_filtered %>% group_by(year, month(UTCDATETIME)) %>% count()
+```
+
+Data seems complete for months present, around 400k to 600k records per month. One last check by day.
+
+```{r}
+# check split by year and month
+day_df <- vms_df_filtered %>%
+  mutate(month = month(UTCDATETIME), day = day(UTCDATETIME)) %>% 
+  filter(month == 12) %>%
+  group_by(year, month, day) %>%
+  count()
+# view table
+day_df
+# plot line chart
+ggplot(day_df) + geom_line(aes(color = as.factor(year), x = day, y = n))
+```
+
+It seems like we're missing data for Dec. 31, 2023. Aside from that, the counts seem good.
