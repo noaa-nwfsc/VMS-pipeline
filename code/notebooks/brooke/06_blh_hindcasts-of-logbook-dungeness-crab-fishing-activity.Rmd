@@ -1,0 +1,337 @@
+---
+title: "Hindcasts of Oregon and Washington Dungeness crab fishing logbook activity"
+author: "Brooke Hawkins"
+date: "`r Sys.Date()`"
+output: html_document
+knit: |
+  (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_file = paste0(xfun::sans_ext(input), '-', Sys.Date(), '.html')
+    )
+  })
+---
+
+## Purpose
+
+* Integrate interpolated VMS and fish ticket data to produce time series, rasters, and maps of fishing activity, landed weight, and revenue.
+* Deliverable: Monthly maps of fishing activity; tables summarizing monthly fishing activity
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# import libraries
+library(tidyverse)
+library(readxl)
+library(here)
+library(sf)
+library(raster)
+library(fasterize)
+library(magrittr)
+library(gridExtra)
+library(nngeo)
+library(rnaturalearth)
+library(viridis)
+
+# adjust ggplot theme
+theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+              axis.ticks.x=element_blank(),
+              axis.ticks.y=element_blank())
+```
+
+Reference code:
+
+* https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script1_original_functions.R
+
+```{r parameters}
+# decide whether to plot explorations
+plot_explorations <- TRUE
+```
+
+## Load data
+
+1. Load the logbook data, which contains set and up locations for strings of crab pots.
+2. Load the permit data, which contains the pot limit for a given vessel and year.
+3. Load the bathymetry raster, which will be used to join depth information at a pot level.
+4. Load the spatial 5km shapefile, which will be used to map monthly fishing activity distribution.
+
+```{r load-data}
+# load OR logbook
+logbook_df <- 
+  read_excel(
+    here('Confidential', 'data', 'raw', 'logbook', 'CLBR110 Crab Logbook_pulled010722.xlsx'),
+    sheet = "CLBR110"
+  ) %>%
+  mutate(
+    # convert date to date type
+    DetailDate = mdy(DetailDate),
+    # convert crab permit number from character to double
+    CrabPermit = as.double(CrabPermit)
+  )
+
+# load OR permit data with pot limits
+permit_df <- read_excel(here('Confidential', 'data', 'raw', 'logbook', 'OregonCrabPermitData2007-2020.xlsx'), sheet = "CrabPermitData")
+
+# load bathymetry raster
+bathymetry <- raster(here('data', 'bathymetry', 'composite_bath.tif'))
+
+# load 5km grid
+grid_5km <- read_sf(here('GIS_layers', 'fivekm_grid_polys_shore_lamb.shp'))
+```
+
+## Explore data
+
+```{r explore-logbook-data, include = plot_explorations}
+# how many rows? are IDs distinct?
+nrow(logbook_df)
+n_distinct(logbook_df$LogDetailID)
+n_distinct(logbook_df$LogID)
+
+# how many nulls?
+summarise_all(logbook_df, ~sum(is.na(.)))
+
+# what's the distribution of number of reported pots?
+logbook_df %>% ggplot(aes(x = NumPots)) + geom_histogram(na.rm = TRUE)
+summary(logbook_df$NumPots)
+
+# where are set and up points? are there points outside of OR waters and US EEZ?
+# TODO quick maps
+```
+```{r explore-permit-data, include = plot_explorations}
+# how many rows? are IDs distinct?
+nrow(permit_df)
+n_distinct(permit_df$Number)
+  
+# how many nulls?
+summarise_all(permit_df, ~sum(is.na(.)))
+
+# how long are permits?
+permit_df$PermitLengthDays <- difftime(permit_df$Enddate, permit_df$Begindate, units = "days")
+permit_df %>% ggplot(aes(x = PermitLengthDays)) + geom_histogram()
+summary(as.numeric(permit_df$PermitLengthDays))
+sum(permit_df$PermitLengthDays >= 365)
+
+# when do they start in the year?
+permit_df$BeginDateYearday <- yday(permit_df$Begindate)
+permit_df %>% ggplot(aes(x = BeginDateYearday)) + geom_histogram()
+summary(permit_df$BeginDateYearday)
+sum(permit_df$BeginDateYearday == 0)
+
+# when do they end in the year?
+permit_df$EndDateYearday <- yday(permit_df$Enddate)
+permit_df %>% ggplot(aes(x = EndDateYearday)) + geom_histogram()
+summary(permit_df$EndDateYearday)
+sum(permit_df$EndDateYearday >= 365)
+```
+Data cleaning question: What to do with negative permit length? (Enddate < Begindate)
+
+## Transform data
+
+```{r filter-logbook-data}
+# filter based on ODFW spatial flag
+filtered_logbook_df <- logbook_df %>% filter(SpatialFlag == "False")
+nrow(filtered_logbook_df)
+# filter based on strings with 0 pots reported
+filtered_logbook_df <- filtered_logbook_df %>% filter(NumPots > 0)
+nrow(filtered_logbook_df)
+```
+
+```{r join-permit-logbook}
+# join permit data to logbook data
+joined_logbook_df <- filtered_logbook_df %>%
+  left_join(permit_df, by = join_by(CrabPermit == Number, DetailDate >= Begindate, DetailDate <= Enddate))
+nrow(joined_logbook_df)
+# for some reason, 121 records duplicated. going to check why there were multiple joins. are overlapping permits possible?
+```
+```{r explore-duplicate-joins, include = plot_explorations}
+# find duplicated IDs and visually inspect in joined dataframe
+test_duped_ids_tbl <- joined_logbook_df %>% group_by(LogDetailID) %>% summarise(record_count = n()) %>% arrange(desc(record_count)) %>% filter(record_count > 1)
+test_duped_ids <- pull(test_duped_ids_tbl, LogDetailID)
+joined_logbook_df %>% filter(LogDetailID %in% test_duped_ids) %>% dplyr::select(LogDetailID, DocNum, DetailDate, Begindate, Enddate, Potlimit) %>% View()
+rm(test_duped_ids_tbl, test_duped_ids)
+```
+
+Based on a quick visual inspection, there are 121 strings from 2 vessels that had a period of time with overlapping permits with the same pot limit. For example, two 500 pot tier permits starting on Jan. 1, 2019, with one ending May 21, 2019 and another ending Dec. 31, 2019.
+
+```{r explore-permit-overlaps}
+test_permit_df <- permit_df %>% 
+  dplyr::select(Number, Docnum, Begindate, Enddate, Potlimit) %>% 
+  group_by(Docnum) %>% 
+  arrange(Begindate, Enddate) %>% 
+  mutate(next_permit_start = lead(Begindate), 
+         next_permit_end_date = lead(Enddate), 
+         next_pot_limit = lead(Potlimit),
+         overlap = next_permit_start <= Enddate,
+         change_pot_limit = Potlimit != next_pot_limit)
+# quick visual inspection
+test_permit_df %>% filter(overlap == TRUE) %>% View()
+# how many permits have an overlapping permit?
+sum(test_permit_df$overlap == TRUE, na.rm = TRUE)
+# how many unique permits overlap?
+test_permit_df %>% filter(overlap == TRUE) %>% dplyr::select(Docnum) %>% n_distinct()
+# how many unique vessels have permits that overlap?
+test_permit_df %>% filter(overlap == TRUE) %>% dplyr::select(Number) %>% n_distinct()
+# does the overlap impact the pot limit?
+sum(test_permit_df$overlap == TRUE & test_permit_df$change_pot_limit == TRUE, na.rm = TRUE)
+rm(test_permit_df)
+```
+
+Data cleaning question: What to do with overlapping permit dates? It can impact pot limit for 12 out of 7194 permits.
+
+```{r transform-logbook-to-spatial}
+# transform set and up points to be in different rows for same logbook entry (each row is a point, with type set or up)
+
+# TODO this section needs updates for joined_logbook_df
+string_df <- joined_logbook_df %>% 
+  pivot_longer(
+    c(SetLatDec, SetLonDec, UpLatDec, UpLonDec),
+    names_to = c("point_type", ".value"),
+    names_pattern = "(.*)(Lat|Lon)Dec",
+    values_to = ".value"
+  )
+
+# start time for spatial transformations
+start_time <- proc.time()
+
+# convert from start and end coordinates to strings
+string_sf <- string_df %>%
+  # remove point type that distinguished up vs. set points, don't need that information to make lines
+  dplyr::select(-point_type) %>%
+  # convert from doubles to spatial data
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326) %>%
+  # group logbook strings by all variables other than coordinate geometry
+  group_by(LogID, LogDetailID, CrabPermit, CrabYear, DEP, DocNum, PortCode, DetailDate, Depth, NumPots, SoakTime, EstLbs, AdjLbs, AdjValue, TicketNum) %>%
+  # transform sf points from degrees to meters for upcoming length calculations
+  st_transform(32610) %>%
+  # convert sf points to sf linestring
+  summarise(do_union = FALSE) %>% 
+  st_cast("LINESTRING") %>% 
+  ungroup()
+
+# print time
+end_time <- proc.time()
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took 1.5 minutes
+```
+
+I should check this next part with Owen, not sure if I'm using the right projections here, and assuming they need to be in the same one.
+
+* https://stackoverflow.com/questions/66283488/trying-to-summarize-line-lengths-within-grid-cells-in-r
+
+I get a warning: `Warning: attribute variables are assumed to be spatially constant throughout all geometries`
+I check the sum of line lengths, I get 1.05Mil km for gridded version, and 1.06Mil km for non-gridded version. Rounding error? Or some boundary issue?
+
+```{r get-line-length}
+# transform string_sf to same CRS as grid_5km
+string_sf_projected <- st_transform(string_sf, st_crs(grid_5km))
+
+# get line length, not gridded
+string_sf_projected$line_length_m <- st_length(string_sf_projected)
+
+# get line length, gridded
+line_length_output <- st_intersection(grid_5km, string_sf_projected) %>%
+  mutate(gridded_line_length_m = st_length(.))
+
+# verify that total line length is the same before and after intersection
+sum(line_length_output$gridded_line_length_m) / 1000
+sum(string_sf_projected$line_length_m) / 1000
+
+# create a yearly, monthly, 5km gridded summary of line length
+string_ym5km_df <- line_length_output %>%
+  st_drop_geometry() %>%
+  mutate(year = year(DetailDate), month = month(DetailDate)) %>%
+  group_by(GRID5KM_ID, year, month) %>%
+  summarise(n_vessels = n_distinct(DocNum),
+            line_length_m = sum(gridded_line_length_m),
+            .groups = "drop")
+```
+
+```{r transform-strings-to-pots}
+# start time for spatial transformations
+start_time <- proc.time()
+
+# distribute traps along the string (points along line)
+trap_sf <- string_sf %>%
+  # remove strings with no pots
+  filter(NumPots != 0) %>%
+  # distribute NumPots points along the line
+  mutate(trap_locations = pmap(.l = list(NumPots, geometry),
+                               .f = function(pots, string) st_line_sample(string, n = pots))) %>%
+  # extract coordinates of points along the line into a tibble
+  mutate(trap_coordinates = map(.x = trap_locations,
+                                 .f = function(traps) as_tibble(st_coordinates(traps)))) %>%
+  # unnest coordinates from tibbles to separate rows
+  unnest(trap_coordinates) %>%
+  # drop linestring information, and L1 created by st_coordinates which isn't needed
+  st_set_geometry(NULL) %>%
+  dplyr::select(-trap_locations, -L1) %>%
+  # convert trap coordinates into simple feature
+  st_as_sf(coords = c('X', 'Y'), crs = 32610) %>%
+  st_transform(4326)
+
+# add depths from bathymetry, divide by 10 to convert from decimeters to meters
+trap_sf$trap_coords_depth_m <- raster::extract(bathymetry, trap_sf) / 10
+
+# end time
+end_time <- proc.time()
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion') # took 1.5 minutes
+
+# filter based on depth
+filtered_trap_sf <- trap_sf %>%
+  filter(trap_coords_depth_m <= 0) %>% # pots must be underwater
+  filter(trap_coords_depth_m > -200) # maximum depth of 200 meters underwater
+```
+
+Note that my experience with the depth filter is that it removes 614 NA depth, and the < -5000 filter has no impact (minimum depth goes from -1159 to -199, no records were present with less than <- 5000 to remove). I removed the < -5000 filter because Leena also didn't mention it in her paper supplementary.
+
+```{r gridded-summary}
+# TODO need to incorporate m2 code in script 2 https://github.com/jameals/raimbow/blob/master/wdfw/code/OR/OR_logbook_analysis_script2_M1_M2.R
+# relevant portions are lines 60-75, and 110-118. then just map it.
+# still need to add limits for when permit tier was cut 30%
+
+# join to 5km grid
+start_time <- proc.time()
+trap_df <- filtered_trap_sf %>%
+  st_transform(st_crs(grid_5km)) %>% # transform to same coordinate reference system as grid
+  st_join(grid_5km) %>% # join 5km grid to traps simple features
+  st_set_geometry(NULL)
+end_time <- proc.time()
+cat((end_time[3] - start_time[3])/60, 'minutes to do spatial conversion')
+rm(start_time, end_time)
+
+# create gridded summary (this is not complete)
+crab_year_start <- 11 # month defines start of crab year
+winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
+dcrb_5km_summary_df <- trap_df %>%
+  mutate(
+    year = year(DetailDate),
+    month = month(DetailDate, label = TRUE, abbr = FALSE),
+    month_numeric = month(DetailDate),
+    year_month = paste0(year(DetailDate),"_", substr(ymd(DetailDate), 6, 7)),
+    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    week_of_year = week(DetailDate),
+    day_of_year = yday(DetailDate)
+  ) %>%
+  group_by(
+    # grid cell ID, makes this a gridded summary
+    GRID5KM_ID,
+    # temporal columns, makes this a monthly summary
+    year,
+    crab_year,
+    year_month,
+    season,
+    month,
+    month_numeric
+  ) %>%
+  summarise(
+    n_pots = n(),
+    n_strings = n_distinct(LogDetailID),
+    n_unique_vessels = n_distinct(DocNum), # is this equivalent to drvid?
+    .groups = "keep"
+  ) %>% 
+  ungroup()
+```
+
+Notes
+
+* It seems suspicious to me there are *exactly* 160,000 strings in the logbook data.
