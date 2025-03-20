@@ -66,7 +66,7 @@ pacfin_revenue_metric <- "EXVESSEL_REVENUE" # another option is AFI_EXVESSEL_REV
 # target_metric <- "revenue" # afi_revenue is an alternative option for newer fish tickets, but use caution as you need to know reference year
 
 ## how much "more important" does your target need to be than the species with the second greatest catch? Expressed as a ratio.
-target_cutoff <- 1
+target_cutoff <- 1.1
 
 ## do you want to report revenue and lbs for the given target species? (dynamic)
 # include_target <- TRUE
@@ -81,7 +81,7 @@ This parameter will get passed through all processing steps
 alltime <- proc.time()
 
 # choose year of data to process
-process_year <- 2020
+process_year <- 2023
 ```
 
 ## Lookback Window
