@@ -40,6 +40,25 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
               axis.ticks.y=element_blank())
 ```
 
+```{r create-output-directories}
+# make hidncast output directory, if doesn't yet exist
+output_dir <- here('Confidential', 'hindcast_output')
+if (!dir.exists(output_dir)) dir.create(output_dir)
+
+# create hindcast output subdirectory name based on system date
+output_subdir_name <- paste0("hindcast_output_", Sys.Date())
+
+# make hindcast output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential', 'hindcast_output', output_subdir_name)
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
+# make tables, figures, and maps subdirectories
+for (temp_name in c('tables', 'figures', 'maps')) {
+  temp_subdir <- here('Confidential', 'hindcast_output', output_subdir_name, temp_name)
+  if (!dir.exists(temp_subdir)) dir.create(temp_subdir)
+}
+rm(temp_name, temp_subdir)
+```
 ## Load data
 
 1. Load the joined, cleaned, interpolated VMS and fish ticket data for specified years, which will be used to map fishing activity distribution. 
@@ -74,27 +93,6 @@ vms_df <- vms_df %>%
   st_join(grid_5km) %>%
   st_set_geometry(NULL)
 ```
-
-```{r create-output-directories}
-# make hidncast output directory, if doesn't yet exist
-output_dir <- here('Confidential', 'hindcast_output')
-if (!dir.exists(output_dir)) dir.create(output_dir)
-
-# create hindcast output subdirectory name based on system date
-output_subdir_name <- paste0("hindcast_output_", Sys.Date())
-
-# make hindcast output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential', 'hindcast_output', output_subdir_name)
-if (!dir.exists(output_subdir)) dir.create(output_subdir)
-
-# make tables, figures, and maps subdirectories
-for (temp_name in c('tables', 'figures', 'maps')) {
-  temp_subdir <- here('Confidential', 'hindcast_output', output_subdir_name, temp_name)
-  if (!dir.exists(temp_subdir)) dir.create(temp_subdir)
-}
-rm(temp_name, temp_subdir)
-```
-
 
 4. Load inflation adjustment factors from FRED.
 
