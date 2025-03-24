@@ -375,28 +375,34 @@ Create some overall **time series** and **heatmaps** of fishing activity, revenu
 ```{r fishing-activity-time-series}
 # this uses the confidential data, using non-gridded summary to not double count unique vessels
 time_series_df <- dcrb_confidential_df %>%
-  group_by(crab_year, year, year_month, month) %>%
+  # add year and month as a date for easier plotting
+  mutate(year_month_date = ym(year_month)) %>%
+  # group by month and summarize
+  group_by(crab_year, year, year_month, year_month_date, month) %>%
   summarise(n_vms_records = n(),
             n_unique_vessels = n_distinct(drvid),
             DCRB_lbs = sum(DCRB_lbs),
             DCRB_revenue_afi = sum(DCRB_revenue_afi),
-            .groups = 'keep')
+            .groups = 'drop') %>%
+  # group by crab year and calculate cumulative sums
+  group_by(crab_year) %>%
+  mutate(cumulative_sum_DCRB_lbs = cumsum(DCRB_lbs),
+         cumulative_sum_DCRB_revenue_afi = cumsum(DCRB_revenue_afi)) %>%
+  ungroup()
 
-# plot # VMS pings per month as bar chart
-time_series_df %>% ggplot() + geom_col(aes(x = year_month, y = n_vms_records, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "time_series_n_vms_records.png"))
+# set x-axis label date breaks for time to start x-axis labels in Nov.
+set_breaks <- scales::breaks_width("1 year", offset = -61) # -61 days moves start from Jan. 1 to Nov. 1
+df_date_breaks <- set_breaks(range(time_series_df$year_month_date))
 
-# plot # unique vessels per month as bar chart
-time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = n_unique_vessels, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "time_series_n_unique_vessels.png"))
-
-# plot # unique vessels per month as bar chart
-time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_lbs, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "time_series_DCRB_lbs.png"))
-
-# plot # unique vessels per month as bar chart
-time_series_df %>% ggplot() +  geom_col(aes(x = year_month, y = DCRB_revenue_afi, fill = crab_year))
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "time_series_DCRB_revenue_afi.png"))
+# set vector of variables to create line plots for
+plot_vars <- c('n_vms_records', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue_afi', 'cumulative_sum_DCRB_lbs', 'cumulative_sum_DCRB_revenue_afi')
+# create line plots
+for (plot_var in plot_vars) {
+  time_series_df %>% ggplot() + 
+    geom_line(aes(x = year_month_date, y = get(plot_var), color = crab_year)) +
+    scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y")
+  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_", plot_var, ".png")))
+}
 
 # plot # VMS pings per month as heatmap
 time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_vms_records))
