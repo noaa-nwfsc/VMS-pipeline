@@ -12,6 +12,11 @@ knit: |
   })
 ---
 
+```{r, include=FALSE}
+# start timer
+start_timer <- proc.time()
+```
+
 ## Purpose
 
 * Integrate interpolated VMS and fish ticket data to produce time series, rasters, and maps of fishing activity, landed weight, and revenue.
@@ -740,3 +745,11 @@ fishing_activity_gif <- function (map_directory, map_metric_name) {
 # create animation for # VMS pings and # unique vessels
 fishing_activity_gif(map_directory = here("Confidential", "hindcast_output", output_subdir_name, "maps"), map_metric_name = "n_vms_records")
 ```
+
+```{r, include=FALSE}
+# end timer
+end_timer <- proc.time()
+total_timer <- end_timer - start_timer
+```
+
+This script took `r round(total_timer[3]/60, 2)` minutes to run.
