@@ -152,7 +152,6 @@ Some commonly used acronyms for variable naming in the code include:
 # define filters
 target_rev <- "DCRB"         # revenue target
 target_lbs <- "DCRB"         # landings target
-state_agency_code <- "C"     # landings brought to California ports
 min_depth <- 0               # minimum depth in meters
 max_depth <- -150            # maximum depth in meters
 min_speed <- 0               # minimum speed in m/s
@@ -175,7 +174,6 @@ dcrb_df <- vms_df %>%
   ) %>%
   # apply filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  filter(agency_code == state_agency_code) %>%
   filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
   # join inflation adjustment factor and adjust revenue
@@ -323,7 +321,6 @@ dcrb_ticket_df <- ticket_df %>%
   ) %>%
   # apply filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  filter(agency_code == state_agency_code) %>%
   mutate(
     year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date),6,7)),
     month_as_numeric = month(date),
