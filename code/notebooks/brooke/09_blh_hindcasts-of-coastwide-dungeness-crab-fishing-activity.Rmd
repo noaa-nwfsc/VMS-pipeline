@@ -59,6 +59,7 @@ for (temp_name in c('tables', 'figures', 'maps')) {
 }
 rm(temp_name, temp_subdir)
 ```
+
 ## Load data
 
 1. Load the joined, cleaned, interpolated VMS and fish ticket data for specified years, which will be used to map fishing activity distribution. 
@@ -161,21 +162,24 @@ winter_months <- c("November", "December", "January", "February", "March") # det
 dcrb_df <- vms_df %>%
   # add temporal columns
   mutate(
-    year = lubridate::year(westcoastdate_notime),
-    month = lubridate::month(westcoastdate_notime, label=TRUE, abbr=FALSE),
+    year_numeric = year(westcoastdate_notime),
     month_numeric = month(westcoastdate_notime),
-    year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime), 6, 7)),
-    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
-    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-    week_of_year = week(westcoastdate_notime),
-    day_of_year = yday(westcoastdate_notime)
+    week_numeric = week(westcoastdate_notime),
+    day_numeric = yday(westcoastdate_notime),
+    month_factor = month(westcoastdate_notime, label = TRUE, abbr = FALSE),
+    year_month_character = paste0(year(westcoastdate_notime),"_", substr(ymd(westcoastdate_notime), 6, 7)),
+    crab_year_character = ifelse(month_numeric >= crab_year_start, 
+                                 paste0(year_numeric, "_", 1+year_numeric),
+                                 paste0(year_numeric-1, "_", year_numeric)),
+    season_character = as.character(ifelse(month_factor %in% winter_months, "Winter", "Spring-Summer")),
+    year_month_date = ym(year_month_character)
   ) %>%
   # apply filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
   # join inflation adjustment factor and adjust revenue
-  left_join(gdp_defl, by = join_by(year)) %>%
+  left_join(gdp_defl, by = join_by(year_numeric == year)) %>%
   mutate(DCRB_revenue_afi = DCRB_revenue / inflation_adjustment_factor) %>%
   # select columns
   dplyr::select(
@@ -189,14 +193,14 @@ dcrb_df <- vms_df %>%
     # temporal fields
     westcoastdate,
     westcoastdate_notime,
-    crab_year, 
-    season,
-    year,
-    year_month,
-    month, 
+    year_month_date,
+    crab_year_character,
+    year_month_character,
+    month_factor,
+    year_numeric,
     month_numeric,
-    week_of_year,
-    day_of_year,
+    week_numeric,
+    day_numeric,
     # vessel length
     FINAL_LENGTH,
     # dungeness crab fields
@@ -254,7 +258,7 @@ dcrb_trip_df <- left_join(dcrb_df, trip_df, by="Rec_ID") %>%
 
 # summarize grid cell and month-level attributes
 confidential_df <- dcrb_df %>%
-  group_by(GRID5KM_ID, year_month) %>%
+  group_by(GRID5KM_ID, year_month_character) %>%
   summarise(n_unique_vessels = n_distinct(drvid),
             # set confidential_flag TRUE for confidential, FALSE for non-confidential
             confidential_flag = (n_distinct(drvid) < 3), .groups="keep") %>%
@@ -262,7 +266,7 @@ confidential_df <- dcrb_df %>%
 
 # join grid cell and month-level attributes back to dungeness crab dataframe
 dcrb_confidential_df <- dcrb_trip_df %>%
-  left_join(confidential_df, by=join_by(GRID5KM_ID, year_month))
+  left_join(confidential_df, by = join_by(GRID5KM_ID, year_month_character))
 
 # create monthly gridded summary
 dcrb_5km_summary_df <- dcrb_confidential_df %>%
@@ -270,11 +274,11 @@ dcrb_5km_summary_df <- dcrb_confidential_df %>%
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
     # temporal columns, makes this a monthly summary
-    year,
-    crab_year,
-    year_month,
-    season,
-    month,
+    crab_year_character,
+    year_numeric,
+    year_month_character,
+    year_month_date,
+    month_factor,
     month_numeric
   ) %>%
   # sum landings, revenue; count unique vessels and VMS records; determine confidentiality filter
@@ -308,28 +312,22 @@ dcrb_vms_rec_ids <- dcrb_confidential_df %>%
 dcrb_ticket_df <- ticket_df %>%
   # add temporal columns
   mutate(
-    year = lubridate::year(date),
-    month = lubridate::month(date, label=TRUE, abbr=FALSE),
+    year_numeric = year(date),
     month_numeric = month(date),
-    year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date), 6, 7)),
-    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
-    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-    week_of_year = week(date),
-    day_of_year = yday(date)
+    week_numeric = week(date),
+    day_numeric = yday(date),
+    month_factor = month(date, label = TRUE, abbr = FALSE),
+    year_month_character = paste0(year(date),"_", substr(ymd(date), 6, 7)),
+    crab_year_character = ifelse(month_numeric >= crab_year_start, 
+                                 paste0(year_numeric, "_", 1+year_numeric),
+                                 paste0(year_numeric-1, "_", year_numeric)),
+    season_character = as.character(ifelse(month_factor %in% winter_months, "Winter", "Spring-Summer")),
+    year_month_date = ym(year_month_character)
   ) %>%
   # apply filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  mutate(
-    year_month = paste0(lubridate::year(date),"_", substr(lubridate::ymd(date),6,7)),
-    month_as_numeric = month(date),
-    month_as_date = round_date(date, unit='month'),
-    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
-    crab_year = ifelse(
-      month_as_numeric >= 11, paste0(year, "_", 1+year), paste0(year-1, "_", year)
-    )
-  ) %>%
   # join inflation adjustment factor and adjust revenue
-  left_join(gdp_defl, by = join_by(year)) %>%
+  left_join(gdp_defl, by = join_by(year_numeric == year)) %>%
   mutate(DCRB_revenue_afi = DCRB_revenue / inflation_adjustment_factor) %>%
   # select columns
   dplyr::select(
@@ -340,14 +338,14 @@ dcrb_ticket_df <- ticket_df %>%
     port_group_code,  # port group ID
     # temporal fields
     date,
-    crab_year,
-    season,
-    year,
-    year_month,
-    month,
+    year_month_date,
+    crab_year_character,
+    year_month_character,
+    month_factor,
+    year_numeric,
     month_numeric,
-    week_of_year,
-    day_of_year,
+    week_numeric,
+    day_numeric,
     # vessel length
     FINAL_LENGTH,
     # dungeness crab fields
@@ -375,17 +373,15 @@ Create some overall **time series** and **heatmaps** of fishing activity, revenu
 ```{r fishing-activity-time-series}
 # this uses the confidential data, using non-gridded summary to not double count unique vessels
 time_series_df <- dcrb_confidential_df %>%
-  # add year and month as a date for easier plotting
-  mutate(year_month_date = ym(year_month)) %>%
   # group by month and summarize
-  group_by(crab_year, year, year_month, year_month_date, month) %>%
+  group_by(crab_year_character, year_numeric, month_factor, month_numeric, year_month_date) %>%
   summarise(n_vms_records = n(),
             n_unique_vessels = n_distinct(drvid),
             DCRB_lbs = sum(DCRB_lbs),
             DCRB_revenue_afi = sum(DCRB_revenue_afi),
             .groups = 'drop') %>%
   # group by crab year and calculate cumulative sums
-  group_by(crab_year) %>%
+  group_by(crab_year_character) %>%
   mutate(cumulative_sum_DCRB_lbs = cumsum(DCRB_lbs),
          cumulative_sum_DCRB_revenue_afi = cumsum(DCRB_revenue_afi)) %>%
   ungroup()
@@ -399,17 +395,17 @@ plot_vars <- c('n_vms_records', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue_af
 # create line plots
 for (plot_var in plot_vars) {
   time_series_df %>% ggplot() + 
-    geom_line(aes(x = year_month_date, y = get(plot_var), color = crab_year)) +
+    geom_line(aes(x = year_month_date, y = get(plot_var), color = crab_year_character)) +
     scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y")
   ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_", plot_var, ".png")))
 }
 
 # plot # VMS pings per month as heatmap
-time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_vms_records))
+time_series_df %>% ggplot() + geom_tile(aes(x = month_factor, y = as.factor(year_numeric), fill = n_vms_records))
 ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "heatmap_n_vms_records.png"))
 
 # plot # unique vessels per month as heatmap
-time_series_df %>% ggplot() + geom_tile(aes(x = month, y = as.factor(year), fill = n_unique_vessels))
+time_series_df %>% ggplot() + geom_tile(aes(x = month_factor, y = as.factor(year_numeric), fill = n_unique_vessels))
 ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "heatmap_n_unique_vessels.png"))
 ```
 
@@ -423,7 +419,7 @@ Create a table and a bar chart that summarize the **representativeness** of VMS 
 ```{r representativeness-tables}
 # check yearly VMS representativeness for tickets, landings, revenue and vessels
 representativeness_yearly_table <- dcrb_ticket_df %>%
-  group_by(year) %>%
+  group_by(year_numeric) %>%
   summarise(
     # check for tickets
     vms_represented_tickets          = sum(vms_represented_flag),
@@ -444,7 +440,7 @@ representativeness_yearly_table <- dcrb_ticket_df %>%
     .groups = 'keep'
   ) %>%
   ungroup() %>%
-  arrange(year)
+  arrange(year_numeric)
 
 # write yearly result
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "table_vms_representativeness_yearly.csv"),
@@ -454,13 +450,13 @@ write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "ta
 ```{r representativeness-time-series}
 # plot % represented by VMS for all four metrics, yearly
 vms_representativeness_time_series_yearly <- representativeness_yearly_table %>%
-  select(year,
+  select(year_numeric,
          contains("percent_vms_represented")) %>%
   pivot_longer(cols = contains("percent_vms_represented"),
                names_to = "metric",
                names_prefix = "percent_vms_represented_",
                values_to ="percent_vms_represented") %>%
-  ggplot(aes(x = as.factor(year), y = percent_vms_represented)) +
+  ggplot(aes(x = as.factor(year_numeric), y = percent_vms_represented)) +
   geom_col() +
   xlab("year") +
   facet_grid(metric ~ ., scales = "free_y")
@@ -477,7 +473,7 @@ vessel_size_cutoff <- 40
 # check yearly VMS representativeness for tickets, landings, revenue and vessels
 stratified_representativeness_yearly_table <- dcrb_ticket_df %>%
   mutate(vessel_size_above_cutoff = FINAL_LENGTH > vessel_size_cutoff) %>%
-  group_by(year, vessel_size_above_cutoff) %>%
+  group_by(year_numeric, vessel_size_above_cutoff) %>%
   summarise(
     # check for tickets
     vms_represented_tickets          = sum(vms_represented_flag),
@@ -498,7 +494,7 @@ stratified_representativeness_yearly_table <- dcrb_ticket_df %>%
     .groups = 'keep'
   ) %>%
   ungroup() %>%
-  arrange(year, vessel_size_above_cutoff)
+  arrange(year_numeric, vessel_size_above_cutoff)
 
 # write yearly result
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "table_vms_representativeness_yearly_stratified.csv"),
@@ -508,14 +504,14 @@ write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "ta
 ```{r size-stratified-representativeness-time-series}
 # plot % represented by VMS for all four metrics stratified by vessel size category, yearly
 stratified_vms_representativeness_time_series_yearly <- stratified_representativeness_yearly_table %>%
-  select(year,
+  select(year_numeric,
          vessel_size_above_cutoff,
          contains("percent_vms_represented")) %>%
   pivot_longer(cols = contains("percent_vms_represented"),
                names_to = "metric",
                names_prefix = "percent_vms_represented_",
                values_to ="percent_vms_represented") %>%
-  ggplot(aes(x = as.factor(year), y = percent_vms_represented, fill = vessel_size_above_cutoff)) +
+  ggplot(aes(x = as.factor(year_numeric), y = percent_vms_represented, fill = vessel_size_above_cutoff)) +
   geom_col(position = "dodge") +
   xlab("year") +
   facet_grid(metric ~ ., scales = "free_y")
@@ -547,13 +543,13 @@ denominator_drop_confidential <- dim(dcrb_confidential_df)[1]
 percent_drop_confidential <- substr(as.character(numerator_drop_confidential / denominator_drop_confidential * 100), 1, 5)
 
 # repeat for each year
-confidential_yearly_table <- dcrb_confidential_df %>% group_by(year) %>%
+confidential_yearly_table <- dcrb_confidential_df %>% group_by(year_numeric) %>%
   summarise(confidential_vms_records = sum(confidential_flag),
             total_vms_records = n(),
             percent_vms_records_confidential = trunc(confidential_vms_records / total_vms_records * 10000) / 100,
             .groups = 'keep') %>%
   ungroup() %>%
-  arrange(year)
+  arrange(year_numeric)
 
 # write yearly result
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "table_confidentiality_yearly.csv"),
@@ -575,7 +571,7 @@ Create a **fishing activity table** summarizing the monthly and yearly average #
 ```{r gridded-summary-tables}
 # create monthly summary of gridded fishing activity
 fishing_activity_monthly_table <- dcrb_5km_output_df %>%
-  group_by(year, month_numeric) %>%
+  group_by(year_numeric, month_numeric) %>%
   summarise(
     # grid cell count
     n_grid_cells = n(),
@@ -593,14 +589,14 @@ fishing_activity_monthly_table <- dcrb_5km_output_df %>%
     iqr_unique_vessels    = IQR(n_unique_vessels),
     .groups = 'keep'
   ) %>%
-  arrange(year, month_numeric)
+  arrange(year_numeric, month_numeric)
 # write result
 write.csv(file=here("Confidential", "hindcast_output", output_subdir_name, "tables", "table_fishing_activity_monthly.csv"),
           x=fishing_activity_monthly_table)
 
 # repeat for yearly
 fishing_activity_yearly_table <- dcrb_5km_output_df %>%
-  group_by(year) %>%
+  group_by(year_numeric) %>%
   summarise(
     # grid cell month and grid cell count
     n_grid_cell_months = n(),
@@ -619,7 +615,7 @@ fishing_activity_yearly_table <- dcrb_5km_output_df %>%
     iqr_unique_vessels    = IQR(n_unique_vessels),
     .groups = 'keep'
   ) %>%
-  arrange(year)
+  arrange(year_numeric)
 # write result
 write.csv(file=here("Confidential", "hindcast_output", output_subdir_name, "tables", "table_fishing_activity_yearly.csv"),
           x=fishing_activity_yearly_table)
@@ -688,18 +684,18 @@ vms_fill_range <- range(dcrb_5km_output_sf$n_vms_records)
 # get unique and ordered year, year_month and month from gridded fishing summary
 month_df <- dcrb_5km_output_sf %>% 
   st_drop_geometry() %>% 
-  select(year, year_month, month) %>% 
+  select(year_numeric, year_month_character, month_numeric) %>% 
   unique() %>% 
-  arrange(year_month)
+  arrange(year_month_character)
 
 # iterate over months
-for (ym in month_df$year_month) {
+for (ym in month_df$year_month_character) {
   # get title as a combination of year and month
-  y <- month_df$year[which(month_df$year_month==ym)]
-  m <- month_df$month[which(month_df$year_month==ym)]
+  y <- month_df$year_numeric[which(month_df$year_month_character==ym)]
+  m <- month_df$month_numeric[which(month_df$year_month_character==ym)]
   title <- paste(y, m)
   # filter data for given month
-  ym_data_sf <- dcrb_5km_output_sf %>% filter(year_month == ym)
+  ym_data_sf <- dcrb_5km_output_sf %>% filter(year_month_character == ym)
   # make and save map of # VMS pings
   vms_map <- fishing_activity_map(data_sf = ym_data_sf,
                                   data_col = ym_data_sf$n_vms_records,
