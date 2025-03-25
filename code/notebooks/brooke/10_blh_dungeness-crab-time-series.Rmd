@@ -150,6 +150,7 @@ dcrb_ticket_df <- ticket_df %>%
     drvid,            # vessel ID
     pacfin_port_code, # port ID
     port_group_code,  # port group ID
+    agency_code,      # agency code
     # temporal fields
     date,
     year_month_date,
@@ -165,13 +166,12 @@ dcrb_ticket_df <- ticket_df %>%
     # dungeness crab fields
     DCRB_lbs,
     DCRB_revenue_afi
-  )
+  ) %>%
+  # de-duplicate records
+  distinct()
 
 # take a peek at the resulting dataframe
 glimpse(dcrb_ticket_df)
-
-# clean up
-remove(ticket_df)
 ```
 
 ```{r}
@@ -184,11 +184,27 @@ n_years   <- n_distinct(dcrb_ticket_df$year_numeric)
 The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` trips (fish tickets), across `r n_years` years.
 
 ```{r}
+# how many fish tickets have duplicate records?
+n_records - n_trips # 7499
+
 # explore why n_records != n_trips
+qa_df <- dcrb_ticket_df %>%
+  group_by(Rec_ID, year_numeric, agency_code) %>%
+  summarize(n_records = n(),
+            na_length = sum(is.na(FINAL_LENGTH)), .groups = 'drop')
+
+# what's the max # duplicates?
+max(qa_df$n_records) # 2 records
+
+# are the duplicates all from NA length?
+max(qa_df$na_length) # max 1 record has NA length per fish ticket
+qa_df %>% filter(n_records > 1) %>% summarize(sum(na_length)) # yes, all 7499 records
+
+# are there additional non-duplicates with NA length?
+qa_df %>% summarize(sum(na_length)) # yes, 12909 records have NA length, which is greater than the 7499 which have an NA and non-NA length
+
+# are the NAs from a particular agency or year?
+qa_df %>% filter(n_records > 1) %>% group_by(agency_code) %>% count() %>% arrange(agency_code) # no, some in every agency
+qa_df %>% filter(n_records > 1) %>% group_by(year_numeric) %>% count() %>% arrange(year_numeric) # no, some in every year
 ```
 
-
-```{r}
-# clean up
-remove(ticket_df, n_records, n_trips, n_years)
-```
