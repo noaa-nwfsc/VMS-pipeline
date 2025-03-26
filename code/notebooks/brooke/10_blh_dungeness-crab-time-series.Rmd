@@ -181,7 +181,9 @@ n_trips   <- n_distinct(dcrb_ticket_df$Rec_ID)
 n_years   <- n_distinct(dcrb_ticket_df$year_numeric)
 ```
 
-The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` trips (fish tickets), across `r n_years` years.
+The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` distinct trips (fish tickets), across `r n_years` years.
+
+There are more records than trips due to the vessel registration processing code including the lookback window data in step 2 of the pipeline. I looked at some examples of duplicates, and they occur for tickets within the lookback window, having a vessel final length in one year and not in another. That can be fixed in the plotting code by removing duplicates when one length is NA.
 
 ```{r}
 # how many fish tickets have duplicate records?
@@ -207,4 +209,129 @@ qa_df %>% summarize(sum(na_length)) # yes, 12909 records have NA length, which i
 qa_df %>% filter(n_records > 1) %>% group_by(agency_code) %>% count() %>% arrange(agency_code) # no, some in every agency
 qa_df %>% filter(n_records > 1) %>% group_by(year_numeric) %>% count() %>% arrange(year_numeric) # no, some in every year
 ```
+
+I'm seeing the duplication of some records, which seems to be due to the same fish ticket having an NA and a non-NA vessel length. I'm going to check data sources in this order for where the duplication of records is happening:
+
+* vessel key in step 2 of main process script (checked, not here)
+* fish ticket to vessel key join in step 2 of main process script (checked, not here)
+* multiple years joined together in this script (suspect it's here)
+* VMS data joined to fish ticket data after step 2 in main process script (not yet checked)
+* fishing activity maps / metrics in this script (not yet checked)
+
+I think this issue is new after the repository reorganization, because looking at my old VMS representativeness plots (from Jan.), there isn't a huge chunk of NA vessel lengths. There were some in 2023, 2021 and 2019, but not a huge amount.
+
+```{r}
+# load vessel length keys
+vessel_df <- purrr::map(load_years, function(ly) {
+  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'vessel_length_keys', paste0('vessel_length_key_', ly, '.rds')))
+}) %>% bind_rows()
+
+# check how many records per vessel ID per year, and how many are NA length
+qa_vessel_df <- vessel_df %>%
+  group_by(drvid, year) %>% 
+  summarize(count = n(), 
+            na_length = sum(is.na(FINAL_LENGTH))) %>%
+  arrange(desc(na_length), desc(count))
+
+# where are the NAs from?
+max(qa_vessel_df$count) # 3 records max for one year and one vessel
+max(qa_vessel_df$na_length) # 1 NA length record max for one year and one vessel
+sum(qa_vessel_df$count > 1 & qa_vessel_df$na_length < qa_vessel_df$count) # 3274 vessel IDs have multiple records, one of which is NA length
+
+# try looking at one year, and see if the issue is there
+vessel_df_2014 <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'vessel_length_keys', paste0('vessel_length_key_2014.rds')))
+
+# repeat QA dataframe
+qa_vessel_2014_df <- vessel_df_2014 %>%
+  group_by(drvid, year) %>% 
+  summarize(count = n(), 
+            na_length = sum(is.na(FINAL_LENGTH))) %>%
+  arrange(desc(na_length), desc(count))
+
+# repeat checks - where are the NAs from?
+max(qa_vessel_2014_df$count) # 3 records max for one year and one vessel
+max(qa_vessel_2014_df$na_length) # 1 NA length record max for one year and one vessel
+sum(qa_vessel_2014_df$count > 1 & qa_vessel_df$na_length < qa_vessel_df$count) # 4357 vessel IDs have multiple records, one of which is NA length
+qa_vessel_2014_df %>% group_by(count, na_length) %>% summarize(n = n()) %>% arrange(desc(n)) # most vessel IDs are fine, the more common issue than NA length is different lengths
+
+# confirm only one year of data is in vessel length dataframes
+unique(qa_vessel_2014_df$year) # confirmed, only 2014 assigned as year
+```
+
+The issue is in the vessel length keys. But I'm not really sure what's causing it. I took a quick look at the dataframe for vessels with multiple lengths, and found that including agency_code creates the issue. Since the last time I plotted was just for California, I didn't encounter this issue?
+
+* Checking vessel IDs with 3 vessel lengths, 0 NA vessel length
+  * One example had lengths of 40, 40, and 41 based for C, O, and W.
+  * Another example had the same issue, 50, 44, 48 lengths for different agency codes
+  * Another example had the same issue, 54, 53, 60 lengths for different agency codes
+* Check vessel IDs with 2 vessel lengths, 1 NA vessel length
+  * One example had NA for O, 50 for W
+  * Another example had NA for O, 31 for W
+  * Another example had NA for O, 28 for W
+
+So it's fine that multiple vessels have different registrations and therefore different lengths across agencies. It does mean that for representativeness plots, they should be split by agency or de-duplicated across states, otherwise vessels will be double- or triple-counted if they have registrations and tickets in multiple states.
+
+But why would there be multiple RecIDs for the same year in ticket_df? I thought fish tickets were unique to a given state. Did I remove something differentiating in the dcrb_ticket_df filter?
+
+```{r}
+# explore why n_records != n_trips
+qa_ticket_df <- ticket_df %>%
+  group_by(Rec_ID) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n))
+```
+
+No, still seeing duplicates with the same length issue in un-filtered version.
+
+```{r}
+# try looking at one year before vessel registration join, and see if the issue is there
+ticket_df_2014 <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'fish_tickets', 'fishtix_withFTID_2014.rds'))
+
+ticket_df %>%
+  filter(year == 2014) %>%
+  group_by(Rec_ID, agency_code) %>%
+  summarize(n_records = n(),
+            na_length = sum(is.na(FINAL_LENGTH)), .groups = 'drop') %>% arrange(desc(n_records))
+
+ticket_df_2014 %>%
+  group_by(Rec_ID, agency_code) %>%
+  summarize(n_records = n()) %>% arrange(desc(n_records))
+```
+
+```{r}
+# try looking at one year after vessel registration join, and see if the issue is there
+ticket_vessel_df_2014 <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'fish_tickets', 'fishtix_vlengths_withFTID_2014.rds'))
+ticket_vessel_df_2013 <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'fish_tickets', 'fishtix_vlengths_withFTID_2013.rds'))
+ticket_vessel_df_2015 <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'fish_tickets', 'fishtix_vlengths_withFTID_2015.rds'))
+
+ticket_vessel_df_2014 %>%
+  group_by(Rec_ID, agency_code) %>%
+  summarize(n_records = n(),
+            na_length = sum(is.na(FINAL_LENGTH)), .groups = 'drop') %>% arrange(desc(n_records))
+
+ticket_df_2014 %>%
+  group_by(Rec_ID, agency_code) %>%
+  summarize(n_records = n()) %>% arrange(desc(n_records))
+
+```
+
+I took another look at the problematic records, and they occur in the lookback window timeframe (Dec. 26-31 of the prior year). I'm wondering how to fix that.
+
+```{r}
+vms_2014 <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'filtered', 'matched_filtered_withFTID_length_2014.rds'))
+vms_2015 <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'filtered', 'matched_filtered_withFTID_length_2015.rds'))
+
+# check 2014 VMS count
+qa_vms_2014_df <- vms_2014 %>%
+  group_by(Rec_ID, agency_code, drvid) %>%
+  summarize(n = n(),
+            na_length = sum(is.na(FINAL_LENGTH))) %>%
+  arrange(desc(na_length))
+
+# check out results
+glimpse(qa_vms_2014_df)
+```
+
+Seems like the issue isn't happening at VMS data then. Perhaps the issue is just related to joining data in this step for the time series visualizations.
+
 
