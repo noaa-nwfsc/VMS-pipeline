@@ -19,6 +19,11 @@ start_timer <- proc.time()
 library(tidyverse)
 library(here)
 library(fredr)
+
+# adjust ggplot theme
+theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+              axis.ticks.x=element_blank(),
+              axis.ticks.y=element_blank())
 ```
 
 ```{r create-output-directories}
@@ -81,11 +86,11 @@ gdp_defl <- mutate(fred_gdpdefl, year = year(date)) %>%
   select(year, inflation_adjustment_factor)
 
 # write inflation adjustment factors
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_adjustment.csv"), x = gdp_defl)
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation-adjustment.csv"), x = gdp_defl, row.names = FALSE)
 
 # plot inflation adjustment factors
 gdp_defl %>% ggplot(aes(x = as.factor(year), y = inflation_adjustment_factor)) + geom_point()
-ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_adjustment.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation-adjustment.png"))
 
 # clean up
 rm(fred_gdpdefl)
@@ -170,8 +175,8 @@ dcrb_ticket_df <- ticket_df %>%
   # de-duplicate records
   distinct()
 
-# take a peek at the resulting dataframe
-glimpse(dcrb_ticket_df)
+# take a peek at columns in the resulting dataframe
+colnames(dcrb_ticket_df)
 ```
 
 ```{r}
@@ -195,7 +200,9 @@ qa_df <- dcrb_ticket_df %>%
             na_length = sum(is.na(FINAL_LENGTH))) %>%
   mutate(remove_na = (na_length == 1) & (n == 2)) %>%
   arrange(desc(n))
-glimpse(qa_df)
+
+# take a peek at columns in the resulting dataframe
+colnames(qa_df)
 
 # how many records need de-duplication (have 2 records, 1 of which has NA length)?
 qa_df %>% group_by(n, na_length, remove_na) %>% summarise(n_records = n()) %>% arrange(desc(n_records)) # 7499 records
@@ -211,5 +218,50 @@ n_qa_trips   <- n_distinct(qa_dcrb_ticket_df$Rec_ID)
 n_qa_years   <- n_distinct(qa_dcrb_ticket_df$year_numeric)
 ```
 
-The QA'ed Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` distinct trips (fish tickets), across `r n_years` years. Now there are no duplicate fish tickets.
+The QA'ed Dungeness crab fish ticket dataframe has `r n_qa_records` records (fish tickets), `r n_qa_trips` distinct trips (fish tickets), across `r n_qa_years` years. Now there are no duplicate fish tickets.
+
+```{r}
+# create monthly summary for time series plots
+time_series_df <- qa_dcrb_ticket_df %>%
+  # group by month and summarize
+  group_by(crab_year_character, year_numeric, month_factor, month_numeric, year_month_date) %>%
+  summarise(n_fish_tickets = n(),
+            n_unique_vessels = n_distinct(drvid),
+            DCRB_lbs = sum(DCRB_lbs),
+            DCRB_revenue_afi = sum(DCRB_revenue_afi),
+            .groups = 'drop') %>%
+  # group by crab year and calculate cumulative sums
+  group_by(crab_year_character) %>%
+  mutate(cumulative_sum_DCRB_lbs = cumsum(DCRB_lbs),
+         cumulative_sum_DCRB_revenue_afi = cumsum(DCRB_revenue_afi)) %>%
+  ungroup()
+
+# write time series
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time-series.csv"), x = time_series_df, row.names = FALSE)
+
+# set x-axis label date breaks for time to start x-axis labels in Nov.
+set_breaks <- scales::breaks_width("1 year", offset = -61) # -61 days moves start from Jan. 1 to Nov. 1
+df_date_breaks <- set_breaks(range(time_series_df$year_month_date))
+
+# set vector of variables to create line plots for
+plot_vars <- c('n_fish_tickets', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue_afi', 'cumulative_sum_DCRB_lbs', 'cumulative_sum_DCRB_revenue_afi')
+
+# create line plots
+for (plot_var in plot_vars) {
+  time_series_df %>% ggplot() + 
+    geom_line(aes(x = year_month_date, y = get(plot_var), color = crab_year_character)) +
+    scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y")
+  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time-series_line_", plot_var, ".png")))
+}
+
+# set vector of variables to create temporal heatmap plots for
+plot_vars <- c('n_fish_tickets', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue_afi')
+
+# create temporal heatmaps
+for (plot_var in plot_vars) {
+  time_series_df %>% ggplot() + 
+    geom_tile(aes(x = month_factor, y = as.factor(year_numeric), fill = get(plot_var)))
+  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time-series_heatmap", plot_var, ".png")))
+}
+```
 
