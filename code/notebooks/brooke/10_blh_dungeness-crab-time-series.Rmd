@@ -490,3 +490,11 @@ cumulative_revenue_plot <- line_plot_facet(
 )
 cumulative_revenue_plot
 ```
+
+```{r, include=FALSE}
+# end timer
+end_timer <- proc.time()
+total_timer <- end_timer - start_timer
+```
+
+This script took `r round(total_timer[3]/60, 2)` minutes to run.
