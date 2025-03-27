@@ -86,11 +86,11 @@ gdp_defl <- mutate(fred_gdpdefl, year = year(date)) %>%
   select(year, inflation_adjustment_factor)
 
 # write inflation adjustment factors
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation-adjustment.csv"), x = gdp_defl, row.names = FALSE)
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_adjustment.csv"), x = gdp_defl, row.names = FALSE)
 
 # plot inflation adjustment factors
 gdp_defl %>% ggplot(aes(x = as.factor(year), y = inflation_adjustment_factor)) + geom_point()
-ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation-adjustment.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_adjustment.png"))
 
 # clean up
 rm(fred_gdpdefl)
@@ -170,6 +170,7 @@ dcrb_ticket_df <- ticket_df %>%
     FINAL_LENGTH,
     # dungeness crab fields
     DCRB_lbs,
+    DCRB_revenue,
     DCRB_revenue_afi
   ) %>%
   # de-duplicate records
@@ -227,41 +228,52 @@ time_series_df <- qa_dcrb_ticket_df %>%
   group_by(crab_year_character, year_numeric, month_factor, month_numeric, year_month_date) %>%
   summarise(n_fish_tickets = n(),
             n_unique_vessels = n_distinct(drvid),
-            DCRB_lbs = sum(DCRB_lbs),
-            DCRB_revenue_afi = sum(DCRB_revenue_afi),
+            DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
+            DCRB_revenue = sum(DCRB_revenue, na.rm = TRUE),
+            DCRB_revenue_afi = sum(DCRB_revenue_afi, na.rm = TRUE),
             .groups = 'drop') %>%
   # group by crab year and calculate cumulative sums
   group_by(crab_year_character) %>%
-  mutate(cumulative_sum_DCRB_lbs = cumsum(DCRB_lbs),
-         cumulative_sum_DCRB_revenue_afi = cumsum(DCRB_revenue_afi)) %>%
+  mutate(cumulative_sum_DCRB_lbs = cumsum(coalesce(DCRB_lbs, 0)),
+         cumulative_sum_DCRB_revenue = cumsum(coalesce(DCRB_revenue, 0)),
+         cumulative_sum_DCRB_revenue_afi = cumsum(coalesce(DCRB_revenue_afi, 0))) %>%
   ungroup()
 
 # write time series
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time-series.csv"), x = time_series_df, row.names = FALSE)
+```
 
+``` {r}
 # set x-axis label date breaks for time to start x-axis labels in Nov.
 set_breaks <- scales::breaks_width("1 year", offset = -61) # -61 days moves start from Jan. 1 to Nov. 1
 df_date_breaks <- set_breaks(range(time_series_df$year_month_date))
 
-# set vector of variables to create line plots for
-plot_vars <- c('n_fish_tickets', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue_afi', 'cumulative_sum_DCRB_lbs', 'cumulative_sum_DCRB_revenue_afi')
+# cumulative time series line plot
+time_series_df %>% 
+  pivot_longer(cols = c('cumulative_sum_DCRB_lbs', 'cumulative_sum_DCRB_revenue', 'cumulative_sum_DCRB_revenue_afi'), names_to = "variable") %>% 
+  ggplot() + 
+  geom_line(aes(x = year_month_date, y = value, color = crab_year_character)) +
+  scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y") +
+  facet_grid(variable ~ ., scales = "free_y")
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_line_cumulative.png")))
+```
 
-# create line plots
-for (plot_var in plot_vars) {
-  time_series_df %>% ggplot() + 
-    geom_line(aes(x = year_month_date, y = get(plot_var), color = crab_year_character)) +
-    scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y")
-  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time-series_line_", plot_var, ".png")))
-}
+```{r}
+# non-cumulative time series line plot
+time_series_df %>% 
+  pivot_longer(cols = c('n_fish_tickets', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue', 'DCRB_revenue_afi'), names_to = "variable") %>% 
+  ggplot() + 
+  geom_line(aes(x = year_month_date, y = value, color = crab_year_character)) +
+  scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y") +
+  facet_grid(variable ~ ., scales = "free_y")
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_line_non_cumulative.png")))
+```
 
-# set vector of variables to create temporal heatmap plots for
-plot_vars <- c('n_fish_tickets', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue_afi')
-
-# create temporal heatmaps
-for (plot_var in plot_vars) {
-  time_series_df %>% ggplot() + 
-    geom_tile(aes(x = month_factor, y = as.factor(year_numeric), fill = get(plot_var)))
-  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time-series_heatmap", plot_var, ".png")))
-}
+```{r}
+# time series heat map
+time_series_df %>% 
+  ggplot() + 
+  geom_tile(aes(x = month_factor, y = as.factor(year_numeric), fill = n_unique_vessels))
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_heatmap_n_unique_vessels.png")))
 ```
 
