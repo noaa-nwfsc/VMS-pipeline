@@ -5,6 +5,8 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
+# Set up
+
 ```{r, include=FALSE}
 # start timer
 start_timer <- proc.time()
@@ -12,7 +14,7 @@ start_timer <- proc.time()
 
 ## Focus: Time series
 
-* Landings and revenue time series from fish tickets for main deck
+Make landings and revenue time series from fish tickets for main deck.
 
 ```{r setup, include=FALSE}
 # import libraries
@@ -45,6 +47,8 @@ for (temp_name in c('tables', 'figures', 'maps')) {
 }
 rm(temp_name, temp_subdir)
 ```
+
+# Data
 
 ## Load data
 
@@ -221,6 +225,10 @@ n_qa_years   <- n_distinct(qa_dcrb_ticket_df$year_numeric)
 
 The QA'ed Dungeness crab fish ticket dataframe has `r n_qa_records` records (fish tickets), `r n_qa_trips` distinct trips (fish tickets), across `r n_qa_years` years. Now there are no duplicate fish tickets.
 
+# Plots
+
+## Coastal time series plots
+
 ```{r}
 # create monthly summary for time series plots
 time_series_df <- qa_dcrb_ticket_df %>%
@@ -240,7 +248,7 @@ time_series_df <- qa_dcrb_ticket_df %>%
   ungroup()
 
 # write time series
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time-series.csv"), x = time_series_df, row.names = FALSE)
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time_series_coast.csv"), x = time_series_df, row.names = FALSE)
 ```
 
 ```{r}
@@ -326,6 +334,113 @@ time_series_df %>%
   ggplot(aes(x = month_factor, y = as.factor(year_numeric), fill = n_unique_vessels)) + 
   geom_tile() +
   labs(x = "Month", y = "Year", title = paste("Dungeness crab", min(load_years), "-", max(load_years)), fill = "Vessels (Count)")
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_heatmap_n_unique_vessels.png")))
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_heatmap_n_unique_vessels_coast.png")))
 ```
 
+## State time series plots
+
+Repeat above, but facet by state.
+
+```{r}
+# create monthly summary for time series plots
+state_time_series_df <- qa_dcrb_ticket_df %>%
+  # group by month and summarize
+  group_by(agency_code, crab_year_character, year_numeric, month_factor, month_numeric, year_month_date) %>%
+  summarise(n_fish_tickets = n(),
+            n_unique_vessels = n_distinct(drvid),
+            DCRB_lbs = sum(DCRB_lbs, na.rm = TRUE),
+            DCRB_revenue = sum(DCRB_revenue, na.rm = TRUE),
+            DCRB_revenue_afi = sum(DCRB_revenue_afi, na.rm = TRUE),
+            .groups = 'drop') %>%
+  # group by crab year and calculate cumulative sums
+  group_by(agency_code, crab_year_character) %>%
+  mutate(cumulative_sum_DCRB_lbs = cumsum(coalesce(DCRB_lbs, 0)),
+         cumulative_sum_DCRB_revenue = cumsum(coalesce(DCRB_revenue, 0)),
+         cumulative_sum_DCRB_revenue_afi = cumsum(coalesce(DCRB_revenue_afi, 0))) %>%
+  ungroup()
+
+# write time series
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time_series_state.csv"), x = state_time_series_df, row.names = FALSE)
+```
+
+```{r}
+# time series line plot
+line_plot_facet <- function(data, facet_var, x_var, y_var, color_var, date_breaks, x_label, y_label, title_label, color_label, png_name) {
+  plot <- data %>% 
+    ggplot(aes(x = get(x_var), y = get(y_var), color = get(color_var))) + 
+    geom_line() +
+    scale_x_date(breaks = date_breaks, date_labels = "%b %Y") +
+    labs(x = x_label, y = y_label, title = title_label, color = color_label) +
+    facet_grid(get(facet_var) ~ .)
+  ggsave(plot, filename = png_name)
+  return(plot)
+}
+
+# set x-axis label date breaks for time to start x-axis labels in Nov.
+set_breaks <- scales::breaks_width("1 year", offset = -61) # -61 days moves start from Jan. 1 to Nov. 1
+date_breaks <- set_breaks(range(time_series_df$year_month_date))
+
+# landings
+landings_plot <- line_plot_facet(
+  data = state_time_series_df,
+  facet_var = "agency_code",
+  x_var = "year_month_date",
+  y_var = "DCRB_lbs",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Landings (lbs)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_landings_state.png"))
+)
+landings_plot
+
+# cumulative landings
+cumulative_landings_plot <- line_plot_facet(
+  data = state_time_series_df,
+  facet_var = "agency_code",
+  x_var = "year_month_date",
+  y_var = "cumulative_sum_DCRB_lbs",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Cumulative landings (lbs)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_landings_cumulative_state.png"))
+)
+cumulative_landings_plot
+
+# revenue
+revenue_plot <- line_plot_facet(
+  data = state_time_series_df,
+  facet_var = "agency_code",
+  x_var = "year_month_date",
+  y_var = "DCRB_revenue_afi",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Revenue (USD $, AFI 2024)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_state.png"))
+)
+revenue_plot
+
+# cumulative revenue
+cumulative_revenue_plot <- line_plot_facet(
+  data = state_time_series_df,
+  facet_var = "agency_code",
+  x_var = "year_month_date",
+  y_var = "cumulative_sum_DCRB_revenue_afi",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Cumulative revenue (USD $, AFI 2024)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_cumulative_state.png"))
+)
+cumulative_revenue_plot
+```
