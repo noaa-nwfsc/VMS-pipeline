@@ -243,37 +243,89 @@ time_series_df <- qa_dcrb_ticket_df %>%
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time-series.csv"), x = time_series_df, row.names = FALSE)
 ```
 
-``` {r}
+```{r}
+# time series line plot
+line_plot <- function(data, x_var, y_var, color_var, date_breaks, x_label, y_label, title_label, color_label, png_name) {
+  plot <- data %>% 
+    ggplot(aes(x = get(x_var), y = get(y_var), color = get(color_var))) + 
+    geom_line() +
+    scale_x_date(breaks = date_breaks, date_labels = "%b %Y") +
+    labs(x = x_label, y = y_label, title = title_label, color = color_label)
+  ggsave(plot, filename = png_name)
+  return(plot)
+}
+
 # set x-axis label date breaks for time to start x-axis labels in Nov.
 set_breaks <- scales::breaks_width("1 year", offset = -61) # -61 days moves start from Jan. 1 to Nov. 1
-df_date_breaks <- set_breaks(range(time_series_df$year_month_date))
+date_breaks <- set_breaks(range(time_series_df$year_month_date))
 
-# cumulative time series line plot
-time_series_df %>% 
-  pivot_longer(cols = c('cumulative_sum_DCRB_lbs', 'cumulative_sum_DCRB_revenue', 'cumulative_sum_DCRB_revenue_afi'), names_to = "variable") %>% 
-  ggplot() + 
-  geom_line(aes(x = year_month_date, y = value, color = crab_year_character)) +
-  scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y") +
-  facet_grid(variable ~ ., scales = "free_y")
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_line_cumulative.png")))
+# landings
+landings_plot <- line_plot(
+  data = time_series_df,
+  x_var = "year_month_date",
+  y_var = "DCRB_lbs",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Landings (lbs)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_landings_coast.png"))
+)
+landings_plot
+
+# cumulative landings
+cumulative_landings_plot <- line_plot(
+  data = time_series_df,
+  x_var = "year_month_date",
+  y_var = "cumulative_sum_DCRB_lbs",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Cumulative landings (lbs)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_landings_cumulative_coast.png"))
+)
+cumulative_landings_plot
+
+# revenue
+revenue_plot <- line_plot(
+  data = time_series_df,
+  x_var = "year_month_date",
+  y_var = "DCRB_revenue_afi",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Revenue (USD $, AFI 2024)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_coast.png"))
+)
+revenue_plot
+
+# cumulative revenue
+cumulative_revenue_plot <- line_plot(
+  data = time_series_df,
+  x_var = "year_month_date",
+  y_var = "cumulative_sum_DCRB_revenue_afi",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Cumulative revenue (USD $, AFI 2024)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_cumulative_coast.png"))
+)
+cumulative_revenue_plot
 ```
 
 ```{r}
-# non-cumulative time series line plot
+# vessels heat map
 time_series_df %>% 
-  pivot_longer(cols = c('n_fish_tickets', 'n_unique_vessels', 'DCRB_lbs', 'DCRB_revenue', 'DCRB_revenue_afi'), names_to = "variable") %>% 
-  ggplot() + 
-  geom_line(aes(x = year_month_date, y = value, color = crab_year_character)) +
-  scale_x_date(breaks = df_date_breaks, date_labels = "%b %Y") +
-  facet_grid(variable ~ ., scales = "free_y")
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_line_non_cumulative.png")))
-```
-
-```{r}
-# time series heat map
-time_series_df %>% 
-  ggplot() + 
-  geom_tile(aes(x = month_factor, y = as.factor(year_numeric), fill = n_unique_vessels))
+  ggplot(aes(x = month_factor, y = as.factor(year_numeric), fill = n_unique_vessels)) + 
+  geom_tile() +
+  labs(x = "Month", y = "Year", title = paste("Dungeness crab", min(load_years), "-", max(load_years)), fill = "Vessels (Count)")
 ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_heatmap_n_unique_vessels.png")))
 ```
 
