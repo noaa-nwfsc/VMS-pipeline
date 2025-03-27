@@ -363,6 +363,52 @@ state_time_series_df <- qa_dcrb_ticket_df %>%
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time_series_state.csv"), x = state_time_series_df, row.names = FALSE)
 ```
 
+Quick check - do the state values total to approximately equal to the coast values? I expect fish tickets, landings and revenue to be the same. I expect vessels to be higher, since some vessels will be double counted (e.g. same vessel may land crab in OR and WA).
+
+```{r}
+# check state totals, join coast numbers
+qa_state_total_df <- state_time_series_df %>%
+  group_by(crab_year_character, year_numeric, month_factor, month_numeric, year_month_date) %>%
+  summarise(state_n_records = n(),
+            state_total_fish_tickets = sum(n_fish_tickets, na.rm = TRUE),
+            state_total_unique_vessels = sum(n_unique_vessels, na.rm = TRUE),
+            state_total_landings = sum(DCRB_lbs, na.rm = TRUE),
+            state_total_revenue_afi = sum(DCRB_revenue_afi, na.rm = TRUE), .groups = 'drop') %>% 
+  left_join(time_series_df, join_by(year_numeric, month_numeric))
+
+# check, max 3 records per month, 1 per state agency?
+summary(qa_state_total_df$state_n_records)
+
+# how many records (months)?
+nrow(qa_state_total_df)
+
+# fish tickets
+qa_state_total_df %>%
+  ggplot(aes(x = state_total_fish_tickets, y = n_fish_tickets)) +
+  geom_point() +
+  geom_abline()
+
+# landings
+qa_state_total_df %>%
+  ggplot(aes(x = state_total_landings, y = DCRB_lbs)) +
+  geom_point() +
+  geom_abline()
+
+# revenue
+qa_state_total_df %>%
+  ggplot(aes(x = state_total_revenue_afi, y = DCRB_revenue_afi)) +
+  geom_point() +
+  geom_abline()
+
+# vessels
+qa_state_total_df %>%
+  ggplot(aes(x = state_total_unique_vessels, y = n_unique_vessels)) +
+  geom_point() +
+  geom_abline()
+```
+
+Looks good. Fish tickets, landings and revenue are all along the 1:1 line, and unique vessels is higher in the state total than overall total as expected.
+
 ```{r}
 # time series line plot
 line_plot_facet <- function(data, facet_var, x_var, y_var, color_var, date_breaks, x_label, y_label, title_label, color_label, png_name) {
