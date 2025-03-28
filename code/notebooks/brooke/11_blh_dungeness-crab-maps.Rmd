@@ -163,25 +163,6 @@ glimpse(dcrb_vms_df)
 
 The dungeness crab VMS dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
 
-Quick sense check - Do I filter for is_interpolated == 1? Does this ignore the first non-interpolated record? Check for 2014, then 2023. What % of records are interpolated?
-
-```{r}
-vms_2023_interpolated_df <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'interpolated', 'interpolated_2023.rds'))
-vms_2023_non_interpolated_df <- read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'matched', 'matched_vmstix_only_withFTID_2023.rds'))
-
-# interpolated record count
-vms_2023_interpolated_df %>% nrow()
-n_distinct(vms_2023_interpolated_df$VMS_RECNO)
-sum(vms_2023_interpolated_df$is_interpolated)
-n_distinct(vms_2023_interpolated_df$Rec_ID)
-
-# non-interpolated record count
-vms_2023_non_interpolated_df %>% nrow()
-n_distinct(vms_2023_non_interpolated_df$VMS_RECNO)
-n_distinct(vms_2023_non_interpolated_df$Rec_ID)
-```
-
-
 ```{r}
 # clean up
 remove(vms_df, n_records, n_trips, n_years)
