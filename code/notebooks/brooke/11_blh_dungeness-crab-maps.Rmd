@@ -23,7 +23,6 @@ library(here)
 library(sf)
 library(rnaturalearth)
 library(viridis)
-library(magick)
 
 # adjust ggplot theme
 theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
@@ -232,11 +231,11 @@ write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "ta
 
 # Plots
 
-## Coastal maps
-
 Create monthly fishing activity maps, based on the gridded summary above. This is one of the slowest parts of the script.
 
-```{r fishing-activity-map-function}
+## Coastal maps
+
+```{r coastal-maps}
 # fishing activity map
 fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, title_label, fill_label, png_name) {
   map_output <- ggplot() +
@@ -261,7 +260,7 @@ dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
   st_as_sf()
 
 # set bounding box across whole time frame (not just one month)
-map_bbox <- st_bbox(dcrb_5km_monthly_sf)
+coast_bbox <- st_bbox(dcrb_5km_monthly_sf)
 
 # set limits for min and max fill for # VMS pings across whole time frame (not just one month)
 log_10_n_vms_records_fill_range <- range(dcrb_5km_monthly_sf$log_10_n_vms_records)
@@ -270,7 +269,7 @@ log_10_n_vms_records_fill_range <- range(dcrb_5km_monthly_sf$log_10_n_vms_record
 year_month_vector <- sort(unique(dcrb_5km_monthly_df$year_month_character))
 
 # iterate over months
-for (ym in year_month_vector[1:24]) {
+for (ym in year_month_vector) {
   # filter data for given month
   ym_data_sf <- dcrb_5km_monthly_sf %>% filter(year_month_character == ym)
   # make and save map of # VMS pings for each month
@@ -279,11 +278,47 @@ for (ym in year_month_vector[1:24]) {
     fill_var = "log_10_n_vms_records",
     fill_range = log_10_n_vms_records_fill_range,
     background_sf = west_coast_states,
-    map_bbox = map_bbox,
+    map_bbox = coast_bbox,
     title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
     fill_label = "Log-10 Interpolated VMS Records",
-    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", paste0("log_10_n_vms_records_", ym, ".png"))
+    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly/all", paste0("log_10_n_vms_records_", ym, ".png"))
   )
+}
+```
+
+## State maps
+
+```{r state-maps}
+# get unique states from gridded fishing summary
+state_vector <- sort(unique(dcrb_5km_monthly_sf$STATE))
+
+for (s in state_vector) {
+  # filter data and set bounding box for state
+  state_sf <- dcrb_5km_monthly_sf %>% filter(STATE == s)
+  state_bbox <- st_bbox(state_sf)
+  
+  # set limits for min and max fill for # VMS pings across whole time frame (not just one month)
+  state_fill_range <- range(state_sf$log_10_n_vms_records)
+  
+  # get unique years and months from gridded fishing summary
+  state_year_month_vector <- sort(unique(state_sf$year_month_character))
+  
+  # iterate over months
+  for (ym in state_year_month_vector) {
+    # filter data for given month
+    ym_data_sf <- state_sf %>% filter(year_month_character == ym) 
+    # make and save map of # VMS pings for each month
+    vms_map <- fishing_map(
+      data_sf = ym_data_sf,
+      fill_var = "log_10_n_vms_records",
+      fill_range = state_fill_range,
+      background_sf = west_coast_states,
+      map_bbox = state_bbox,
+      title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
+      fill_label = "Log-10 Interpolated VMS Records",
+      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly/", paste0(s, "/log_10_n_vms_records_", ym, ".png"))
+    )
+  }
 }
 ```
 
