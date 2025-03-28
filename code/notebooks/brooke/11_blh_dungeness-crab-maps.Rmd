@@ -219,6 +219,7 @@ dcrb_5km_monthly_df <- dcrb_vms_df %>%
     dcrb_lbs = sum(dcrb_lbs_per_vms_record),
     dcrb_rev = sum(dcrb_rev_per_vms_record),
     n_vms_records = n(),
+    log_10_n_vms_records = log10(n_vms_records),
     n_unique_vessels = n_distinct(drvid),
     .groups = "drop"
   ) %>% 
@@ -227,6 +228,63 @@ dcrb_5km_monthly_df <- dcrb_vms_df %>%
 
 # write monthly gridded summary
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_monthly_df.csv"), x = dcrb_5km_monthly_df)
+```
+
+# Plots
+
+## Coastal maps
+
+Create monthly fishing activity maps, based on the gridded summary above. This is one of the slowest parts of the script.
+
+```{r fishing-activity-map-function}
+# fishing activity map
+fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, title_label, fill_label, png_name) {
+  map_output <- ggplot() +
+    geom_sf(data = background_sf, fill = 'gray80') +
+    geom_sf(data = data_sf, aes(fill = get(fill_var)), lwd = 0) +
+    labs(title = title_label, fill = paste(fill_label, "per 5x5 cell")) +
+    xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
+    scale_fill_viridis(limits = fill_range) +
+    theme(legend.position = "bottom")
+  ggsave(filename = png_name)
+  return(map_output)
+}
+
+# set west coast as background map
+west_coast_states <- rnaturalearth::ne_states(country = 'United States of America', returnclass = 'sf') %>% 
+  filter(name %in% c('California', 'Oregon', 'Washington', 'Nevada')) %>% 
+  st_transform(st_crs(grid_5km))
+
+# join geometry from 5km grid to gridded fishing summary
+dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
+  left_join(grid_5km, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+
+# set bounding box across whole time frame (not just one month)
+map_bbox <- st_bbox(dcrb_5km_monthly_sf)
+
+# set limits for min and max fill for # VMS pings across whole time frame (not just one month)
+log_10_n_vms_records_fill_range <- range(dcrb_5km_monthly_sf$log_10_n_vms_records)
+
+# get unique years and months from gridded fishing summary
+year_month_vector <- sort(unique(dcrb_5km_monthly_df$year_month_character))
+
+# iterate over months
+for (ym in year_month_vector[1:24]) {
+  # filter data for given month
+  ym_data_sf <- dcrb_5km_monthly_sf %>% filter(year_month_character == ym)
+  # make and save map of # VMS pings for each month
+  vms_map <- fishing_map(
+    data_sf = ym_data_sf,
+    fill_var = "log_10_n_vms_records",
+    fill_range = log_10_n_vms_records_fill_range,
+    background_sf = west_coast_states,
+    map_bbox = map_bbox,
+    title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
+    fill_label = "Log-10 Interpolated VMS Records",
+    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", paste0("log_10_n_vms_records_", ym, ".png"))
+  )
+}
 ```
 
 ```{r, include=FALSE}
