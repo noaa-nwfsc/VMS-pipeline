@@ -43,9 +43,9 @@ if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 ## Load data
 
-1. Load the joined, cleaned, interpolated VMS and fish ticket data for specified years, which will be used to map fishing activity distribution. 
-2. Load the spatial 5km grid, which will also be used to map fishing activity distribution.
-3. Load the inflation adjustment table, which will be used to adjust revenue for inflation.
+1.  Load the joined, cleaned, interpolated VMS and fish ticket data for specified years, which will be used to map fishing activity distribution.
+2.  Load the spatial 5km grid, which will also be used to map fishing activity distribution.
+3.  Load the inflation adjustment table, which will be used to adjust revenue for inflation.
 
 Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB. Run notebook 10, which creates the inflation adjustment table and output directories.
 
@@ -69,18 +69,18 @@ gdp_defl <- read.csv(file = here("Confidential", "hindcast_output", output_subdi
 
 Transform the joined, cleaned, interpolated VMS and fish ticket data:
 
-1. Filter for dungeness crab related records, California landings, min/max depth and speed filters.
-2. Add temporal columns.
-3. Adjust revenue for inflation with data from FRED.
-4. Join spatial grid to VMS data, which is one of the slowest parts of the script.
+1.  Filter for dungeness crab related records, California landings, min/max depth and speed filters.
+2.  Add temporal columns.
+3.  Adjust revenue for inflation with data from FRED.
+4.  Join spatial grid to VMS data, which is one of the slowest parts of the script.
 
 Some commonly used acronyms for variable naming in the code include:
 
-* `dcrb` dungeness crab
-* `rev` revenue
-* `lbs` landings
-* `VMS` vessel monitoring system
-* `afi` adjusted for inflation
+-   `dcrb` dungeness crab
+-   `rev` revenue
+-   `lbs` landings
+-   `VMS` vessel monitoring system
+-   `afi` adjusted for inflation
 
 ```{r transform-vms-data}
 # define filters
@@ -167,24 +167,24 @@ The dungeness crab VMS dataframe has `r n_records` records (interpolated VMS pin
 remove(vms_df, n_records, n_trips, n_years)
 ```
 
-Next, create a monthly gridded summary of fishing activity. 
+Next, create a monthly gridded summary of fishing activity.
 
-1. Add trip-level attributes:
+1.  Add trip-level attributes:
 
-* `trip_n_vms_records`: the number of interpolated VMS records associated with a fishing trip (fish ticket)
+-   `trip_n_vms_records`: the number of interpolated VMS records associated with a fishing trip (fish ticket)
 
-2. Add VMS record attributes, calculated using the trip-level attribute:
+2.  Add VMS record attributes, calculated using the trip-level attribute:
 
-* `dcrb_lbs_per_vms_record`: the total landings for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with 1200 lbs landed and 20 VMS records would have 60 lbs per VMS record)
-* `dcrb_rev_per_vms_record`: the total revenue for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with $4000 revenue and 20 VMS pings would have \$200 revenue per VMS record)
+-   `dcrb_lbs_per_vms_record`: the total landings for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with 1200 lbs landed and 20 VMS records would have 60 lbs per VMS record)
+-   `dcrb_rev_per_vms_record`: the total revenue for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with \$4000 revenue and 20 VMS pings would have \$200 revenue per VMS record)
 
-3. Summarize fishing activity at a monthly gridded level:
+3.  Summarize fishing activity at a monthly gridded level:
 
-* `dcrb_lbs`: the total landings per VMS record in a given grid cell in a given month
-* `dcrb_rev`: the total revenue per VMS record in a given grid cell in a given month
-* `n_vms_records`: the number of VMS records in a given grid cell in a given month
-* `n_unique_vessels`: the number of unique vessels in a given grid cell in a given month
-* `confidential_flag`: determines whether the grid cell month has <3 unique vessels; in which case, the data in this grid cell and month needs to be excluded from non-confidential reports
+-   `dcrb_lbs`: the total landings per VMS record in a given grid cell in a given month
+-   `dcrb_rev`: the total revenue per VMS record in a given grid cell in a given month
+-   `n_vms_records`: the number of VMS records in a given grid cell in a given month
+-   `n_unique_vessels`: the number of unique vessels in a given grid cell in a given month
+-   `confidential_flag`: determines whether the grid cell month has \<3 unique vessels; in which case, the data in this grid cell and month needs to be excluded from non-confidential reports
 
 ```{r gridded-summary}
 # count records per trip (fish ticket)
@@ -257,7 +257,9 @@ fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, 
 
 ### Persistence
 
-```{r persistence-maps-coastal}
+Create a simple persistence map, which will visualize the number of years with any amount of fishing activity in a given grid cell.
+
+```{r persistence-maps-coastal-simple}
 # simple persistence summary: for how many crab years did the grid cell include fishing activity?
 dcrb_5km_persistence_simple_df <- dcrb_5km_monthly_df %>% 
   group_by(GRID5KM_ID) %>% 
@@ -286,6 +288,79 @@ simple_persistence_map <- fishing_map(
 # TODO ranked persistence map (75% activity cutoff rather than # years)
 # TODO monthly across years, annually across months
 # TODO statewise
+```
+
+Create a ranked persistence map, which will visualize the top x% of fishing activity based on the number of interpolated pings for a given year in a given grid cell.
+
+For example, assume there are three grid cells with 10, 1, and 2 interpolated VMS pings in them in one year. Assume those same grid cells have 8, 8, and 0 interpolated VMS pings in them the following year.
+
+| Year | Grid Cell | Number of pings |
+|------|-----------|-----------------|
+| 2013 | A         | 10              |
+| 2013 | B         | 1               |
+| 2013 | C         | 2               |
+| 2014 | A         | 8               |
+| 2014 | B         | 8               |
+| 2014 | C         | 0               |
+
+In 2013, there are 13 pings total. In 2014, there are 16 pings total.
+
+Let's assign a cutoff of 75% - each year, we want to look at where 75% of the fishing activity occurred, based on the total pings that year.
+
+-   For 2013, the 75% cutoff = 13 pings \* 0.75 = 9.75 pings. Let's round that to 10 pings.
+
+-   For 2014, the 75% cutoff = 16 pings \* 0.75 = 12 pings.
+
+| Year | Grid Cell | Number of pings | Annual pings | Threshold pings |
+|------|-----------|-----------------|--------------|-----------------|
+| 2013 | A         | 10              | 13           | 10              |
+| 2013 | B         | 1               | 13           | 10              |
+| 2013 | C         | 2               | 13           | 10              |
+| 2014 | A         | 8               | 16           | 12              |
+| 2014 | B         | 8               | 16           | 12              |
+| 2014 | C         | 0               | 16           | 12              |
+
+We will rank the grid cells for each year, calculate a cumulative sum, and see when we reach the 75% cutoff of fishing activity, and only include those grid cells within the persistence map. In the case of ties at the cutoff, we'll include ties.
+
+| Year | Grid Cell | Number of pings | Annual pings | Annual threshold pings | Annual rank | Cumulative sum pings | Annual threshold pings |
+|----|----|----|----|----|----|----|----|
+| *2013* | *A* | *10* | *13* | *10* | *1* | *10* | *1* |
+| 2013 | C | 2 | 13 | 10 | 2 | 12 | 0 |
+| 2013 | B | 1 | 13 | 10 | 3 | 13 | 0 |
+| *2014* | *A* | *8* | *16* | *12* | *1* | *8* | *1* |
+| *2014* | *B* | *8* | *16* | *12* | *1* | *16* | *1* |
+| 2014 | C | 0 | 16 | 12 | 2 | 16 | 0 |
+
+In the ranked persistence map, grid cell A will include fishing activity for 2 years, B will include fishing for 1 year, and C will include fishing for 0 years. This example uses calendar years for simplicity's sake, but the plotting code will use crab years.
+
+There is some complicated logic in here in the `case_when` statement and `include_in_map_tie_cocrrected` in order to include ties that reach the threshold, but exclude ties after the threshold has already been reached.
+
+```{r persistence-maps-coastal-ranked}
+test_df <- tibble(year = c(2013, 2013, 2013, 2014, 2014, 2014, 2014, 2014, 2014),
+                  grid_cell = c('A', 'B', 'C', 'A', 'B', 'C', 'D', 'E', 'F'),
+                  n_pings = c(10, 2, 1, 8, 8, 8, 0, 1, 1))
+
+threshold_cutoff <- 0.75
+
+test_year_df <- test_df %>% group_by(year) %>%
+  summarise(year_n_pings = sum(n_pings),
+            year_cutoff_n_pings = ceiling(year_n_pings * threshold_cutoff))
+
+test_df %>% 
+  left_join(test_year_df, by = 'year') %>% 
+  group_by(year) %>%
+  mutate(dense_rank_n_pings = dense_rank(n_pings * -1)) %>% 
+  arrange(year, dense_rank_n_pings) %>%
+  mutate(cumulative_n_pings = cumsum(n_pings),
+         lag_cumulative_n_pings = lag(cumulative_n_pings),
+         lag_n_pings = lag(n_pings),
+         include_in_map = case_when(
+           cumulative_n_pings <= year_cutoff_n_pings ~ TRUE,
+           lag_cumulative_n_pings < year_cutoff_n_pings ~ TRUE,
+           n_pings == lag_n_pings ~ TRUE,
+           .default = FALSE
+         )) %>%
+  mutate(include_in_map_tie_corrected = coalesce(ifelse(!lag(include_in_map), FALSE, include_in_map), include_in_map)) %>% View()
 ```
 
 ### Monthly
