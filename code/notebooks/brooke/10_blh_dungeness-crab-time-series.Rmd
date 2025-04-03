@@ -41,7 +41,7 @@ output_subdir <- here('Confidential', 'hindcast_output', output_subdir_name)
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # make tables, figures, and maps subdirectories
-for (temp_name in c('tables', 'figures', 'maps', 'maps/monthly', 'maps/monthly/all', 'maps/monthly/CA', 'maps/monthly/OR', 'maps/monthly/WA')) {
+for (temp_name in c('tables', 'figures')) {
   temp_subdir <- here('Confidential', 'hindcast_output', output_subdir_name, temp_name)
   if (!dir.exists(temp_subdir)) dir.create(temp_subdir)
 }

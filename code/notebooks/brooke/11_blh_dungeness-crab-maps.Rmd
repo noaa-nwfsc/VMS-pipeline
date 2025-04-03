@@ -226,16 +226,19 @@ dcrb_5km_monthly_df <- dcrb_vms_df %>%
   mutate(remove_for_confidentiality = n_unique_vessels < 3)
 
 # write monthly gridded summary
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_monthly_df.csv"), x = dcrb_5km_monthly_df)
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_monthly_df.csv"), x = dcrb_5km_monthly_df, row.names = FALSE)
 ```
 
 # Plots
 
-Create monthly fishing activity maps, based on the gridded summary above. This is one of the slowest parts of the script.
+Create fishing activity maps, based on the gridded summary above. This is one of the slowest parts of the script.
 
-## Coastal maps
+```{r background-map}
+# set west coast as background map
+west_coast_states <- rnaturalearth::ne_states(country = 'United States of America', returnclass = 'sf') %>% 
+  filter(name %in% c('California', 'Oregon', 'Washington', 'Nevada')) %>% 
+  st_transform(st_crs(grid_5km))
 
-```{r coastal-maps}
 # fishing activity map
 fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, title_label, fill_label, png_name) {
   map_output <- ggplot() +
@@ -245,15 +248,49 @@ fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, 
     xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
     scale_fill_viridis(limits = fill_range) +
     theme(legend.position = "bottom")
-  ggsave(filename = png_name)
+  ggsave(filename = png_name, create.dir = TRUE)
   return(map_output)
 }
+```
 
-# set west coast as background map
-west_coast_states <- rnaturalearth::ne_states(country = 'United States of America', returnclass = 'sf') %>% 
-  filter(name %in% c('California', 'Oregon', 'Washington', 'Nevada')) %>% 
-  st_transform(st_crs(grid_5km))
+## Coastal maps
 
+### Persistence
+
+```{r persistence-maps-coastal}
+# simple persistence summary: for how many crab years did the grid cell include fishing activity?
+dcrb_5km_persistence_simple_df <- dcrb_5km_monthly_df %>% 
+  group_by(GRID5KM_ID) %>% 
+  summarise(crab_years_with_fishing_activity = n_distinct(crab_year_character))
+
+# write simple persistence summary
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_simple_df.csv"), x = dcrb_5km_persistence_simple_df, row.names = FALSE)
+
+# join geometry from 5km grid to gridded fishing summary
+dcrb_5km_persistence_simple_sf <- dcrb_5km_persistence_simple_df %>%
+  left_join(grid_5km, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+
+# fishing activity map - whole time series
+simple_persistence_map <- fishing_map(
+  data_sf = dcrb_5km_persistence_simple_sf,
+  fill_var = "crab_years_with_fishing_activity",
+  fill_range = range(dcrb_5km_persistence_simple_sf$crab_years_with_fishing_activity),
+  background_sf = west_coast_states,
+  map_bbox = st_bbox(dcrb_5km_persistence_simple_sf),
+  title_label = paste0("Simple Persistence Map, ", min(load_years), "-", max(load_years)),
+  fill_label = "Crab Years with Fishing Activity",
+  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("simple_persistence_all_time.png"))
+)
+
+# TODO ranked persistence map (75% activity cutoff rather than # years)
+# TODO monthly across years, annually across months
+# TODO statewise
+```
+
+### Monthly
+
+```{r monthly-maps-coastal}
 # join geometry from 5km grid to gridded fishing summary
 dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
   left_join(grid_5km, by = join_by(GRID5KM_ID)) %>%
@@ -288,7 +325,9 @@ for (ym in year_month_vector) {
 
 ## State maps
 
-```{r state-maps}
+### Monthly
+
+```{r monthly-maps-state}
 # get unique states from gridded fishing summary
 state_vector <- sort(unique(dcrb_5km_monthly_sf$STATE))
 
