@@ -285,82 +285,55 @@ simple_persistence_map <- fishing_map(
   png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("simple_persistence_all_time.png"))
 )
 
-# TODO ranked persistence map (75% activity cutoff rather than # years)
 # TODO monthly across years, annually across months
 # TODO statewise
 ```
 
-Create a ranked persistence map, which will visualize the top x% of fishing activity based on the number of interpolated pings for a given year in a given grid cell.
+Create a ranked persistence map, which will visualize the top x% of fishing activity based on the number of interpolated pings for a given year in a given grid cell. There is some complicated logic in here, see `12_blh_example-ranked-persistence-map.Rmd` for a hypothetical example.
 
-For example, assume there are three grid cells with 10, 1, and 2 interpolated VMS pings in them in one year. Assume those same grid cells have 8, 8, and 0 interpolated VMS pings in them the following year.
-
-| Year | Grid Cell | Number of pings |
-|------|-----------|-----------------|
-| 2013 | A         | 10              |
-| 2013 | B         | 1               |
-| 2013 | C         | 2               |
-| 2014 | A         | 8               |
-| 2014 | B         | 8               |
-| 2014 | C         | 0               |
-
-In 2013, there are 13 pings total. In 2014, there are 16 pings total.
-
-Let's assign a cutoff of 75% - each year, we want to look at where 75% of the fishing activity occurred, based on the total pings that year.
-
--   For 2013, the 75% cutoff = 13 pings \* 0.75 = 9.75 pings. Let's round that to 10 pings.
-
--   For 2014, the 75% cutoff = 16 pings \* 0.75 = 12 pings.
-
-| Year | Grid Cell | Number of pings | Annual pings | Threshold pings |
-|------|-----------|-----------------|--------------|-----------------|
-| 2013 | A         | 10              | 13           | 10              |
-| 2013 | B         | 1               | 13           | 10              |
-| 2013 | C         | 2               | 13           | 10              |
-| 2014 | A         | 8               | 16           | 12              |
-| 2014 | B         | 8               | 16           | 12              |
-| 2014 | C         | 0               | 16           | 12              |
-
-We will rank the grid cells for each year, calculate a cumulative sum, and see when we reach the 75% cutoff of fishing activity, and only include those grid cells within the persistence map. In the case of ties at the cutoff, we'll include ties.
-
-| Year | Grid Cell | Number of pings | Annual pings | Annual threshold pings | Annual rank | Cumulative sum pings | Annual threshold pings |
-|----|----|----|----|----|----|----|----|
-| *2013* | *A* | *10* | *13* | *10* | *1* | *10* | *1* |
-| 2013 | C | 2 | 13 | 10 | 2 | 12 | 0 |
-| 2013 | B | 1 | 13 | 10 | 3 | 13 | 0 |
-| *2014* | *A* | *8* | *16* | *12* | *1* | *8* | *1* |
-| *2014* | *B* | *8* | *16* | *12* | *1* | *16* | *1* |
-| 2014 | C | 0 | 16 | 12 | 2 | 16 | 0 |
-
-In the ranked persistence map, grid cell A will include fishing activity for 2 years, B will include fishing for 1 year, and C will include fishing for 0 years. This example uses calendar years for simplicity's sake, but the plotting code will use crab years.
-
-There is some complicated logic in here in the `case_when` statement and `include_in_map_tie_cocrrected` in order to include ties that reach the threshold, but exclude ties after the threshold has already been reached.
+The logic here assumes that the number of pings is a positive non-zero integer (no fractions, no negative values). If that changes, then update the dense rank and case when statements accordingly.
 
 ```{r persistence-maps-coastal-ranked}
-test_df <- tibble(year = c(2013, 2013, 2013, 2014, 2014, 2014, 2014, 2014, 2014),
-                  grid_cell = c('A', 'B', 'C', 'A', 'B', 'C', 'D', 'E', 'F'),
-                  n_pings = c(10, 2, 1, 8, 8, 8, 0, 1, 1))
+# TODO make sure this works with a clean starting environment (restart R and run up to this cell)
 
-threshold_cutoff <- 0.75
+# set a threshold of fishing activity for a given year you'd like to reach
+persistence_threshold <- 0.75
 
-test_year_df <- test_df %>% group_by(year) %>%
-  summarise(year_n_pings = sum(n_pings),
-            year_cutoff_n_pings = ceiling(year_n_pings * threshold_cutoff))
+# calculate pings per crab year
+dcrb_5km_yearly_df <- dcrb_5km_monthly_df %>%
+  group_by(crab_year_character) %>%
+  summarise(year_n_vms_records = sum(n_vms_records),
+            year_cutoff_n_vms_records = ceiling(year_n_vms_records * persistence_threshold))
 
-test_df %>% 
-  left_join(test_year_df, by = 'year') %>% 
-  group_by(year) %>%
-  mutate(dense_rank_n_pings = dense_rank(n_pings * -1)) %>% 
-  arrange(year, dense_rank_n_pings) %>%
-  mutate(cumulative_n_pings = cumsum(n_pings),
-         lag_cumulative_n_pings = lag(cumulative_n_pings),
-         lag_n_pings = lag(n_pings),
+# rank pings in a given year and decide whether to include in map for that year based on contribution to annual fishing activity
+dcrb_5km_persistence_ranked_df <- dcrb_5km_monthly_df %>% 
+  left_join(dcrb_5km_yearly_df, by = 'crab_year_character') %>% 
+  group_by(crab_year_character) %>%
+  # rank each grid cell based on # interpolated VMS pings for that crab year
+  mutate(dense_rank_n_vms_records = dense_rank(n_vms_records * -1)) %>% 
+  # sort that crab year's data based on the rank
+  arrange(crab_year_character, dense_rank_n_vms_records) %>%
+  # calculate the cumulative sum of records to see which grid cells count towards the persistence threshold that year
+  mutate(cumulative_n_vms_records = cumsum(n_vms_records),
          include_in_map = case_when(
-           cumulative_n_pings <= year_cutoff_n_pings ~ TRUE,
-           lag_cumulative_n_pings < year_cutoff_n_pings ~ TRUE,
-           n_pings == lag_n_pings ~ TRUE,
+           # if we haven't reached the threshold yet, then include the grid cell
+           cumulative_n_vms_records <= year_cutoff_n_vms_records ~ TRUE,
+           # if we have reached the threshold but it happened in between this grid cell and the prior grid cell, then include the grid cell
+           lag(cumulative_n_vms_records) < year_cutoff_n_vms_records ~ TRUE,
+           # if we have reached the threshold and it didn't happen with this grid cell, but this grid cell is tied with the grid cell that put it over, then include this grid cell
+           n_vms_records == lag(n_vms_records) ~ TRUE,
            .default = FALSE
          )) %>%
-  mutate(include_in_map_tie_corrected = coalesce(ifelse(!lag(include_in_map), FALSE, include_in_map), include_in_map)) %>% View()
+  # if some grid cells were included after reaching the threshold just because they were ties, then exclude those grid cells
+  mutate(include_in_map_corrected = coalesce(ifelse(!lag(include_in_map), FALSE, include_in_map), include_in_map)) %>% 
+  # remove the uncorrected version of include_in_map so there's less confusion with the output
+  select(-include_in_map)
+
+# write intermediate output
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_df.csv"), x = dcrb_5km_persistence_ranked_df, row.names = FALSE)
+
+# ranked persistence summary: for how many crab years did the grid cell contribute to 75% of the fishing activity?
+# TODO
 ```
 
 ### Monthly
