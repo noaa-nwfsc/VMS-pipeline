@@ -289,48 +289,47 @@ simple_persistence_map <- fishing_map(
 # TODO statewise
 ```
 
-Create a ranked persistence map, which will visualize the top x% of fishing activity based on the number of interpolated pings for a given year in a given grid cell. There is some complicated logic in here, see `12_blh_example-ranked-persistence-map.Rmd` for a hypothetical example.
+Create a ranked persistence map, which will visualize the top `persistence_threshold`% of fishing activity based on the number of interpolated pings for a given year in a given grid cell. There is some complicated logic in here, see `12_blh_example-ranked-persistence-map.Rmd` for a hypothetical example.
 
 The logic here assumes that the number of pings is a positive non-zero integer (no fractions, no negative values). If that changes, then update the dense rank and case when statements accordingly.
 
 ```{r persistence-maps-coastal-ranked}
-# TODO make sure this works with a clean starting environment (restart R and run up to this cell)
-
 # set a threshold of fishing activity for a given year you'd like to reach
 persistence_threshold <- 0.75
 
 # calculate pings per crab year
-dcrb_5km_yearly_df <- dcrb_5km_monthly_df %>%
+dcrb_yearly_df <- dcrb_5km_monthly_df %>%
   group_by(crab_year_character) %>%
   summarise(year_n_vms_records = sum(n_vms_records),
             year_cutoff_n_vms_records = ceiling(year_n_vms_records * persistence_threshold))
 
-# rank pings in a given year and decide whether to include in map for that year based on contribution to annual fishing activity
-dcrb_5km_persistence_ranked_df <- dcrb_5km_monthly_df %>% 
-  left_join(dcrb_5km_yearly_df, by = 'crab_year_character') %>% 
+# calculate pings per grid cell per crab year
+dcrb_5km_yearly_df <- dcrb_5km_monthly_df %>%
+  group_by(GRID5KM_ID, crab_year_character) %>%
+  summarise(n_vms_records = sum(n_vms_records))
+
+# rank grid cells based on # pings per crab year and decide whether to include in persistence map
+dcrb_5km_persistence_ranked_interim_df <- dcrb_5km_yearly_df %>% 
+  left_join(dcrb_yearly_df, by = 'crab_year_character') %>% 
   group_by(crab_year_character) %>%
-  # rank each grid cell based on # interpolated VMS pings for that crab year
   mutate(dense_rank_n_vms_records = dense_rank(n_vms_records * -1)) %>% 
-  # sort that crab year's data based on the rank
   arrange(crab_year_character, dense_rank_n_vms_records) %>%
-  # calculate the cumulative sum of records to see which grid cells count towards the persistence threshold that year
   mutate(cumulative_n_vms_records = cumsum(n_vms_records),
-         include_in_map = case_when(
-           # if we haven't reached the threshold yet, then include the grid cell
-           cumulative_n_vms_records <= year_cutoff_n_vms_records ~ TRUE,
-           # if we have reached the threshold but it happened in between this grid cell and the prior grid cell, then include the grid cell
-           lag(cumulative_n_vms_records) < year_cutoff_n_vms_records ~ TRUE,
-           # if we have reached the threshold and it didn't happen with this grid cell, but this grid cell is tied with the grid cell that put it over, then include this grid cell
-           n_vms_records == lag(n_vms_records) ~ TRUE,
-           .default = FALSE
-         )) %>%
-  # if some grid cells were included after reaching the threshold just because they were ties, then exclude those grid cells
-  mutate(include_in_map_corrected = coalesce(ifelse(!lag(include_in_map), FALSE, include_in_map), include_in_map)) %>% 
-  # remove the uncorrected version of include_in_map so there's less confusion with the output
-  select(-include_in_map)
+         include_1 = (cumulative_n_vms_records <= year_cutoff_n_vms_records),
+         include_2 = ifelse(!include_1 & 
+                              lag(include_1) &
+                              (lag(cumulative_n_vms_records) < year_cutoff_n_vms_records) & 
+                              cumulative_n_vms_records > year_cutoff_n_vms_records, 
+                            TRUE,
+                            include_1),
+         include_3 = ifelse(!include_2 & 
+                              lag(include_2) &
+                              lag(n_vms_records) == n_vms_records,
+                            TRUE,
+                            include_2))
 
 # write intermediate output
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_df.csv"), x = dcrb_5km_persistence_ranked_df, row.names = FALSE)
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_interim_df.csv"), x = dcrb_5km_persistence_ranked_interim_df, row.names = FALSE)
 
 # ranked persistence summary: for how many crab years did the grid cell contribute to 75% of the fishing activity?
 # TODO
