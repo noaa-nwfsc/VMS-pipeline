@@ -257,6 +257,8 @@ fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, 
 
 ### Persistence
 
+#### Simple
+
 Create a simple persistence map, which will visualize the number of years with any amount of fishing activity in a given grid cell.
 
 ```{r persistence-maps-coastal-simple}
@@ -289,6 +291,8 @@ simple_persistence_map <- fishing_map(
 # TODO statewise
 ```
 
+#### Ranked
+
 Create a ranked persistence map, which will visualize the top `persistence_threshold`% of fishing activity based on the number of interpolated pings for a given year in a given grid cell. There is some complicated logic in here, see `12_blh_example-ranked-persistence-map.Rmd` for a hypothetical example.
 
 The logic here assumes that the number of pings is a positive non-zero integer (no fractions, no negative values). If that changes, then update the dense rank and case when statements accordingly.
@@ -297,42 +301,54 @@ The logic here assumes that the number of pings is a positive non-zero integer (
 # set a threshold of fishing activity for a given year you'd like to reach
 persistence_threshold <- 0.75
 
-# calculate pings per crab year
+# calculate pings per crab year, rounding up if the result is a decimal
 dcrb_yearly_df <- dcrb_5km_monthly_df %>%
   group_by(crab_year_character) %>%
   summarise(year_n_vms_records = sum(n_vms_records),
             year_cutoff_n_vms_records = ceiling(year_n_vms_records * persistence_threshold))
 
-# calculate pings per grid cell per crab year
+# calculate total pings per grid cell per crab year (drops month, and doesn't include revenue or landings for now)
 dcrb_5km_yearly_df <- dcrb_5km_monthly_df %>%
   group_by(GRID5KM_ID, crab_year_character) %>%
   summarise(n_vms_records = sum(n_vms_records))
 
-# rank grid cells based on # pings per crab year and decide whether to include in persistence map
+# sort grid cells based on # pings per crab year and determine whether to include in persistence map
 dcrb_5km_persistence_ranked_interim_df <- dcrb_5km_yearly_df %>% 
   left_join(dcrb_yearly_df, by = 'crab_year_character') %>% 
   group_by(crab_year_character) %>%
-  mutate(dense_rank_n_vms_records = dense_rank(n_vms_records * -1)) %>% 
-  arrange(crab_year_character, dense_rank_n_vms_records) %>%
+  arrange(crab_year_character, dense_rank(n_vms_records * -1)) %>%
   mutate(cumulative_n_vms_records = cumsum(n_vms_records),
-         include_1 = (cumulative_n_vms_records <= year_cutoff_n_vms_records),
-         include_2 = ifelse(!include_1 & 
-                              lag(include_1) &
-                              (lag(cumulative_n_vms_records) < year_cutoff_n_vms_records) & 
-                              cumulative_n_vms_records > year_cutoff_n_vms_records, 
-                            TRUE,
-                            include_1),
-         include_3 = ifelse(!include_2 & 
-                              lag(include_2) &
-                              lag(n_vms_records) == n_vms_records,
-                            TRUE,
-                            include_2))
+         include = (cumulative_n_vms_records <= year_cutoff_n_vms_records |
+                      (cumulative_n_vms_records > year_cutoff_n_vms_records & lag(cumulative_n_vms_records < year_cutoff_n_vms_records))))
 
 # write intermediate output
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_interim_df.csv"), x = dcrb_5km_persistence_ranked_interim_df, row.names = FALSE)
 
 # ranked persistence summary: for how many crab years did the grid cell contribute to 75% of the fishing activity?
-# TODO
+dcrb_5km_persistence_ranked_df <- dcrb_5km_persistence_ranked_interim_df %>% 
+  filter(include) %>%
+  group_by(GRID5KM_ID) %>% 
+  summarise(crab_years_with_fishing_activity = n_distinct(crab_year_character))
+
+# write simple persistence summary
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_df.csv"), x = dcrb_5km_persistence_ranked_df, row.names = FALSE)
+
+# join geometry from 5km grid to gridded fishing summary
+dcrb_5km_persistence_ranked_sf <- dcrb_5km_persistence_ranked_df %>%
+  left_join(grid_5km, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+
+# fishing activity map - whole time series
+ranked_persistence_map <- fishing_map(
+  data_sf = dcrb_5km_persistence_ranked_sf,
+  fill_var = "crab_years_with_fishing_activity",
+  fill_range = range(dcrb_5km_persistence_ranked_sf$crab_years_with_fishing_activity),
+  background_sf = west_coast_states,
+  map_bbox = st_bbox(dcrb_5km_persistence_ranked_sf),
+  title_label = paste0("Ranked Persistence Map, ", min(load_years), "-", max(load_years)),
+  fill_label = "Crab Years with Fishing Activity",
+  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("ranked_persistence_all_time_", persistence_threshold*100, ".png"))
+)
 ```
 
 ### Monthly
