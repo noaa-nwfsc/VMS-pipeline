@@ -68,40 +68,30 @@ ticket_df <- purrr::map(load_years, function(ly) {
 
 2. Load inflation adjustment factors from FRED.
 
-Adjust revenue for inflation using FRED Personal Consumption Expenditures: Chain-Type Price Index, [PCEPI](https://fred.stlouisfed.org/series/PCEPI). Code is adapted from R code by Erin Steiner. PCEPI index is used per Dan Holland's suggestion. This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis. The reference year is 2017 by default.
+Adjust revenue for inflation using Personal Consumption Expenditures: Chain-Type Price Index, [PCEPI](https://fred.stlouisfed.org/series/PCEPI) from FRED. PCEPI index is chosen per Dan Holland's suggestion. The reference year is 2017 by default. This is a monthly time series that is used by multiplying the revenue by 100 / PCEPI. It is used at a monthly time scale (rather than taking an annual average).
 
-Pre-requisite: Create a FRED account and [API key](https://fred.stlouisfed.org/docs/api/api_key.html).
+Pre-requisite: Create a FRED account and [API key](https://fred.stlouisfed.org/docs/api/api_key.html). This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis. 
 
 ```{r inflation-adjustment}
 # insert your FRED API key
 fredr_set_key('')
 
-# download the monthly inflation adjustments from Fred from start of min load year to end of max load year
+# download the monthly inflation adjustments from FRED from start of min load year to end of max load year
 fred_pcepi <- fredr(
     series_id = "PCEPI", 
     observation_start = as.Date(paste0(min(load_years), "-01-01")),
     observation_end = as.Date(paste0(max(load_years), "-12-31"))
-  )
-
-# generate the mean annual deflators based on the monthly values
-pcepi_adjustment <- mutate(fred_pcepi, year = year(date)) %>%
-  group_by(year) %>%
-  summarize(pcepi = mean(value), .groups = 'drop') %>%
-  mutate(inflation_adjustment_factor = pcepi / pcepi[year == max(year)]) %>%
-  select(year, inflation_adjustment_factor)
+  ) %>%
+  rename(year_month = date, pcepi = value) %>% 
+  select(-c(realtime_start, realtime_end, series_id))
 
 # write inflation adjustment factors
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_adjustment_pcepi.csv"), x = pcepi_adjustment, row.names = FALSE)
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_pcepi.csv"), x = fred_pcepi, row.names = FALSE)
 
 # plot inflation adjustment factors
-pcepi_adjustment %>% ggplot(aes(x = as.factor(year), y = inflation_adjustment_factor)) + geom_point()
-ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_adjustment_pcepi.png"))
-
-# clean up
-rm(fred_pcepi)
+fred_pcepi %>% ggplot(aes(x = year_month, y = pcepi)) + geom_line() + scale_x_date(date_breaks = "1 year", date_labels = "%b %Y")
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_pcepi.png"), create.dir = TRUE)
 ```
-
-The reference year for inflation adjustment is `r max(pcepi_adjustment$year)`.
 
 ## Transform data
 
@@ -151,8 +141,8 @@ dcrb_ticket_df <- ticket_df %>%
   # apply filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   # join inflation adjustment factor and adjust revenue
-  left_join(pcepi_adjustment, by = join_by(year_numeric == year)) %>%
-  mutate(DCRB_revenue_afi = DCRB_revenue / inflation_adjustment_factor) %>%
+  left_join(fred_pcepi, by = join_by(year_month_date == year_month)) %>%
+  mutate(DCRB_revenue_afi = DCRB_revenue * 100 / pcepi) %>%
   # select columns
   dplyr::select(
     # identifiers
@@ -173,6 +163,8 @@ dcrb_ticket_df <- ticket_df %>%
     day_numeric,
     # vessel length
     FINAL_LENGTH,
+    # inflation adjustment index
+    pcepi,
     # dungeness crab fields
     DCRB_lbs,
     DCRB_revenue,
