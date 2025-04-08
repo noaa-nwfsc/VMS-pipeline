@@ -29,7 +29,7 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
 ```
 
 ```{r create-output-directories}
-# make hidncast output directory, if doesn't yet exist
+# make hindcast output directory, if doesn't yet exist
 output_dir <- here('Confidential', 'hindcast_output')
 if (!dir.exists(output_dir)) dir.create(output_dir)
 
