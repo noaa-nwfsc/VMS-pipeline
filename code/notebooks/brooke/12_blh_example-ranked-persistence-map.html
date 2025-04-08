@@ -11,7 +11,7 @@
 
 <meta name="author" content="Brooke Hawkins" />
 
-<meta name="date" content="2025-04-03" />
+<meta name="date" content="2025-04-08" />
 
 <title>12_blh_example-ranked-persistence-map</title>
 
@@ -1623,7 +1623,7 @@ display: none;
 
 <h1 class="title toc-ignore">12_blh_example-ranked-persistence-map</h1>
 <h4 class="author">Brooke Hawkins</h4>
-<h4 class="date">2025-04-03</h4>
+<h4 class="date">2025-04-08</h4>
 
 </div>
 
@@ -1842,14 +1842,14 @@ then it’s worth commenting the line that drops the lagged columns, and
 pay special attention to the ties in 2014 - how does the logic account
 for the tie with 8 pings that help reach the threshold, vs. 1 ping after
 the threshold is already reached?</p>
-<pre class="r"><code>test_df &lt;- tibble(year = c(2013, 2013, 2013, 2014, 2014, 2014, 2014, 2014, 2014),
-                  grid_cell = c(&#39;A&#39;, &#39;B&#39;, &#39;C&#39;, &#39;A&#39;, &#39;B&#39;, &#39;C&#39;, &#39;D&#39;, &#39;E&#39;, &#39;F&#39;),
-                  n_pings = c(10, 2, 1, 8, 8, 8, 0, 1, 1))
+<pre class="r"><code>test_df &lt;- tibble(year = c(rep(2013, 3), rep(2014, 3)),
+                  grid_cell = c(rep(letters[1:3], 2)),
+                  n_pings = c(10, 2, 1, 8, 8, 0))
 # check out example dataframe
 test_df</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"2013","2":"A","3":"10"},{"1":"2013","2":"B","3":"2"},{"1":"2013","2":"C","3":"1"},{"1":"2014","2":"A","3":"8"},{"1":"2014","2":"B","3":"8"},{"1":"2014","2":"C","3":"8"},{"1":"2014","2":"D","3":"0"},{"1":"2014","2":"E","3":"1"},{"1":"2014","2":"F","3":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"2013","2":"a","3":"10"},{"1":"2013","2":"b","3":"2"},{"1":"2013","2":"c","3":"1"},{"1":"2014","2":"a","3":"8"},{"1":"2014","2":"b","3":"8"},{"1":"2014","2":"c","3":"0"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
 <pre class="r"><code># assign a threshold cutoff
@@ -1882,9 +1882,17 @@ ranked_test_df &lt;- test_df %&gt;%
 ranked_test_df</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["year_n_pings"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["year_cutoff_n_pings"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["dense_rank_n_pings"],"name":[6],"type":["int"],"align":["right"]},{"label":["cumulative_n_pings"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["include_in_map_tie_corrected"],"name":[8],"type":["lgl"],"align":["right"]}],"data":[{"1":"2013","2":"A","3":"10","4":"13","5":"10","6":"1","7":"10","8":"TRUE"},{"1":"2013","2":"B","3":"2","4":"13","5":"10","6":"2","7":"12","8":"FALSE"},{"1":"2013","2":"C","3":"1","4":"13","5":"10","6":"3","7":"13","8":"FALSE"},{"1":"2014","2":"A","3":"8","4":"26","5":"20","6":"1","7":"8","8":"TRUE"},{"1":"2014","2":"B","3":"8","4":"26","5":"20","6":"1","7":"16","8":"TRUE"},{"1":"2014","2":"C","3":"8","4":"26","5":"20","6":"1","7":"24","8":"TRUE"},{"1":"2014","2":"E","3":"1","4":"26","5":"20","6":"2","7":"25","8":"FALSE"},{"1":"2014","2":"F","3":"1","4":"26","5":"20","6":"2","7":"26","8":"FALSE"},{"1":"2014","2":"D","3":"0","4":"26","5":"20","6":"3","7":"26","8":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["year_n_pings"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["year_cutoff_n_pings"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["dense_rank_n_pings"],"name":[6],"type":["int"],"align":["right"]},{"label":["cumulative_n_pings"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["include_in_map_tie_corrected"],"name":[8],"type":["lgl"],"align":["right"]}],"data":[{"1":"2013","2":"a","3":"10","4":"13","5":"10","6":"1","7":"10","8":"TRUE"},{"1":"2013","2":"b","3":"2","4":"13","5":"10","6":"2","7":"12","8":"FALSE"},{"1":"2013","2":"c","3":"1","4":"13","5":"10","6":"3","7":"13","8":"FALSE"},{"1":"2014","2":"a","3":"8","4":"16","5":"12","6":"1","7":"8","8":"TRUE"},{"1":"2014","2":"b","3":"8","4":"16","5":"12","6":"1","7":"16","8":"TRUE"},{"1":"2014","2":"c","3":"0","4":"16","5":"12","6":"2","7":"16","8":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
+<p>This logic is still flawed, I wanted a vectorized way to do this, but
+can’t figure it out for including ties at the threshold cutoff, but not
+beyond it.</p>
+<p>This currently over-includes ties - the last statement in the case
+when statement will include all ties, not only ties that helped reach
+the threshold.</p>
+<p>I’m going to simplify in the actual persistence map code for now, and
+forget about including ties for now.</p>
 
 
 

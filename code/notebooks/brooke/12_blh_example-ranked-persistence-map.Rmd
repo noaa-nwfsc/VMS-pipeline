@@ -47,7 +47,7 @@ Let's assign a cutoff of 75% - each year, we want to look at where 75% of the fi
 We will rank the grid cells for each year, calculate a cumulative sum, and see when we reach the 75% cutoff of fishing activity, and only include those grid cells within the persistence map. In the case of ties at the cutoff, we'll include ties.
 
 | Year | Grid Cell | Number of pings | Annual pings | Annual threshold pings | Annual rank | Cumulative sum pings | Annual threshold pings |
-|----|----|----|----|----|----|----|----|
+|---------|---------|---------|---------|---------|---------|---------|---------|
 | *2013* | *A* | *10* | *13* | *10* | *1* | *10* | *1* |
 | 2013 | C | 2 | 13 | 10 | 2 | 12 | 0 |
 | 2013 | B | 1 | 13 | 10 | 3 | 13 | 0 |
@@ -60,9 +60,9 @@ In the ranked persistence map, grid cell A will include fishing activity for 2 y
 There is some complicated logic in here in the `case_when` statement and `include_in_map_tie_cocrrected` in order to include ties that reach the threshold, but exclude ties after the threshold has already been reached. If you want to understand the logic, then it's worth commenting the line that drops the lagged columns, and pay special attention to the ties in 2014 - how does the logic account for the tie with 8 pings that help reach the threshold, vs. 1 ping after the threshold is already reached?
 
 ```{r persistence-maps-coastal-ranked}
-test_df <- tibble(year = c(2013, 2013, 2013, 2014, 2014, 2014, 2014, 2014, 2014),
-                  grid_cell = c('A', 'B', 'C', 'A', 'B', 'C', 'D', 'E', 'F'),
-                  n_pings = c(10, 2, 1, 8, 8, 8, 0, 1, 1))
+test_df <- tibble(year = c(rep(2013, 3), rep(2014, 3)),
+                  grid_cell = c(rep(letters[1:3], 2)),
+                  n_pings = c(10, 2, 1, 8, 8, 0))
 # check out example dataframe
 test_df
 
@@ -95,3 +95,9 @@ ranked_test_df <- test_df %>%
 # view the result
 ranked_test_df
 ```
+
+This logic is still flawed, I wanted a vectorized way to do this, but can't figure it out for including ties at the threshold cutoff, but not beyond it.
+
+This currently over-includes ties - the last statement in the case when statement will include all ties, not only ties that helped reach the threshold.
+
+I'm going to simplify in the actual persistence map code for now, and forget about including ties for now.
