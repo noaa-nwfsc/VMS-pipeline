@@ -229,6 +229,8 @@ The QA'ed Dungeness crab fish ticket dataframe has `r n_qa_records` records (fis
 
 ## Coastal time series plots
 
+### Data prep
+
 ```{r}
 # create monthly summary for time series plots
 time_series_df <- qa_dcrb_ticket_df %>%
@@ -250,6 +252,8 @@ time_series_df <- qa_dcrb_ticket_df %>%
 # write time series
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "time_series_coast.csv"), x = time_series_df, row.names = FALSE)
 ```
+
+### Line plots
 
 ```{r}
 # time series line plot
@@ -305,7 +309,7 @@ revenue_plot <- line_plot(
   color_var = "crab_year_character",
   date_breaks = date_breaks,
   x_label = "Date",
-  y_label = "Revenue (USD $, AFI 2024)",
+  y_label = "Revenue (USD $)",
   title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
   color_label = "Crab year",
   png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_coast.png"))
@@ -320,7 +324,7 @@ cumulative_revenue_plot <- line_plot(
   color_var = "crab_year_character",
   date_breaks = date_breaks,
   x_label = "Date",
-  y_label = "Cumulative revenue (USD $, AFI 2024)",
+  y_label = "Cumulative revenue (USD $)",
   title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
   color_label = "Crab year",
   png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_cumulative_coast.png"))
@@ -359,6 +363,8 @@ ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "f
 ## State time series plots
 
 Repeat above, but facet by state.
+
+### Data prep
 
 ```{r}
 # create monthly summary for time series plots
@@ -428,6 +434,8 @@ qa_state_total_df %>%
 
 Looks good. Fish tickets, landings and revenue are all along the 1:1 line, and unique vessels is higher in the state total than overall total as expected.
 
+### Line plots
+
 ```{r}
 # time series line plot
 line_plot_facet <- function(data, facet_var, x_var, y_var, color_var, date_breaks, x_label, y_label, title_label, color_label, png_name) {
@@ -486,7 +494,7 @@ revenue_plot <- line_plot_facet(
   color_var = "crab_year_character",
   date_breaks = date_breaks,
   x_label = "Date",
-  y_label = "Revenue (USD $, AFI 2024)",
+  y_label = "Revenue (USD $)",
   title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
   color_label = "Crab year",
   png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_state.png"))
@@ -502,7 +510,7 @@ cumulative_revenue_plot <- line_plot_facet(
   color_var = "crab_year_character",
   date_breaks = date_breaks,
   x_label = "Date",
-  y_label = "Cumulative revenue (USD $, AFI 2024)",
+  y_label = "Cumulative revenue (USD $)",
   title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
   color_label = "Crab year",
   png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_cumulative_state.png"))
