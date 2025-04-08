@@ -328,13 +328,32 @@ cumulative_revenue_plot <- line_plot(
 cumulative_revenue_plot
 ```
 
+### Temporal heatmaps
+
 ```{r}
-# vessels heat map
+# vessels temporal heat map
 time_series_df %>% 
   ggplot(aes(x = month_factor, y = as.factor(year_numeric), fill = n_unique_vessels)) + 
   geom_tile() +
-  labs(x = "Month", y = "Year", title = paste("Dungeness crab", min(load_years), "-", max(load_years)), fill = "Vessels (Count)")
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_heatmap_n_unique_vessels_coast.png")))
+  labs(x = "Month", y = "Year", title = paste("Dungeness crab", min(load_years), "-", max(load_years)), fill = "Vessels (Count)") +
+  scale_fill_viridis_c()
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_heatmap_n_unique_vessels_coast.png")))
+
+# landings temporal heat map
+time_series_df %>% 
+  ggplot(aes(x = month_factor, y = as.factor(year_numeric), fill = DCRB_lbs)) + 
+  geom_tile() +
+  labs(x = "Month", y = "Year", title = paste("Dungeness crab", min(load_years), "-", max(load_years)), fill = "Landings (lbs)") +
+  scale_fill_viridis_c()
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_heatmap_landings_coast.png")))
+
+# revenue temporal heat map
+time_series_df %>% 
+  ggplot(aes(x = month_factor, y = as.factor(year_numeric), fill = DCRB_revenue_afi/10^6)) + 
+  geom_tile() +
+  labs(x = "Month", y = "Year", title = paste("Dungeness crab", min(load_years), "-", max(load_years)), fill = "Revenue (Millions USD)") +
+  scale_fill_viridis_c()
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_heatmap_revenue_coast.png")))
 ```
 
 ## State time series plots
