@@ -69,7 +69,7 @@ pcepi_adjustment <- read.csv(file = here("Confidential", "hindcast_output", outp
 
 Transform the joined, cleaned, interpolated VMS and fish ticket data:
 
-1.  Filter for dungeness crab related records, California landings, min/max depth and speed filters.
+1.  Filter for dungeness crab related records, min/max depth and speed filters.
 2.  Add temporal columns.
 3.  Adjust revenue for inflation with data from FRED.
 4.  Join spatial grid to VMS data, which is one of the slowest parts of the script.
@@ -418,7 +418,7 @@ for (s in state_vector) {
       map_bbox = state_bbox,
       title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
       fill_label = "Log-10 Interpolated VMS Records",
-      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly/", paste0(s, "/log_10_n_vms_records_", ym, ".png"))
+      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly", paste0(s, "/log_10_n_vms_records_", ym, ".png"))
     )
   }
 }
