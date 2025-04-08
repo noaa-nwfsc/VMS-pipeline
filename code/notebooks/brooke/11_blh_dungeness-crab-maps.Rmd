@@ -62,7 +62,7 @@ vms_df <- purrr::map(load_years, function(ly) {
 grid_5km <- read_sf(here('spatial_data', 'master_5km_grid_tmer.shp'))
 
 # load inflation adjustment
-gdp_defl <- read.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_adjustment.csv"))
+pcepi_adjustment <- read.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_adjustment_pcepi.csv"))
 ```
 
 ## Transform data
@@ -114,7 +114,7 @@ dcrb_vms_df <- vms_df %>%
   filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
   # join inflation adjustment factor and adjust revenue
-  left_join(gdp_defl, by = join_by(year_numeric == year)) %>%
+  left_join(pcepi_adjustment, by = join_by(year_numeric == year)) %>%
   mutate(DCRB_revenue_afi = DCRB_revenue / inflation_adjustment_factor) %>%
   # select columns
   dplyr::select(
