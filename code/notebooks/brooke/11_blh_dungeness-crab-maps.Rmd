@@ -208,6 +208,8 @@ dcrb_5km_monthly_df <- dcrb_vms_df %>%
   group_by(
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
+    # state, used to facet maps later on
+    STATE,
     # temporal columns, makes this a monthly summary
     crab_year_character,
     year_numeric,
@@ -267,7 +269,7 @@ Create a simple persistence map, which will visualize the number of years with a
 ```{r persistence-maps-coastal-simple}
 # simple persistence summary: for how many crab years did the grid cell include fishing activity?
 dcrb_5km_persistence_simple_df <- dcrb_5km_monthly_df %>% 
-  group_by(GRID5KM_ID) %>% 
+  group_by(GRID5KM_ID, STATE) %>% 
   summarise(crab_years_with_fishing_activity = n_distinct(crab_year_character))
 
 # write simple persistence summary
@@ -285,13 +287,10 @@ simple_persistence_map <- fishing_map(
   fill_range = range(dcrb_5km_persistence_simple_sf$crab_years_with_fishing_activity),
   background_sf = west_coast_states,
   map_bbox = st_bbox(dcrb_5km_persistence_simple_sf),
-  title_label = paste0("Simple Persistence Map, ", min(load_years), "-", max(load_years)),
+  title_label = paste0("Persistence Map (Simple), ", min(load_years), "-", max(load_years)),
   fill_label = "Crab Years with Fishing Activity",
   png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("simple_persistence_all_time.png"))
 )
-
-# TODO monthly across years, annually across months
-# TODO statewise
 ```
 
 #### Ranked
@@ -348,9 +347,9 @@ ranked_persistence_map <- fishing_map(
   fill_range = range(dcrb_5km_persistence_ranked_sf$crab_years_with_fishing_activity),
   background_sf = west_coast_states,
   map_bbox = st_bbox(dcrb_5km_persistence_ranked_sf),
-  title_label = paste0("Ranked Persistence Map, ", min(load_years), "-", max(load_years)),
+  title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(load_years), "-", max(load_years)),
   fill_label = "Crab Years with Fishing Activity",
-  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("ranked_persistence_all_time_", persistence_threshold*100, ".png"))
+  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
 )
 ```
 
