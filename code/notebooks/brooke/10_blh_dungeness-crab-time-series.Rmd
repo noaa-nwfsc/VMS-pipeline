@@ -323,6 +323,21 @@ cumulative_revenue_plot <- line_plot(
   png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_cumulative_coast.png"))
 )
 cumulative_revenue_plot
+
+# unique vessels
+vessels_plot <- line_plot(
+  data = time_series_df,
+  x_var = "year_month_date",
+  y_var = "n_unique_vessels",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Vessels (Count)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_vessels_coast.png"))
+)
+vessels_plot
 ```
 
 ### Temporal heatmaps
@@ -334,7 +349,7 @@ time_series_df %>%
   geom_tile() +
   labs(x = "Month", y = "Year", title = paste("Dungeness crab", min(load_years), "-", max(load_years)), fill = "Vessels (Count)") +
   scale_fill_viridis_c()
-ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_heatmap_n_unique_vessels_coast.png")))
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_heatmap_vessels_coast.png")))
 
 # landings temporal heat map
 time_series_df %>% 
@@ -509,6 +524,22 @@ cumulative_revenue_plot <- line_plot_facet(
   png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_revenue_cumulative_state.png"))
 )
 cumulative_revenue_plot
+
+# vessels
+vessels_plot <- line_plot_facet(
+  data = state_time_series_df,
+  facet_var = "agency_code",
+  x_var = "year_month_date",
+  y_var = "n_unique_vessels",
+  color_var = "crab_year_character",
+  date_breaks = date_breaks,
+  x_label = "Date",
+  y_label = "Vessels (Count)",
+  title_label = paste("Dungeness crab", min(load_years), "-", max(load_years)),
+  color_label = "Crab year",
+  png_name = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0("time_series_vessels_state.png"))
+)
+vessels_plot
 ```
 
 ```{r, include=FALSE}
