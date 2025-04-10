@@ -311,7 +311,7 @@ dcrb_yearly_df <- dcrb_5km_monthly_df %>%
 
 # calculate total pings per grid cell per crab year (drops month, and doesn't include revenue or landings for now)
 dcrb_5km_yearly_df <- dcrb_5km_monthly_df %>%
-  group_by(GRID5KM_ID, crab_year_character) %>%
+  group_by(GRID5KM_ID, STATE, crab_year_character) %>%
   summarise(n_vms_records = sum(n_vms_records))
 
 # sort grid cells based on # pings per crab year and determine whether to include in persistence map
@@ -332,7 +332,7 @@ dcrb_5km_persistence_ranked_df <- dcrb_5km_persistence_ranked_interim_df %>%
   group_by(GRID5KM_ID) %>% 
   summarise(crab_years_with_fishing_activity = n_distinct(crab_year_character))
 
-# write simple persistence summary
+# write ranked persistence summary
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_df.csv"), x = dcrb_5km_persistence_ranked_df, row.names = FALSE)
 
 # join geometry from 5km grid to gridded fishing summary
@@ -358,7 +358,7 @@ ranked_persistence_map <- fishing_map(
 ```{r monthly-maps-coastal}
 # join geometry from 5km grid to gridded fishing summary
 dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
-  left_join(grid_5km, by = join_by(GRID5KM_ID)) %>%
+  left_join(grid_5km, by = join_by(GRID5KM_ID, STATE)) %>%
   st_as_sf()
 
 # set bounding box across whole time frame (not just one month)
@@ -390,6 +390,65 @@ for (ym in year_month_vector) {
 
 ## State maps
 
+### Persistence
+
+#### Ranked
+
+```{r persistence-maps-state-ranked}
+# calculate pings per crab year per state, rounding up if the result is a decimal
+dcrb_yearly_state_df <- dcrb_5km_monthly_df %>%
+  group_by(crab_year_character, STATE) %>%
+  summarise(year_n_vms_records = sum(n_vms_records),
+            year_cutoff_n_vms_records = ceiling(year_n_vms_records * persistence_threshold))
+
+# sort grid cells based on # pings per crab year and determine whether to include in persistence map
+dcrb_5km_persistence_ranked_interim_state_df <- dcrb_5km_yearly_df %>% 
+  left_join(dcrb_yearly_state_df, by = c('crab_year_character', 'STATE')) %>% 
+  group_by(crab_year_character, STATE) %>%
+  arrange(crab_year_character, STATE, dense_rank(n_vms_records * -1)) %>%
+  mutate(cumulative_n_vms_records = cumsum(n_vms_records),
+         include = (cumulative_n_vms_records <= year_cutoff_n_vms_records |
+                      (cumulative_n_vms_records > year_cutoff_n_vms_records & lag(cumulative_n_vms_records < year_cutoff_n_vms_records))))
+
+# write intermediate output
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_interim_state_df.csv"), x = dcrb_5km_persistence_ranked_interim_state_df, row.names = FALSE)
+
+# ranked persistence summary: for how many crab years did the grid cell contribute to 75% of the fishing activity?
+dcrb_5km_persistence_ranked_state_df <- dcrb_5km_persistence_ranked_interim_state_df %>% 
+  filter(include) %>%
+  group_by(GRID5KM_ID, STATE) %>% 
+  summarise(crab_years_with_fishing_activity = n_distinct(crab_year_character))
+
+# write ranked persistence summary
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_state_df.csv"), x = dcrb_5km_persistence_ranked_state_df, row.names = FALSE)
+
+# join geometry from 5km grid to gridded fishing summary
+dcrb_5km_persistence_ranked_state_sf <- dcrb_5km_persistence_ranked_state_df %>%
+  left_join(grid_5km, by = join_by(GRID5KM_ID, STATE)) %>%
+  st_as_sf()
+
+# get unique states from gridded fishing summary
+state_vector <- sort(unique(dcrb_5km_persistence_ranked_state_sf$STATE))
+
+for (s in state_vector) {
+  # filter data and set bounding box for state
+  state_sf <- dcrb_5km_persistence_ranked_state_sf %>% filter(STATE == s)
+  state_bbox <- st_bbox(state_sf)
+  
+  # fishing activity map - whole time series
+  ranked_persistence_map <- fishing_map(
+    data_sf = state_sf,
+    fill_var = "crab_years_with_fishing_activity",
+    fill_range = range(state_sf$crab_years_with_fishing_activity),
+    background_sf = west_coast_states,
+    map_bbox = st_bbox(state_sf),
+    title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(load_years), "-", max(load_years)),
+    fill_label = "Crab Years with Fishing Activity",
+    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence", s, paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
+  )
+}
+```
+
 ### Monthly
 
 ```{r monthly-maps-state}
@@ -420,7 +479,7 @@ for (s in state_vector) {
       map_bbox = state_bbox,
       title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
       fill_label = "Log-10 Interpolated VMS Records",
-      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly", paste0(s, "/log_10_n_vms_records_", ym, ".png"))
+      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly", s, paste0("log_10_n_vms_records_", ym, ".png"))
     )
   }
 }
