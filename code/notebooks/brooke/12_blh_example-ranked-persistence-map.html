@@ -11,7 +11,7 @@
 
 <meta name="author" content="Brooke Hawkins" />
 
-<meta name="date" content="2025-04-08" />
+<meta name="date" content="2025-04-10" />
 
 <title>12_blh_example-ranked-persistence-map</title>
 
@@ -1623,276 +1623,233 @@ display: none;
 
 <h1 class="title toc-ignore">12_blh_example-ranked-persistence-map</h1>
 <h4 class="author">Brooke Hawkins</h4>
-<h4 class="date">2025-04-08</h4>
+<h4 class="date">2025-04-10</h4>
 
 </div>
 
 
-<p>Create a ranked persistence map, which will visualize the top x% of
+<p>Create a ranked persistence map, which will visualize the top X% of
 fishing activity based on the number of interpolated pings for a given
-year in a given grid cell.</p>
-<p>For example, assume there are three grid cells with 10, 1, and 2
-interpolated VMS pings in them in one year. Assume those same grid cells
-have 8, 8, and 0 interpolated VMS pings in them the following year.</p>
-<table>
-<thead>
-<tr class="header">
-<th>Year</th>
-<th>Grid Cell</th>
-<th>Number of pings</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>2013</td>
-<td>A</td>
-<td>10</td>
-</tr>
-<tr class="even">
-<td>2013</td>
-<td>B</td>
-<td>1</td>
-</tr>
-<tr class="odd">
-<td>2013</td>
-<td>C</td>
-<td>2</td>
-</tr>
-<tr class="even">
-<td>2014</td>
-<td>A</td>
-<td>8</td>
-</tr>
-<tr class="odd">
-<td>2014</td>
-<td>B</td>
-<td>8</td>
-</tr>
-<tr class="even">
-<td>2014</td>
-<td>C</td>
-<td>0</td>
-</tr>
-</tbody>
-</table>
-<p>In 2013, there are 13 pings total. In 2014, there are 16 pings
-total.</p>
-<p>Let’s assign a cutoff of 75% - each year, we want to look at where
-75% of the fishing activity occurred, based on the total pings that
-year.</p>
+year in a given grid cell. X will be our cutoff or threshold (I’m using
+those terms interchangeably).</p>
+<p>For simplicity, I use <code>year</code> (e.g. 2013) in these
+examples, but in the actual mapping code, I use use
+<code>crab_year</code> (e.g. 2013_2014 for Nov. 2013 - Oct. 2014).</p>
+<div id="simple---coast---all-time" class="section level2">
+<h2>Simple - Coast - All time</h2>
+<p>There are a few versions of this map, let’s start with the simple
+version for the whole coast and the whole time frame.</p>
+<p>Consider a simple example, for three grid cells in three years.</p>
+<pre class="r"><code>ex_1_df &lt;- tibble(year = c(rep(2013, 3), rep(2014, 3), rep(2015, 3)),
+                  grid_cell = c(letters[1:3], sample(letters[1:3]), sample(letters[1:3])),
+                  n_pings = c(75, 10, 15, 160, 30, 10, 60, 20, 20))
+ex_1_df</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"2013","2":"a","3":"75"},{"1":"2013","2":"b","3":"10"},{"1":"2013","2":"c","3":"15"},{"1":"2014","2":"b","3":"160"},{"1":"2014","2":"a","3":"30"},{"1":"2014","2":"c","3":"10"},{"1":"2015","2":"b","3":"60"},{"1":"2015","2":"a","3":"20"},{"1":"2015","2":"c","3":"20"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>For each grid cell, calculate how many years the grid cell had any
+fishing activity.</p>
+<pre class="r"><code>ex_1_map_df &lt;- ex_1_df %&gt;%
+  group_by(grid_cell) %&gt;%
+  summarise(years_with_activity = n_distinct(year),
+            .groups = &#39;drop&#39;)
+ex_1_map_df</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["grid_cell"],"name":[1],"type":["chr"],"align":["left"]},{"label":["years_with_activity"],"name":[2],"type":["int"],"align":["right"]}],"data":[{"1":"a","2":"3"},{"1":"b","2":"3"},{"1":"c","2":"3"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>This dataframe would then be joined to the 5km grid by
+<code>grid_cell</code>, and plotted on a map. Each grid cell had
+activity in every year, so every cell would be included on the map with
+3 years of activity.</p>
+</div>
+<div id="ranked---coast---all-time" class="section level2">
+<h2>Ranked - Coast - All time</h2>
+<p>Let’s make it a little trickier. Now we only want to consider grid
+cells that contribute to the top X% of fishing activity. We’ll still
+consider the whole coast and the whole time frame.</p>
+<p>Let’s consider a 75% threshold.</p>
+<pre class="r"><code>threshold &lt;- 0.75</code></pre>
+<p>To decide which grid cells contribute towards the 75% fishing
+activity, we need to do a couple of things:</p>
+<ol style="list-style-type: decimal">
+<li>Sort each year of data from most pings to fewest pings</li>
+<li>Calculate total number of pings per year</li>
+<li>Calculate the threshold number of pings per year (if it’s a
+fraction, round up to the nearest whole number)</li>
+<li>Calculate a cumulative sum of number of pings for each year</li>
+<li>Compare the cumulative number of pings to the threshold number of
+pings to decide which cells get included in the persistence map</li>
+</ol>
+<pre class="r"><code>ex_1_threshold_df &lt;- ex_1_df %&gt;%
+  arrange(year, n_pings * -1) %&gt;%
+  group_by(year) %&gt;% 
+  mutate(year_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_pings)) %&gt;%
+  ungroup() %&gt;%
+  group_by(year) %&gt;% 
+  mutate(cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings &lt;= threshold_pings) | 
+           (cumulative_pings &gt; threshold_pings &amp; lag(cumulative_pings) &lt; threshold_pings) | 
+           (cumulative_pings &gt; threshold_pings &amp; is.na(lag(cumulative_pings) &lt; threshold_pings)))
+ex_1_threshold_df</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["year_pings"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["threshold_pings"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["cumulative_pings"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["include"],"name":[7],"type":["lgl"],"align":["right"]}],"data":[{"1":"2013","2":"a","3":"75","4":"100","5":"75","6":"75","7":"TRUE"},{"1":"2013","2":"c","3":"15","4":"100","5":"75","6":"90","7":"FALSE"},{"1":"2013","2":"b","3":"10","4":"100","5":"75","6":"100","7":"FALSE"},{"1":"2014","2":"b","3":"160","4":"200","5":"150","6":"160","7":"TRUE"},{"1":"2014","2":"a","3":"30","4":"200","5":"150","6":"190","7":"FALSE"},{"1":"2014","2":"c","3":"10","4":"200","5":"150","6":"200","7":"FALSE"},{"1":"2015","2":"b","3":"60","4":"100","5":"75","6":"60","7":"TRUE"},{"1":"2015","2":"a","3":"20","4":"100","5":"75","6":"80","7":"TRUE"},{"1":"2015","2":"c","3":"20","4":"100","5":"75","6":"100","7":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>This logic for <code>include</code> probably seems arbitrarily
+complicated, but here are a few use cases considered here:</p>
 <ul>
-<li><p>For 2013, the 75% cutoff = 13 pings * 0.75 = 9.75 pings. Let’s
-round that to 10 pings.</p></li>
-<li><p>For 2014, the 75% cutoff = 16 pings * 0.75 = 12 pings.</p></li>
+<li>What if the cumulative pings is exactly equal to the threshold
+pings? (2013)</li>
+<li>What if cumulative pings is not exactly equal to the threshold
+pings? (2014, 2015)</li>
+<li>What if the first record reaches the threshold? (2014)</li>
 </ul>
-<table>
-<thead>
-<tr class="header">
-<th>Year</th>
-<th>Grid Cell</th>
-<th>Number of pings</th>
-<th>Annual pings</th>
-<th>Threshold pings</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>2013</td>
-<td>A</td>
-<td>10</td>
-<td>13</td>
-<td>10</td>
-</tr>
-<tr class="even">
-<td>2013</td>
-<td>B</td>
-<td>1</td>
-<td>13</td>
-<td>10</td>
-</tr>
-<tr class="odd">
-<td>2013</td>
-<td>C</td>
-<td>2</td>
-<td>13</td>
-<td>10</td>
-</tr>
-<tr class="even">
-<td>2014</td>
-<td>A</td>
-<td>8</td>
-<td>16</td>
-<td>12</td>
-</tr>
-<tr class="odd">
-<td>2014</td>
-<td>B</td>
-<td>8</td>
-<td>16</td>
-<td>12</td>
-</tr>
-<tr class="even">
-<td>2014</td>
-<td>C</td>
-<td>0</td>
-<td>16</td>
-<td>12</td>
-</tr>
-</tbody>
-</table>
-<p>We will rank the grid cells for each year, calculate a cumulative
-sum, and see when we reach the 75% cutoff of fishing activity, and only
-include those grid cells within the persistence map. In the case of ties
-at the cutoff, we’ll include ties.</p>
-<table>
-<colgroup>
-<col width="12%" />
-<col width="12%" />
-<col width="12%" />
-<col width="12%" />
-<col width="12%" />
-<col width="12%" />
-<col width="12%" />
-<col width="12%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Year</th>
-<th>Grid Cell</th>
-<th>Number of pings</th>
-<th>Annual pings</th>
-<th>Annual threshold pings</th>
-<th>Annual rank</th>
-<th>Cumulative sum pings</th>
-<th>Annual threshold pings</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><em>2013</em></td>
-<td><em>A</em></td>
-<td><em>10</em></td>
-<td><em>13</em></td>
-<td><em>10</em></td>
-<td><em>1</em></td>
-<td><em>10</em></td>
-<td><em>1</em></td>
-</tr>
-<tr class="even">
-<td>2013</td>
-<td>C</td>
-<td>2</td>
-<td>13</td>
-<td>10</td>
-<td>2</td>
-<td>12</td>
-<td>0</td>
-</tr>
-<tr class="odd">
-<td>2013</td>
-<td>B</td>
-<td>1</td>
-<td>13</td>
-<td>10</td>
-<td>3</td>
-<td>13</td>
-<td>0</td>
-</tr>
-<tr class="even">
-<td><em>2014</em></td>
-<td><em>A</em></td>
-<td><em>8</em></td>
-<td><em>16</em></td>
-<td><em>12</em></td>
-<td><em>1</em></td>
-<td><em>8</em></td>
-<td><em>1</em></td>
-</tr>
-<tr class="odd">
-<td><em>2014</em></td>
-<td><em>B</em></td>
-<td><em>8</em></td>
-<td><em>16</em></td>
-<td><em>12</em></td>
-<td><em>1</em></td>
-<td><em>16</em></td>
-<td><em>1</em></td>
-</tr>
-<tr class="even">
-<td>2014</td>
-<td>C</td>
-<td>0</td>
-<td>16</td>
-<td>12</td>
-<td>2</td>
-<td>16</td>
-<td>0</td>
-</tr>
-</tbody>
-</table>
-<p>In the ranked persistence map, grid cell A will include fishing
-activity for 2 years, B will include fishing for 1 year, and C will
-include fishing for 0 years. This example uses calendar years for
-simplicity’s sake, but the plotting code will use crab years.</p>
-<p>There is some complicated logic in here in the <code>case_when</code>
-statement and <code>include_in_map_tie_cocrrected</code> in order to
-include ties that reach the threshold, but exclude ties after the
-threshold has already been reached. If you want to understand the logic,
-then it’s worth commenting the line that drops the lagged columns, and
-pay special attention to the ties in 2014 - how does the logic account
-for the tie with 8 pings that help reach the threshold, vs. 1 ping after
-the threshold is already reached?</p>
-<pre class="r"><code>test_df &lt;- tibble(year = c(rep(2013, 3), rep(2014, 3)),
-                  grid_cell = c(rep(letters[1:3], 2)),
-                  n_pings = c(10, 2, 1, 8, 8, 0))
-# check out example dataframe
-test_df</code></pre>
+<p>Not <em>exactly</em> 75% of the fishing effort is included; it’s more
+accurate to say at least 75% fishing effort is included. For example, in
+2014 and in 2015, 80% of the effort is included.</p>
+<p>Edge case - I’m still not satisfied with ties at the threshold. For
+example, in 2015, grid cells b and c both have 20 pings, and grid cell b
+is included while grid cell c isn’t. I haven’t figured out a way to
+handle that exception without iterating over records one by one in a for
+loop, which seems slow. I did see this happen in the actual VMS data for
+the 2016-2017 crab year. I doubt it has huge impacts on the maps, just
+calling out this one remaining caveat.</p>
+<p>Anyway, moving on.</p>
+<p>When mapping persistence for grid cells that contribute to the top
+75% of fishing activity, we now need to find how many years each of the
+grid cells are included. The steps are:</p>
+<ol style="list-style-type: decimal">
+<li>Filter for grid cells that should be included in the summary</li>
+<li>Count the number of distinct years for each grid cell</li>
+</ol>
+<pre class="r"><code>ex_1_threshold_map_df &lt;- ex_1_threshold_df %&gt;%
+  filter(include) %&gt;%
+  group_by(grid_cell) %&gt;%
+  summarize(years_with_activity = n_distinct(year),
+            .groups = &#39;drop&#39;)
+
+ex_1_threshold_map_df</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"2013","2":"a","3":"10"},{"1":"2013","2":"b","3":"2"},{"1":"2013","2":"c","3":"1"},{"1":"2014","2":"a","3":"8"},{"1":"2014","2":"b","3":"8"},{"1":"2014","2":"c","3":"0"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["grid_cell"],"name":[1],"type":["chr"],"align":["left"]},{"label":["years_with_activity"],"name":[2],"type":["int"],"align":["right"]}],"data":[{"1":"a","2":"2"},{"1":"b","2":"2"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-<pre class="r"><code># assign a threshold cutoff
-threshold_cutoff &lt;- 0.75
-
-# figure out annual pings
-test_year_df &lt;- test_df %&gt;% group_by(year) %&gt;%
-  summarise(year_n_pings = sum(n_pings),
-            year_cutoff_n_pings = ceiling(year_n_pings * threshold_cutoff))
-
-# do the ranking and figure out which grid cells to include in the summary
-ranked_test_df &lt;- test_df %&gt;% 
-  left_join(test_year_df, by = &#39;year&#39;) %&gt;% 
+<p>Only grid cells a and b contributed towards the top 75% fishing
+effort, and in 2 years each.</p>
+<p>Note: the ranked version for a 100% threshold is identical to the
+simple version. The 100% threshold will just do some sorting and
+calculating that isn’t required, because every value for
+<code>include</code> will be true until 100% of the pings are
+represented.</p>
+</div>
+<div id="ranked---state---all-time" class="section level2">
+<h2>Ranked - State - All time</h2>
+<p>Now let’s do the same exact thing, but instead of considering the
+whole coast, we’ll look at each state separately. We can use a similar
+dataframe as before, but we need to have state included in the
+aggregation.</p>
+<p>Consider a new example with two years and two states of data.</p>
+<pre class="r"><code>ex_2_df &lt;- tibble(year = c(rep(2013, 5), rep(2014, 5)),
+                  state = c(rep(&#39;C&#39;, 3), rep(&#39;O&#39;, 2), rep(&#39;C&#39;, 2), rep(&#39;O&#39;, 3)),
+                  grid_cell = c(letters[1:5], sample(letters[1:2]), sample(letters[4:6])),
+                  n_pings = c(10, 30, 60, 50, 50, 80, 20, 45, 35, 10))
+ex_2_df</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["state"],"name":[2],"type":["chr"],"align":["left"]},{"label":["grid_cell"],"name":[3],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[4],"type":["dbl"],"align":["right"]}],"data":[{"1":"2013","2":"C","3":"a","4":"10"},{"1":"2013","2":"C","3":"b","4":"30"},{"1":"2013","2":"C","3":"c","4":"60"},{"1":"2013","2":"O","3":"d","4":"50"},{"1":"2013","2":"O","3":"e","4":"50"},{"1":"2014","2":"C","3":"a","4":"80"},{"1":"2014","2":"C","3":"b","4":"20"},{"1":"2014","2":"O","3":"d","4":"45"},{"1":"2014","2":"O","3":"e","4":"35"},{"1":"2014","2":"O","3":"f","4":"10"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>There are two versions here:</p>
+<p>A. Ranking top X% in each state based on the whole coast’s fishing
+activity. <em>Universe for analysis = whole coast.</em> (This just
+splits the map into separate panels, so the coastal trends are easier to
+see.) B. Rank top X% in each state based on that state’s fishing
+activity. <em>Universe for analysis = each state.</em> (This is a
+different analytical task, because the yearly totals need to be grouped
+by state in addition to by year.)</p>
+<div id="version-a" class="section level3">
+<h3>Version A</h3>
+<p>For version A, we do the same process as above, just add the
+<code>state</code> identifier whenever the <code>grid_cell</code>
+identifier is grouped by for aggregations. Since each grid cell has only
+one state, the results are the same, just with the addition of the the
+<code>state</code> column.</p>
+<p>Repeat the checks for whether a grid cell contributes to the top 75%
+of fishing activity:</p>
+<pre class="r"><code>ex_2_a_threshold_df &lt;- ex_2_df %&gt;%
+  arrange(year, state, n_pings * -1) %&gt;% # state is now included here
   group_by(year) %&gt;%
-  mutate(dense_rank_n_pings = dense_rank(n_pings * -1)) %&gt;% 
-  arrange(year, dense_rank_n_pings) %&gt;%
-  mutate(cumulative_n_pings = cumsum(n_pings),
-         lag_cumulative_n_pings = lag(cumulative_n_pings),
-         lag_n_pings = lag(n_pings),
-         include_in_map = case_when(
-           cumulative_n_pings &lt;= year_cutoff_n_pings ~ TRUE,
-           lag_cumulative_n_pings &lt; year_cutoff_n_pings ~ TRUE,
-           n_pings == lag_n_pings ~ TRUE,
-           .default = FALSE
-         )) %&gt;%
-  mutate(include_in_map_tie_corrected = coalesce(ifelse(!lag(include_in_map), FALSE, include_in_map), include_in_map)) %&gt;% 
-  select(-c(lag_cumulative_n_pings, lag_n_pings, include_in_map))
-
-# view the result
-ranked_test_df</code></pre>
+  mutate(year_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_pings)) %&gt;%
+  ungroup() %&gt;%
+  group_by(year) %&gt;%
+  mutate(cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings &lt;= threshold_pings) |
+           (cumulative_pings &gt; threshold_pings &amp; lag(cumulative_pings) &lt; threshold_pings) |
+           (cumulative_pings &gt; threshold_pings &amp; is.na(lag(cumulative_pings) &lt; threshold_pings)))
+ex_2_a_threshold_df</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["grid_cell"],"name":[2],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["year_n_pings"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["year_cutoff_n_pings"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["dense_rank_n_pings"],"name":[6],"type":["int"],"align":["right"]},{"label":["cumulative_n_pings"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["include_in_map_tie_corrected"],"name":[8],"type":["lgl"],"align":["right"]}],"data":[{"1":"2013","2":"a","3":"10","4":"13","5":"10","6":"1","7":"10","8":"TRUE"},{"1":"2013","2":"b","3":"2","4":"13","5":"10","6":"2","7":"12","8":"FALSE"},{"1":"2013","2":"c","3":"1","4":"13","5":"10","6":"3","7":"13","8":"FALSE"},{"1":"2014","2":"a","3":"8","4":"16","5":"12","6":"1","7":"8","8":"TRUE"},{"1":"2014","2":"b","3":"8","4":"16","5":"12","6":"1","7":"16","8":"TRUE"},{"1":"2014","2":"c","3":"0","4":"16","5":"12","6":"2","7":"16","8":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["state"],"name":[2],"type":["chr"],"align":["left"]},{"label":["grid_cell"],"name":[3],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["year_pings"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["threshold_pings"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["cumulative_pings"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["include"],"name":[8],"type":["lgl"],"align":["right"]}],"data":[{"1":"2013","2":"C","3":"c","4":"60","5":"200","6":"150","7":"60","8":"TRUE"},{"1":"2013","2":"C","3":"b","4":"30","5":"200","6":"150","7":"90","8":"TRUE"},{"1":"2013","2":"C","3":"a","4":"10","5":"200","6":"150","7":"100","8":"TRUE"},{"1":"2013","2":"O","3":"d","4":"50","5":"200","6":"150","7":"150","8":"TRUE"},{"1":"2013","2":"O","3":"e","4":"50","5":"200","6":"150","7":"200","8":"FALSE"},{"1":"2014","2":"C","3":"a","4":"80","5":"190","6":"143","7":"80","8":"TRUE"},{"1":"2014","2":"C","3":"b","4":"20","5":"190","6":"143","7":"100","8":"TRUE"},{"1":"2014","2":"O","3":"d","4":"45","5":"190","6":"143","7":"145","8":"TRUE"},{"1":"2014","2":"O","3":"e","4":"35","5":"190","6":"143","7":"180","8":"FALSE"},{"1":"2014","2":"O","3":"f","4":"10","5":"190","6":"143","7":"190","8":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-<p>This logic is still flawed, I wanted a vectorized way to do this, but
-can’t figure it out for including ties at the threshold cutoff, but not
-beyond it.</p>
-<p>This currently over-includes ties - the last statement in the case
-when statement will include all ties, not only ties that helped reach
-the threshold.</p>
-<p>I’m going to simplify in the actual persistence map code for now, and
-forget about including ties for now.</p>
+<p>Repeat the aggreagation for how many years a grid cell contributes to
+the top 75% of fishing activity:</p>
+<pre class="r"><code>ex_2_a_threshold_map_df &lt;- ex_2_a_threshold_df %&gt;%
+  filter(include) %&gt;%
+  group_by(grid_cell, state) %&gt;% # state is now included here
+  summarize(years_with_activity = n_distinct(year),
+            .groups = &#39;drop&#39;)
+
+ex_2_a_threshold_map_df</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["grid_cell"],"name":[1],"type":["chr"],"align":["left"]},{"label":["state"],"name":[2],"type":["chr"],"align":["left"]},{"label":["years_with_activity"],"name":[3],"type":["int"],"align":["right"]}],"data":[{"1":"a","2":"C","3":"2"},{"1":"b","2":"C","3":"2"},{"1":"c","2":"C","3":"1"},{"1":"d","2":"O","3":"2"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+<div id="version-b" class="section level3">
+<h3>Version B</h3>
+<p>For version B, we do the same process as above, but when we calculate
+the total number of pings and compare a grid cell against a threshold,
+we compare to the state total, not the whole coast total.</p>
+<pre class="r"><code>ex_2_b_threshold_df &lt;- ex_2_df %&gt;%
+  arrange(year, state, n_pings * -1) %&gt;% # state is still included here
+  group_by(year, state) %&gt;% # state is now included here too
+  mutate(year_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_pings)) %&gt;%
+  ungroup() %&gt;%
+  group_by(year, state) %&gt;% # state is now included here too
+  mutate(cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings &lt;= threshold_pings) |
+           (cumulative_pings &gt; threshold_pings &amp; lag(cumulative_pings) &lt; threshold_pings) |
+           (cumulative_pings &gt; threshold_pings &amp; is.na(lag(cumulative_pings) &lt; threshold_pings)))
+ex_2_b_threshold_df</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["year"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["state"],"name":[2],"type":["chr"],"align":["left"]},{"label":["grid_cell"],"name":[3],"type":["chr"],"align":["left"]},{"label":["n_pings"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["year_pings"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["threshold_pings"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["cumulative_pings"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["include"],"name":[8],"type":["lgl"],"align":["right"]}],"data":[{"1":"2013","2":"C","3":"c","4":"60","5":"100","6":"75","7":"60","8":"TRUE"},{"1":"2013","2":"C","3":"b","4":"30","5":"100","6":"75","7":"90","8":"TRUE"},{"1":"2013","2":"C","3":"a","4":"10","5":"100","6":"75","7":"100","8":"FALSE"},{"1":"2013","2":"O","3":"d","4":"50","5":"100","6":"75","7":"50","8":"TRUE"},{"1":"2013","2":"O","3":"e","4":"50","5":"100","6":"75","7":"100","8":"TRUE"},{"1":"2014","2":"C","3":"a","4":"80","5":"100","6":"75","7":"80","8":"TRUE"},{"1":"2014","2":"C","3":"b","4":"20","5":"100","6":"75","7":"100","8":"FALSE"},{"1":"2014","2":"O","3":"d","4":"45","5":"90","6":"68","7":"45","8":"TRUE"},{"1":"2014","2":"O","3":"e","4":"35","5":"90","6":"68","7":"80","8":"TRUE"},{"1":"2014","2":"O","3":"f","4":"10","5":"90","6":"68","7":"90","8":"FALSE"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>ex_2_b_threshold_map_df &lt;- ex_2_b_threshold_df %&gt;%
+  filter(include) %&gt;%
+  group_by(grid_cell, state) %&gt;% # state is still included here
+  summarize(years_with_activity = n_distinct(year),
+            .groups = &#39;drop&#39;)
+
+ex_2_b_threshold_map_df</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["grid_cell"],"name":[1],"type":["chr"],"align":["left"]},{"label":["state"],"name":[2],"type":["chr"],"align":["left"]},{"label":["years_with_activity"],"name":[3],"type":["int"],"align":["right"]}],"data":[{"1":"a","2":"C","3":"1"},{"1":"b","2":"C","3":"1"},{"1":"c","2":"C","3":"1"},{"1":"d","2":"O","3":"2"},{"1":"e","2":"O","3":"2"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
 
 
 

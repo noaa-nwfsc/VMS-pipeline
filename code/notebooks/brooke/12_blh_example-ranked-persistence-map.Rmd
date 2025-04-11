@@ -25,7 +25,7 @@ For simplicity, I use `year` (e.g. 2013) in these examples, but in the actual ma
 
 There are a few versions of this map, let's start with the simple version for the whole coast and the whole time frame.
 
-Consider a simple example, for three grid cells in three years. 
+Consider a simple example, for three grid cells in three years.
 
 ```{r make-example-1}
 ex_1_df <- tibble(year = c(rep(2013, 3), rep(2014, 3), rep(2015, 3)),
@@ -41,11 +41,10 @@ ex_1_map_df <- ex_1_df %>%
   group_by(grid_cell) %>%
   summarise(years_with_activity = n_distinct(year),
             .groups = 'drop')
-
 ex_1_map_df
 ```
 
-This dataframe would then be joined to the 5km grid by `grid_cell`, and plotted on a map. Each grid cell had activity in every year, so every cell would be included on the map with 3 years of activity. 
+This dataframe would then be joined to the 5km grid by `grid_cell`, and plotted on a map. Each grid cell had activity in every year, so every cell would be included on the map with 3 years of activity.
 
 ## Ranked - Coast - All time
 
@@ -59,11 +58,11 @@ threshold <- 0.75
 
 To decide which grid cells contribute towards the 75% fishing activity, we need to do a couple of things:
 
-1. Sort each year of data from most pings to fewest pings
-2. Calculate total number of pings per year
-3. Calculate the threshold number of pings per year (if it's a fraction, round up to the nearest whole number)
-4. Calculate a cumulative sum of number of pings for each year
-5. Compare the cumulative number of pings to the threshold number of pings to decide which cells get included in the persistence map
+1.  Sort each year of data from most pings to fewest pings
+2.  Calculate total number of pings per year
+3.  Calculate the threshold number of pings per year (if it's a fraction, round up to the nearest whole number)
+4.  Calculate a cumulative sum of number of pings for each year
+5.  Compare the cumulative number of pings to the threshold number of pings to decide which cells get included in the persistence map
 
 ```{r}
 ex_1_threshold_df <- ex_1_df %>%
@@ -77,15 +76,14 @@ ex_1_threshold_df <- ex_1_df %>%
          include = (cumulative_pings <= threshold_pings) | 
            (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) | 
            (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
-
 ex_1_threshold_df
 ```
 
 This logic for `include` probably seems arbitrarily complicated, but here are a few use cases considered here:
 
-* What if the cumulative pings is exactly equal to the threshold pings? (2013)
-* What if cumulative pings is not exactly equal to the threshold pings? (2014, 2015)
-* What if the first record reaches the threshold? (2014)
+-   What if the cumulative pings is exactly equal to the threshold pings? (2013)
+-   What if cumulative pings is not exactly equal to the threshold pings? (2014, 2015)
+-   What if the first record reaches the threshold? (2014)
 
 Not *exactly* 75% of the fishing effort is included; it's more accurate to say at least 75% fishing effort is included. For example, in 2014 and in 2015, 80% of the effort is included.
 
@@ -95,8 +93,8 @@ Anyway, moving on.
 
 When mapping persistence for grid cells that contribute to the top 75% of fishing activity, we now need to find how many years each of the grid cells are included. The steps are:
 
-1. Filter for grid cells that should be included in the summary
-2. Count the number of distinct years for each grid cell
+1.  Filter for grid cells that should be included in the summary
+2.  Count the number of distinct years for each grid cell
 
 ```{r}
 ex_1_threshold_map_df <- ex_1_threshold_df %>%
@@ -111,4 +109,86 @@ ex_1_threshold_map_df
 Only grid cells a and b contributed towards the top 75% fishing effort, and in 2 years each.
 
 Note: the ranked version for a 100% threshold is identical to the simple version. The 100% threshold will just do some sorting and calculating that isn't required, because every value for `include` will be true until 100% of the pings are represented.
+
+## Ranked - State - All time
+
+Now let's do the same exact thing, but instead of considering the whole coast, we'll look at each state separately. We can use a similar dataframe as before, but we need to have state included in the aggregation.
+
+Consider a new example with two years and two states of data.
+
+```{r}
+ex_2_df <- tibble(year = c(rep(2013, 5), rep(2014, 5)),
+                  state = c(rep('C', 3), rep('O', 2), rep('C', 2), rep('O', 3)),
+                  grid_cell = c(letters[1:5], sample(letters[1:2]), sample(letters[4:6])),
+                  n_pings = c(10, 30, 60, 50, 50, 80, 20, 45, 35, 10))
+ex_2_df
+```
+
+ There are two versions here:
+
+A. Ranking top X% in each state based on the whole coast's fishing activity. *Universe for analysis = whole coast.* (This just splits the map into separate panels, so the coastal trends are easier to see.)
+B. Rank top X% in each state based on that state's fishing activity. *Universe for analysis = each state.* (This is a different analytical task, because the yearly totals need to be grouped by state in addition to by year.)
+
+### Version A
+
+For version A, we do the same process as above, just add the `state` identifier whenever the `grid_cell` identifier is grouped by for aggregations. Since each grid cell has only one state, the results are the same, just with the addition of the the `state` column.
+
+Repeat the checks for whether a grid cell contributes to the top 75% of fishing activity:
+
+```{r}
+ex_2_a_threshold_df <- ex_2_df %>%
+  arrange(year, state, n_pings * -1) %>% # state is now included here
+  group_by(year) %>%
+  mutate(year_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_pings)) %>%
+  ungroup() %>%
+  group_by(year) %>%
+  mutate(cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings <= threshold_pings) |
+           (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) |
+           (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
+ex_2_a_threshold_df
+```
+
+Repeat the aggreagation for how many years a grid cell contributes to the top 75% of fishing activity:
+
+```{r}
+ex_2_a_threshold_map_df <- ex_2_a_threshold_df %>%
+  filter(include) %>%
+  group_by(grid_cell, state) %>% # state is now included here
+  summarize(years_with_activity = n_distinct(year),
+            .groups = 'drop')
+
+ex_2_a_threshold_map_df
+```
+
+### Version B
+
+For version B, we do the same process as above, but when we calculate the total number of pings and compare a grid cell against a threshold, we compare to the state total, not the whole coast total.
+
+```{r}
+ex_2_b_threshold_df <- ex_2_df %>%
+  arrange(year, state, n_pings * -1) %>% # state is still included here
+  group_by(year, state) %>% # state is now included here too
+  mutate(year_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_pings)) %>%
+  ungroup() %>%
+  group_by(year, state) %>% # state is now included here too
+  mutate(cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings <= threshold_pings) |
+           (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) |
+           (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
+ex_2_b_threshold_df
+```
+
+```{r}
+ex_2_b_threshold_map_df <- ex_2_b_threshold_df %>%
+  filter(include) %>%
+  group_by(grid_cell, state) %>% # state is still included here
+  summarize(years_with_activity = n_distinct(year),
+            .groups = 'drop')
+
+ex_2_b_threshold_map_df
+```
+
 
