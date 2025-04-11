@@ -12,92 +12,103 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # import libraries
 library(tidyverse)
+
+# set seed for reproducibility
+set.seed(37)
 ```
 
-Create a ranked persistence map, which will visualize the top x% of fishing activity based on the number of interpolated pings for a given year in a given grid cell.
+Create a ranked persistence map, which will visualize the top X% of fishing activity based on the number of interpolated pings for a given year in a given grid cell. X will be our cutoff or threshold (I'm using those terms interchangeably).
 
-For example, assume there are three grid cells with 10, 1, and 2 interpolated VMS pings in them in one year. Assume those same grid cells have 8, 8, and 0 interpolated VMS pings in them the following year.
+For simplicity, I use `year` (e.g. 2013) in these examples, but in the actual mapping code, I use use `crab_year` (e.g. 2013_2014 for Nov. 2013 - Oct. 2014).
 
-| Year | Grid Cell | Number of pings |
-|------|-----------|-----------------|
-| 2013 | A         | 10              |
-| 2013 | B         | 1               |
-| 2013 | C         | 2               |
-| 2014 | A         | 8               |
-| 2014 | B         | 8               |
-| 2014 | C         | 0               |
+## Simple - Coast - All time
 
-In 2013, there are 13 pings total. In 2014, there are 16 pings total.
+There are a few versions of this map, let's start with the simple version for the whole coast and the whole time frame.
 
-Let's assign a cutoff of 75% - each year, we want to look at where 75% of the fishing activity occurred, based on the total pings that year.
+Consider a simple example, for three grid cells in three years. 
 
--   For 2013, the 75% cutoff = 13 pings \* 0.75 = 9.75 pings. Let's round that to 10 pings.
-
--   For 2014, the 75% cutoff = 16 pings \* 0.75 = 12 pings.
-
-| Year | Grid Cell | Number of pings | Annual pings | Threshold pings |
-|------|-----------|-----------------|--------------|-----------------|
-| 2013 | A         | 10              | 13           | 10              |
-| 2013 | B         | 1               | 13           | 10              |
-| 2013 | C         | 2               | 13           | 10              |
-| 2014 | A         | 8               | 16           | 12              |
-| 2014 | B         | 8               | 16           | 12              |
-| 2014 | C         | 0               | 16           | 12              |
-
-We will rank the grid cells for each year, calculate a cumulative sum, and see when we reach the 75% cutoff of fishing activity, and only include those grid cells within the persistence map. In the case of ties at the cutoff, we'll include ties.
-
-| Year | Grid Cell | Number of pings | Annual pings | Annual threshold pings | Annual rank | Cumulative sum pings | Annual threshold pings |
-|---------|---------|---------|---------|---------|---------|---------|---------|
-| *2013* | *A* | *10* | *13* | *10* | *1* | *10* | *1* |
-| 2013 | C | 2 | 13 | 10 | 2 | 12 | 0 |
-| 2013 | B | 1 | 13 | 10 | 3 | 13 | 0 |
-| *2014* | *A* | *8* | *16* | *12* | *1* | *8* | *1* |
-| *2014* | *B* | *8* | *16* | *12* | *1* | *16* | *1* |
-| 2014 | C | 0 | 16 | 12 | 2 | 16 | 0 |
-
-In the ranked persistence map, grid cell A will include fishing activity for 2 years, B will include fishing for 1 year, and C will include fishing for 0 years. This example uses calendar years for simplicity's sake, but the plotting code will use crab years.
-
-There is some complicated logic in here in the `case_when` statement and `include_in_map_tie_cocrrected` in order to include ties that reach the threshold, but exclude ties after the threshold has already been reached. If you want to understand the logic, then it's worth commenting the line that drops the lagged columns, and pay special attention to the ties in 2014 - how does the logic account for the tie with 8 pings that help reach the threshold, vs. 1 ping after the threshold is already reached?
-
-```{r persistence-maps-coastal-ranked}
-test_df <- tibble(year = c(rep(2013, 3), rep(2014, 3)),
-                  grid_cell = c(rep(letters[1:3], 2)),
-                  n_pings = c(10, 2, 1, 8, 8, 0))
-# check out example dataframe
-test_df
-
-# assign a threshold cutoff
-threshold_cutoff <- 0.75
-
-# figure out annual pings
-test_year_df <- test_df %>% group_by(year) %>%
-  summarise(year_n_pings = sum(n_pings),
-            year_cutoff_n_pings = ceiling(year_n_pings * threshold_cutoff))
-
-# do the ranking and figure out which grid cells to include in the summary
-ranked_test_df <- test_df %>% 
-  left_join(test_year_df, by = 'year') %>% 
-  group_by(year) %>%
-  mutate(dense_rank_n_pings = dense_rank(n_pings * -1)) %>% 
-  arrange(year, dense_rank_n_pings) %>%
-  mutate(cumulative_n_pings = cumsum(n_pings),
-         lag_cumulative_n_pings = lag(cumulative_n_pings),
-         lag_n_pings = lag(n_pings),
-         include_in_map = case_when(
-           cumulative_n_pings <= year_cutoff_n_pings ~ TRUE,
-           lag_cumulative_n_pings < year_cutoff_n_pings ~ TRUE,
-           n_pings == lag_n_pings ~ TRUE,
-           .default = FALSE
-         )) %>%
-  mutate(include_in_map_tie_corrected = coalesce(ifelse(!lag(include_in_map), FALSE, include_in_map), include_in_map)) %>% 
-  select(-c(lag_cumulative_n_pings, lag_n_pings, include_in_map))
-
-# view the result
-ranked_test_df
+```{r make-example-1}
+ex_1_df <- tibble(year = c(rep(2013, 3), rep(2014, 3), rep(2015, 3)),
+                  grid_cell = c(letters[1:3], sample(letters[1:3]), sample(letters[1:3])),
+                  n_pings = c(75, 10, 15, 160, 30, 10, 60, 20, 20))
+ex_1_df
 ```
 
-This logic is still flawed, I wanted a vectorized way to do this, but can't figure it out for including ties at the threshold cutoff, but not beyond it.
+For each grid cell, calculate how many years the grid cell had any fishing activity.
 
-This currently over-includes ties - the last statement in the case when statement will include all ties, not only ties that helped reach the threshold.
+```{r}
+ex_1_map_df <- ex_1_df %>%
+  group_by(grid_cell) %>%
+  summarise(years_with_activity = n_distinct(year),
+            .groups = 'drop')
 
-I'm going to simplify in the actual persistence map code for now, and forget about including ties for now.
+ex_1_map_df
+```
+
+This dataframe would then be joined to the 5km grid by `grid_cell`, and plotted on a map. Each grid cell had activity in every year, so every cell would be included on the map with 3 years of activity. 
+
+## Ranked - Coast - All time
+
+Let's make it a little trickier. Now we only want to consider grid cells that contribute to the top X% of fishing activity. We'll still consider the whole coast and the whole time frame.
+
+Let's consider a 75% threshold.
+
+```{r set-threshold}
+threshold <- 0.75
+```
+
+To decide which grid cells contribute towards the 75% fishing activity, we need to do a couple of things:
+
+1. Sort each year of data from most pings to fewest pings
+2. Calculate total number of pings per year
+3. Calculate the threshold number of pings per year (if it's a fraction, round up to the nearest whole number)
+4. Calculate a cumulative sum of number of pings for each year
+5. Compare the cumulative number of pings to the threshold number of pings to decide which cells get included in the persistence map
+
+```{r}
+ex_1_threshold_df <- ex_1_df %>%
+  arrange(year, n_pings * -1) %>%
+  group_by(year) %>% 
+  mutate(year_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_pings)) %>%
+  ungroup() %>%
+  group_by(year) %>% 
+  mutate(cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings <= threshold_pings) | 
+           (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) | 
+           (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
+
+ex_1_threshold_df
+```
+
+This logic for `include` probably seems arbitrarily complicated, but here are a few use cases considered here:
+
+* What if the cumulative pings is exactly equal to the threshold pings? (2013)
+* What if cumulative pings is not exactly equal to the threshold pings? (2014, 2015)
+* What if the first record reaches the threshold? (2014)
+
+Not *exactly* 75% of the fishing effort is included; it's more accurate to say at least 75% fishing effort is included. For example, in 2014 and in 2015, 80% of the effort is included.
+
+Edge case - I'm still not satisfied with ties at the threshold. For example, in 2015, grid cells b and c both have 20 pings, and grid cell b is included while grid cell c isn't. I haven't figured out a way to handle that exception without iterating over records one by one in a for loop, which seems slow. I did see this happen in the actual VMS data for the 2016-2017 crab year. I doubt it has huge impacts on the maps, just calling out this one remaining caveat.
+
+Anyway, moving on.
+
+When mapping persistence for grid cells that contribute to the top 75% of fishing activity, we now need to find how many years each of the grid cells are included. The steps are:
+
+1. Filter for grid cells that should be included in the summary
+2. Count the number of distinct years for each grid cell
+
+```{r}
+ex_1_threshold_map_df <- ex_1_threshold_df %>%
+  filter(include) %>%
+  group_by(grid_cell) %>%
+  summarize(years_with_activity = n_distinct(year),
+            .groups = 'drop')
+
+ex_1_threshold_map_df
+```
+
+Only grid cells a and b contributed towards the top 75% fishing effort, and in 2 years each.
+
+Note: the ranked version for a 100% threshold is identical to the simple version. The 100% threshold will just do some sorting and calculating that isn't required, because every value for `include` will be true until 100% of the pings are represented.
+
