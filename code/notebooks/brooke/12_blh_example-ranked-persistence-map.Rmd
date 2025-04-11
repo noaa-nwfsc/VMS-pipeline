@@ -114,7 +114,7 @@ Now let's do the same exact thing, but instead of considering the whole coast, w
 
 Consider a new example with two years and two states of data.
 
-```{r}
+```{r make-example-2}
 ex_2_df <- tibble(year = c(rep(2013, 5), rep(2014, 5)),
                   state = c(rep('C', 3), rep('O', 2), rep('C', 2), rep('O', 3)),
                   grid_cell = c(letters[1:5], sample(letters[1:2]), sample(letters[4:6])),
@@ -122,9 +122,10 @@ ex_2_df <- tibble(year = c(rep(2013, 5), rep(2014, 5)),
 kable(ex_2_df)
 ```
 
- There are two versions here:
+There are two versions here:
 
 A. Ranking top X% in each state based on the whole coast's fishing activity. *Universe for analysis = whole coast.* (This just splits the map into separate panels, so the coastal trends are easier to see.)
+
 B. Rank top X% in each state based on that state's fishing activity. *Universe for analysis = each state.* (This is a different analytical task, because the yearly totals need to be grouped by state in addition to by year.)
 
 ### Version A
@@ -148,7 +149,7 @@ ex_2_a_threshold_df <- ex_2_df %>%
 kable(ex_2_a_threshold_df)
 ```
 
-Repeat the aggreagation for how many years a grid cell contributes to the top 75% of fishing activity:
+Repeat the aggregation for how many years a grid cell contributes to the top 75% of fishing activity:
 
 ```{r}
 ex_2_a_threshold_map_df <- ex_2_a_threshold_df %>%
