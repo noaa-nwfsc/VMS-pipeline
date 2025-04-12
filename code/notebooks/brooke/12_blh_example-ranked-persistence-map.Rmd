@@ -160,6 +160,8 @@ ex_2_a_threshold_map_df <- ex_2_a_threshold_df %>%
 kable(ex_2_a_threshold_map_df)
 ```
 
+When considering the whole coast for context, grid cells a and b in California contributed to the top 75% fishing activity in 2 years, grid cell c in California contributed in 1 year, and grid cell d in Oregon contributed in 2 years.
+
 ### Version B
 
 For version B, we do the same process as above, but when we calculate the total number of pings and compare a grid cell against a threshold, we compare to the state total, not the whole coast total.
@@ -187,3 +189,69 @@ ex_2_b_threshold_map_df <- ex_2_b_threshold_df %>%
             .groups = 'drop')
 kable(ex_2_b_threshold_map_df)
 ```
+
+When considering each state separately for context, grid cells a, b, and c in California contributed to the top 75% fishing activity in 1 year each, and grid cells d and e contributed to the top 75% fishing activity in two years each.
+
+## Ranked - Coast - Monthly
+
+I'm honestly not sure I like this one yet, I think the interpretation is a bit funky.
+
+Let's go back to thinking about the whole coast, and let's look at how many months across all years had fishing activity. 
+
+The resulting map will show twelve maps, 1 per month. The grid cell color will indicate the number of years the cell contributed to the to 75% fishing activity for that month.
+
+This is analogous to the *Ranked - State - All time - Version B* use case, but we'll swap `month` for `state` when aggregating.
+
+Here's a new example dataframe, including year and month:
+
+```{r make-example-3}
+ex_3_df <- tibble(year = rep(2014, 6),
+                  month = c(rep(1, 3), rep(2, 3)),
+                  grid_cell = c(letters[1:3], sample(letters[1:3])),
+                  n_pings = c(70, 20, 10, 90, 70, 40))
+kable(ex_3_df)
+```
+
+```{r}
+ex_3_year_month_threshold_df <- ex_3_df %>%
+  arrange(year, month, n_pings * -1) %>%
+  group_by(year, month) %>%
+  mutate(year_month_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_month_pings),
+         cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings <= threshold_pings) |
+           (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) |
+           (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
+kable(ex_3_year_month_threshold_df)
+```
+```{r}
+ex_3_month_threshold_map_df <- ex_3_year_month_threshold_df %>%
+  filter(include) %>%
+  group_by(grid_cell, month) %>%
+  summarize(years_with_activity = n_distinct(year),
+            .groups = 'drop')
+kable(ex_3_month_threshold_map_df)
+```
+
+The January map would show that grid cell a and b both contributed to 1 year of the top 75% fishing activity, across all Januaries.
+
+The February map would show that grid cell and c contributed to 1 year of the top 75% of fishing activity, across all Februaries.
+
+## Ranked - Coast - Yearly
+
+I'm honestly not sure I like this one yet, I think the interpretation is a bit funky.
+
+This is analogous to the *Ranked - Coast - Monthly* use case, only the final aggregation step and interpretation is different.
+
+The resulting map will show thirteen maps, 1 per year. The grid cell color will indicate the number of months the cell contributed to the to 75% fishing activity for that year.
+
+```{r}
+ex_3_year_threshold_map_df <- ex_3_year_month_threshold_df %>%
+  filter(include) %>%
+  group_by(grid_cell, year) %>% # this is now for month
+  summarize(months_with_activity = n_distinct(month),
+            .groups = 'drop')
+kable(ex_3_year_threshold_map_df)
+```
+
+The 2014 map would show that grid cell a contributed to the top 75% of fishing activity of a given month for two months in the year, and grid cells b and c contributed to the top 75% of fishing activity of a given month for one month in the year.

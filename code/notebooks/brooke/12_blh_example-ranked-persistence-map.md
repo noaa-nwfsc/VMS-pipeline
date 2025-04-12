@@ -1,7 +1,7 @@
 12_blh_example-ranked-persistence-map
 ================
 Brooke Hawkins
-2025-04-10
+2025-04-11
 
 Create a ranked persistence map, which will visualize the top X% of
 fishing activity based on the number of interpolated pings for a given
@@ -195,8 +195,9 @@ There are two versions here:
 
 A. Ranking top X% in each state based on the whole coast’s fishing
 activity. *Universe for analysis = whole coast.* (This just splits the
-map into separate panels, so the coastal trends are easier to see.) B.
-Rank top X% in each state based on that state’s fishing activity.
+map into separate panels, so the coastal trends are easier to see.)
+
+B. Rank top X% in each state based on that state’s fishing activity.
 *Universe for analysis = each state.* (This is a different analytical
 task, because the yearly totals need to be grouped by state in addition
 to by year.)
@@ -239,8 +240,8 @@ kable(ex_2_a_threshold_df)
 | 2014 | O | e | 35 | 190 | 143 | 180 | FALSE |
 | 2014 | O | f | 10 | 190 | 143 | 190 | FALSE |
 
-Repeat the aggreagation for how many years a grid cell contributes to
-the top 75% of fishing activity:
+Repeat the aggregation for how many years a grid cell contributes to the
+top 75% of fishing activity:
 
 ``` r
 ex_2_a_threshold_map_df <- ex_2_a_threshold_df %>%
@@ -257,6 +258,11 @@ kable(ex_2_a_threshold_map_df)
 | b         | C     |                   2 |
 | c         | C     |                   1 |
 | d         | O     |                   2 |
+
+When considering the whole coast for context, grid cells a and b in
+California contributed to the top 75% fishing activity in 2 years, grid
+cell c in California contributed in 1 year, and grid cell d in Oregon
+contributed in 2 years.
 
 ### Version B
 
@@ -308,3 +314,112 @@ kable(ex_2_b_threshold_map_df)
 | c         | C     |                   1 |
 | d         | O     |                   2 |
 | e         | O     |                   2 |
+
+When considering each state separately for context, grid cells a, b, and
+c in California contributed to the top 75% fishing activity in 1 year
+each, and grid cells d and e contributed to the top 75% fishing activity
+in two years each.
+
+## Ranked - Coast - Monthly
+
+Let’s go back to thinking about the whole coast, and let’s look at how
+many months across all years had fishing activity.
+
+The resulting map will show twelve maps, 1 per month. The grid cell
+color will indicate the number of years the cell contributed to the to
+75% fishing activity for that month.
+
+This is analogous to the *Ranked - State - All time - Version B* use
+case, but we’ll swap `month` for `state` when aggregating.
+
+Here’s a new example dataframe, including year and month:
+
+``` r
+ex_3_df <- tibble(year = rep(2014, 6),
+                  month = c(rep(1, 3), rep(2, 3)),
+                  grid_cell = c(letters[1:3], sample(letters[1:3])),
+                  n_pings = c(70, 20, 10, 90, 70, 40))
+kable(ex_3_df)
+```
+
+| year | month | grid_cell | n_pings |
+|-----:|------:|:----------|--------:|
+| 2014 |     1 | a         |      70 |
+| 2014 |     1 | b         |      20 |
+| 2014 |     1 | c         |      10 |
+| 2014 |     2 | a         |      90 |
+| 2014 |     2 | c         |      70 |
+| 2014 |     2 | b         |      40 |
+
+``` r
+ex_3_year_month_threshold_df <- ex_3_df %>%
+  arrange(year, month, n_pings * -1) %>%
+  group_by(year, month) %>%
+  mutate(year_month_pings = sum(n_pings),
+         threshold_pings = ceiling(threshold * year_month_pings),
+         cumulative_pings = cumsum(n_pings),
+         include = (cumulative_pings <= threshold_pings) |
+           (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) |
+           (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
+kable(ex_3_year_month_threshold_df)
+```
+
+| year | month | grid_cell | n_pings | year_month_pings | threshold_pings | cumulative_pings | include |
+|---:|---:|:---|---:|---:|---:|---:|:---|
+| 2014 | 1 | a | 70 | 100 | 75 | 70 | TRUE |
+| 2014 | 1 | b | 20 | 100 | 75 | 90 | TRUE |
+| 2014 | 1 | c | 10 | 100 | 75 | 100 | FALSE |
+| 2014 | 2 | a | 90 | 200 | 150 | 90 | TRUE |
+| 2014 | 2 | c | 70 | 200 | 150 | 160 | TRUE |
+| 2014 | 2 | b | 40 | 200 | 150 | 200 | FALSE |
+
+``` r
+ex_3_month_threshold_map_df <- ex_3_year_month_threshold_df %>%
+  filter(include) %>%
+  group_by(grid_cell, month) %>%
+  summarize(years_with_activity = n_distinct(year),
+            .groups = 'drop')
+kable(ex_3_month_threshold_map_df)
+```
+
+| grid_cell | month | years_with_activity |
+|:----------|------:|--------------------:|
+| a         |     1 |                   1 |
+| a         |     2 |                   1 |
+| b         |     1 |                   1 |
+| c         |     2 |                   1 |
+
+When considering each month separately for context, grid cell a
+contributed to 1 year of the top 75% fishing activity in both January
+and February. Grid cell b contributed to 1 year of the top 75% fishing
+activity in January, and grid cell c contributed to 1 year of the top
+75% fishing activity in February.
+
+## Ranked - Coast - Yearly
+
+This is analogous to the *Ranked - Coast - Monthly* use case, only the
+final aggregation step and interpretation is different.
+
+The resulting map will show thirteen maps, 1 per year. The grid cell
+color will indicate the number of months the cell contributed to the to
+75% fishing activity for that year.
+
+``` r
+ex_3_year_threshold_map_df <- ex_3_year_month_threshold_df %>%
+  filter(include) %>%
+  group_by(grid_cell, year) %>% # this is now for month
+  summarize(months_with_activity = n_distinct(month),
+            .groups = 'drop')
+kable(ex_3_year_threshold_map_df)
+```
+
+| grid_cell | year | months_with_activity |
+|:----------|-----:|---------------------:|
+| a         | 2014 |                    2 |
+| b         | 2014 |                    1 |
+| c         | 2014 |                    1 |
+
+I’m honestly not sure if this version is very useful, and I find it
+confusing to have switched the interpretation from counting years
+vs. counting months. I’m not eager to make this plot, even though it’s
+simple enough to do.
