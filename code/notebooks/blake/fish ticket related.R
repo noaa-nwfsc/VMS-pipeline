@@ -91,6 +91,49 @@ spp_codes <- c("ALBC")
 gear_codes <- c("OCEAN TROLL","TROLL (SALMON)","TROLL (ALBACORE)","HOOK AND LINE","JIG (ALBACORE)","GILL NET, DRIFT","LONG LINE, SET","TROLL, (SALMON)")
 
 
+# filter only spot prawn tickets
+Spot_prawn <- fishtickets %>%
+  filter(PACFIN_SPECIES_CODE == "SPRW")
+
+# take a look at the spot prawn attribute structure
+glimpse(Spot_prawn)
+
+# tally the number of tickets by PacFIN gear code to figure out which gear types to use
+SPRW_gear <- table(Spot_prawn$GEAR_NAME)
+# more detailed tally (using DescTools) the number of tickets by PacFIN gear code to figure out which gear types to use
+SPRW_gear <- Freq(Spot_prawn$GEAR_NAME, ord = "desc")
+
+# Looking only at CA fish tickets from 2009 - 2023, with PARTICIPATION_GROUP_NAME	= NON-INDIAN COMMERCIAL FISHER
+# REMOVAL_TYPE_NAME	= COMMERCIAL (NON-EFP), 97.51% of all SPRW tonnes landed and 93.48% of all tickets are from PRAWN TRAP, so only select those in master_process script
+
+# save a tab delimited table
+write_tsv(SPRW_gear, "Spot prawn gear type freq distribution 1994-2023.txt")
+
+
+
+
+# filter only spot prawn tickets
+Sable <- fishtickets %>%
+  filter(PACFIN_SPECIES_CODE == "SABL")
+
+# take a look at the spot prawn attribute structure
+glimpse(Sable)
+
+# tally the number of tickets by PacFIN gear code to figure out which gear types to use
+SABL_gear <- table(Sable$GEAR_NAME)
+# more detailed tally (using DescTools) the number of tickets by PacFIN gear code to figure out which gear types to use
+SABL_gear <- Freq(Sable$GEAR_NAME, ord = "desc")
+
+# ##.##% of all SABL tickets are from NAME(S), so only select those in master_process script
+
+# save a tab delimited table
+write_tsv(SABL_gear, "Sablefish gear type freq distribution 1994-2023.txt")
+
+
+
+
+
+
 ## Code from Kelly for selecting and filtering duplicate fish tickets in Pipeline intermediate output
 
 library(tidyverse)
