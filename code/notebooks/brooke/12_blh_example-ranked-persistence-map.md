@@ -45,7 +45,7 @@ fishing activity.
 # input: dataframe where each record represents one grid cell in one year
   # grid_cell: column for group by
 # output: dataframe where each record represents one grid cell, with calculated column 'years_active'
-simple_persistence <- function(df) {
+simple_persistence_output <- function(df) {
   output_df <- df %>%
     group_by(grid_cell) %>%
     summarise(years_active = n_distinct(year), .groups = 'drop')
@@ -54,7 +54,7 @@ simple_persistence <- function(df) {
 ```
 
 ``` r
-ex_1_map_df <- simple_persistence(ex_1_df)
+ex_1_map_df <- simple_persistence_output(ex_1_df)
 kable(ex_1_map_df)
 ```
 
@@ -77,7 +77,7 @@ the whole coast and the whole time frame.
 Let’s consider a 75% threshold.
 
 ``` r
-threshold <- 0.75
+ex_threshold <- 0.75
 ```
 
 To decide which grid cells contribute towards the 75% fishing activity,
@@ -95,15 +95,14 @@ we need to do a couple of things:
 # input: dataframe where each record represents one grid cell in one year
   # year: column for group by
   # n_pings: column to rank by and compare to threshold within each year
-  # grid_cell: 
 # output: 
   # interim_df: dataframe where each record represents one grid cell in one year, with three calculated columns
     # year_pings: pings for that year
     # threshold_pings: threshold pings for that year
     # cumsum_n_pings: cumulative pings in ranked order for that grid cell
     # include: whether the grid cell meets the threshold pings for that year
-  # output_df: dataframe where each record represents one grid cell, with calculated column 'years_active'
-ranked_persistence <- function(df, threshold) {
+ 
+ranked_persistence_interim <- function(df, threshold) {
   interim_df <- df %>%
     arrange(year, n_pings * -1) %>%
     group_by(year) %>% 
@@ -113,26 +112,14 @@ ranked_persistence <- function(df, threshold) {
            include = (cumsum_pings <= threshold_pings) | 
              (cumsum_pings > threshold_pings & lag(cumsum_pings) < threshold_pings) | 
              (cumsum_pings > threshold_pings & is.na(lag(cumsum_pings) < threshold_pings)))
-  output_df <- interim_df %>%
-    filter(include) %>%
-    group_by(grid_cell) %>%
-    summarize(years_active = n_distinct(year),
-              .groups = 'drop')
-  return(list(interim_df, output_df))
+  return(interim_df)
 }
 ```
 
 ``` r
-ex_1_ranked_list <- ranked_persistence(ex_1_df, threshold)
-ex_1_threshold_df <- ex_1_ranked_list[1]
-ex_1_threshold_map_df <- ex_1_ranked_list[2]
+ex_1_threshold_df <- ranked_persistence_interim(ex_1_df, ex_threshold)
 kable(ex_1_threshold_df)
 ```
-
-<table class="kable_wrapper">
-<tbody>
-<tr>
-<td>
 
 | year | grid_cell | n_pings | year_pings | threshold_pings | cumsum_pings | include |
 |-----:|:----------|--------:|-----------:|----------------:|-------------:|:--------|
@@ -145,11 +132,6 @@ kable(ex_1_threshold_df)
 | 2015 | b         |      60 |        100 |              75 |           60 | TRUE    |
 | 2015 | a         |      20 |        100 |              75 |           80 | TRUE    |
 | 2015 | c         |      20 |        100 |              75 |          100 | FALSE   |
-
-</td>
-</tr>
-</tbody>
-</table>
 
 This logic for `include` probably seems arbitrarily complicated, but
 here are a few use cases considered here:
@@ -182,23 +164,32 @@ cells are included. The steps are:
 2.  Count the number of distinct years for each grid cell
 
 ``` r
-kable(ex_1_threshold_map_df)
+# input: dataframe where each record represents one grid cell in one year, with three calculated columns
+  # grid_cell: column for group by
+  # year_pings: n_pings for that year
+  # threshold_pings: threshold * n_pings for that year
+  # cumsum_n_pings: cumulative n_pings in ranked order for that grid cell
+  # include: whether the grid cell meets the threshold n_pings for that year 
+# output: dataframe where each record represents one grid cell, with calculated column 'years_active'
+ranked_persistence_output <- function(interim_df) {
+  output_df <- interim_df %>%
+    filter(include) %>%
+    group_by(grid_cell) %>%
+    summarize(years_active = n_distinct(year),
+              .groups = 'drop')
+  return(output_df)
+}
 ```
 
-<table class="kable_wrapper">
-<tbody>
-<tr>
-<td>
+``` r
+ex_1_threshold_map_df <- ranked_persistence_output(ex_1_threshold_df)
+kable(ex_1_threshold_map_df)
+```
 
 | grid_cell | years_active |
 |:----------|-------------:|
 | a         |            2 |
 | b         |            2 |
-
-</td>
-</tr>
-</tbody>
-</table>
 
 Only grid cells a and b contributed towards the top 75% fishing effort,
 and in 2 years each.
@@ -264,7 +255,7 @@ ex_2_a_threshold_df <- ex_2_df %>%
   arrange(year, state, n_pings * -1) %>% # state is now included here
   group_by(year) %>%
   mutate(year_pings = sum(n_pings),
-         threshold_pings = ceiling(threshold * year_pings)) %>%
+         threshold_pings = ceiling(ex_threshold * year_pings)) %>%
   ungroup() %>%
   group_by(year) %>%
   mutate(cumulative_pings = cumsum(n_pings),
@@ -318,11 +309,19 @@ the total number of pings and compare a grid cell against a threshold,
 we compare to the state total, not the whole coast total.
 
 ``` r
+# TODO iterate over states separately
+# make a list of dataframes, one dataframe per state
+state_df_list <- lapply(unique(ex_2_df$state), function(s) ex_2_df %>% filter(state == s))
+state_df_interim_list <- lapply(state_df_list, function(s) ranked_persistence_interim(df = s, threshold = ex_threshold))
+state_df_output_list <- lapply(state_df_interim_list, ranked_persistence_output)
+```
+
+``` r
 ex_2_b_threshold_df <- ex_2_df %>%
   arrange(year, state, n_pings * -1) %>% # state is still included here
   group_by(year, state) %>% # state is now included here too
   mutate(year_pings = sum(n_pings),
-         threshold_pings = ceiling(threshold * year_pings)) %>%
+         threshold_pings = ceiling(ex_threshold * year_pings)) %>%
   ungroup() %>%
   group_by(year, state) %>% # state is now included here too
   mutate(cumulative_pings = cumsum(n_pings),
@@ -406,7 +405,7 @@ ex_3_year_month_threshold_df <- ex_3_df %>%
   arrange(year, month, n_pings * -1) %>%
   group_by(year, month) %>%
   mutate(year_month_pings = sum(n_pings),
-         threshold_pings = ceiling(threshold * year_month_pings),
+         threshold_pings = ceiling(ex_threshold * year_month_pings),
          cumulative_pings = cumsum(n_pings),
          include = (cumulative_pings <= threshold_pings) |
            (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) |
