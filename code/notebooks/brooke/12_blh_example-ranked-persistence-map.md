@@ -1,7 +1,7 @@
 12_blh_example-ranked-persistence-map
 ================
 Brooke Hawkins
-2025-04-11
+2025-04-18
 
 Create a ranked persistence map, which will visualize the top X% of
 fishing activity based on the number of interpolated pings for a given
@@ -42,18 +42,27 @@ For each grid cell, calculate how many years the grid cell had any
 fishing activity.
 
 ``` r
-ex_1_map_df <- ex_1_df %>%
-  group_by(grid_cell) %>%
-  summarise(years_with_activity = n_distinct(year),
-            .groups = 'drop')
+# input: dataframe where each record represents one grid cell in one year
+  # grid_cell: column for group by
+# output: dataframe where each record represents one grid cell, with calculated column 'years_active'
+simple_persistence <- function(df) {
+  output_df <- df %>%
+    group_by(grid_cell) %>%
+    summarise(years_active = n_distinct(year), .groups = 'drop')
+  return(output_df)
+}
+```
+
+``` r
+ex_1_map_df <- simple_persistence(ex_1_df)
 kable(ex_1_map_df)
 ```
 
-| grid_cell | years_with_activity |
-|:----------|--------------------:|
-| a         |                   3 |
-| b         |                   3 |
-| c         |                   3 |
+| grid_cell | years_active |
+|:----------|-------------:|
+| a         |            3 |
+| b         |            3 |
+| c         |            3 |
 
 This dataframe would then be joined to the 5km grid by `grid_cell`, and
 plotted on a map. Each grid cell had activity in every year, so every
@@ -83,31 +92,64 @@ we need to do a couple of things:
     pings to decide which cells get included in the persistence map
 
 ``` r
-ex_1_threshold_df <- ex_1_df %>%
-  arrange(year, n_pings * -1) %>%
-  group_by(year) %>% 
-  mutate(year_pings = sum(n_pings),
-         threshold_pings = ceiling(threshold * year_pings)) %>%
-  ungroup() %>%
-  group_by(year) %>% 
-  mutate(cumulative_pings = cumsum(n_pings),
-         include = (cumulative_pings <= threshold_pings) | 
-           (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) | 
-           (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
+# input: dataframe where each record represents one grid cell in one year
+  # year: column for group by
+  # n_pings: column to rank by and compare to threshold within each year
+  # grid_cell: 
+# output: 
+  # interim_df: dataframe where each record represents one grid cell in one year, with three calculated columns
+    # year_pings: pings for that year
+    # threshold_pings: threshold pings for that year
+    # cumsum_n_pings: cumulative pings in ranked order for that grid cell
+    # include: whether the grid cell meets the threshold pings for that year
+  # output_df: dataframe where each record represents one grid cell, with calculated column 'years_active'
+ranked_persistence <- function(df, threshold) {
+  interim_df <- df %>%
+    arrange(year, n_pings * -1) %>%
+    group_by(year) %>% 
+    mutate(year_pings = sum(n_pings),
+           threshold_pings = ceiling(threshold * year_pings),
+           cumsum_pings = cumsum(n_pings),
+           include = (cumsum_pings <= threshold_pings) | 
+             (cumsum_pings > threshold_pings & lag(cumsum_pings) < threshold_pings) | 
+             (cumsum_pings > threshold_pings & is.na(lag(cumsum_pings) < threshold_pings)))
+  output_df <- interim_df %>%
+    filter(include) %>%
+    group_by(grid_cell) %>%
+    summarize(years_active = n_distinct(year),
+              .groups = 'drop')
+  return(list(interim_df, output_df))
+}
+```
+
+``` r
+ex_1_ranked_list <- ranked_persistence(ex_1_df, threshold)
+ex_1_threshold_df <- ex_1_ranked_list[1]
+ex_1_threshold_map_df <- ex_1_ranked_list[2]
 kable(ex_1_threshold_df)
 ```
 
-| year | grid_cell | n_pings | year_pings | threshold_pings | cumulative_pings | include |
-|-----:|:----------|--------:|-----------:|----------------:|-----------------:|:--------|
-| 2013 | a         |      75 |        100 |              75 |               75 | TRUE    |
-| 2013 | c         |      15 |        100 |              75 |               90 | FALSE   |
-| 2013 | b         |      10 |        100 |              75 |              100 | FALSE   |
-| 2014 | b         |     160 |        200 |             150 |              160 | TRUE    |
-| 2014 | a         |      30 |        200 |             150 |              190 | FALSE   |
-| 2014 | c         |      10 |        200 |             150 |              200 | FALSE   |
-| 2015 | b         |      60 |        100 |              75 |               60 | TRUE    |
-| 2015 | a         |      20 |        100 |              75 |               80 | TRUE    |
-| 2015 | c         |      20 |        100 |              75 |              100 | FALSE   |
+<table class="kable_wrapper">
+<tbody>
+<tr>
+<td>
+
+| year | grid_cell | n_pings | year_pings | threshold_pings | cumsum_pings | include |
+|-----:|:----------|--------:|-----------:|----------------:|-------------:|:--------|
+| 2013 | a         |      75 |        100 |              75 |           75 | TRUE    |
+| 2013 | c         |      15 |        100 |              75 |           90 | FALSE   |
+| 2013 | b         |      10 |        100 |              75 |          100 | FALSE   |
+| 2014 | b         |     160 |        200 |             150 |          160 | TRUE    |
+| 2014 | a         |      30 |        200 |             150 |          190 | FALSE   |
+| 2014 | c         |      10 |        200 |             150 |          200 | FALSE   |
+| 2015 | b         |      60 |        100 |              75 |           60 | TRUE    |
+| 2015 | a         |      20 |        100 |              75 |           80 | TRUE    |
+| 2015 | c         |      20 |        100 |              75 |          100 | FALSE   |
+
+</td>
+</tr>
+</tbody>
+</table>
 
 This logic for `include` probably seems arbitrarily complicated, but
 here are a few use cases considered here:
@@ -140,18 +182,23 @@ cells are included. The steps are:
 2.  Count the number of distinct years for each grid cell
 
 ``` r
-ex_1_threshold_map_df <- ex_1_threshold_df %>%
-  filter(include) %>%
-  group_by(grid_cell) %>%
-  summarize(years_with_activity = n_distinct(year),
-            .groups = 'drop')
 kable(ex_1_threshold_map_df)
 ```
 
-| grid_cell | years_with_activity |
-|:----------|--------------------:|
-| a         |                   2 |
-| b         |                   2 |
+<table class="kable_wrapper">
+<tbody>
+<tr>
+<td>
+
+| grid_cell | years_active |
+|:----------|-------------:|
+| a         |            2 |
+| b         |            2 |
+
+</td>
+</tr>
+</tbody>
+</table>
 
 Only grid cells a and b contributed towards the top 75% fishing effort,
 and in 2 years each.
@@ -322,6 +369,9 @@ in two years each.
 
 ## Ranked - Coast - Monthly
 
+I’m honestly not sure I like this one yet, I think the interpretation is
+a bit funky.
+
 Let’s go back to thinking about the whole coast, and let’s look at how
 many months across all years had fishing activity.
 
@@ -389,13 +439,16 @@ kable(ex_3_month_threshold_map_df)
 | b         |     1 |                   1 |
 | c         |     2 |                   1 |
 
-When considering each month separately for context, grid cell a
-contributed to 1 year of the top 75% fishing activity in both January
-and February. Grid cell b contributed to 1 year of the top 75% fishing
-activity in January, and grid cell c contributed to 1 year of the top
-75% fishing activity in February.
+The January map would show that grid cell a and b both contributed to 1
+year of the top 75% fishing activity, across all Januaries.
+
+The February map would show that grid cell and c contributed to 1 year
+of the top 75% of fishing activity, across all Februaries.
 
 ## Ranked - Coast - Yearly
+
+I’m honestly not sure I like this one yet, I think the interpretation is
+a bit funky.
 
 This is analogous to the *Ranked - Coast - Monthly* use case, only the
 final aggregation step and interpretation is different.
@@ -419,7 +472,7 @@ kable(ex_3_year_threshold_map_df)
 | b         | 2014 |                    1 |
 | c         | 2014 |                    1 |
 
-I’m honestly not sure if this version is very useful, and I find it
-confusing to have switched the interpretation from counting years
-vs. counting months. I’m not eager to make this plot, even though it’s
-simple enough to do.
+The 2014 map would show that grid cell a contributed to the top 75% of
+fishing activity of a given month for two months in the year, and grid
+cells b and c contributed to the top 75% of fishing activity of a given
+month for one month in the year.
