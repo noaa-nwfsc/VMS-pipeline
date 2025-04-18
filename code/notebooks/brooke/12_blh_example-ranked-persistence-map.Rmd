@@ -35,11 +35,21 @@ kable(ex_1_df)
 
 For each grid cell, calculate how many years the grid cell had any fishing activity.
 
+```{r simple-persistence-function}
+# input: dataframe where each record represents one grid cell in one year
+  # grid_cell: column for group by
+# output: dataframe where each record represents one grid cell, with calculated column 'years_active'
+simple_persistence <- function(df) {
+  output_df <- df %>%
+    group_by(grid_cell) %>%
+    summarise(years_active = n_distinct(year), .groups = 'drop')
+  return(output_df)
+}
+```
+
+
 ```{r}
-ex_1_map_df <- ex_1_df %>%
-  group_by(grid_cell) %>%
-  summarise(years_with_activity = n_distinct(year),
-            .groups = 'drop')
+ex_1_map_df <- simple_persistence(ex_1_df)
 kable(ex_1_map_df)
 ```
 
@@ -63,18 +73,41 @@ To decide which grid cells contribute towards the 75% fishing activity, we need 
 4.  Calculate a cumulative sum of number of pings for each year
 5.  Compare the cumulative number of pings to the threshold number of pings to decide which cells get included in the persistence map
 
+```{r ranked-persistence-function}
+# input: dataframe where each record represents one grid cell in one year
+  # year: column for group by
+  # n_pings: column to rank by and compare to threshold within each year
+  # grid_cell: 
+# output: 
+  # interim_df: dataframe where each record represents one grid cell in one year, with three calculated columns
+    # year_pings: pings for that year
+    # threshold_pings: threshold pings for that year
+    # cumsum_n_pings: cumulative pings in ranked order for that grid cell
+    # include: whether the grid cell meets the threshold pings for that year
+  # output_df: dataframe where each record represents one grid cell, with calculated column 'years_active'
+ranked_persistence <- function(df, threshold) {
+  interim_df <- df %>%
+    arrange(year, n_pings * -1) %>%
+    group_by(year) %>% 
+    mutate(year_pings = sum(n_pings),
+           threshold_pings = ceiling(threshold * year_pings),
+           cumsum_pings = cumsum(n_pings),
+           include = (cumsum_pings <= threshold_pings) | 
+             (cumsum_pings > threshold_pings & lag(cumsum_pings) < threshold_pings) | 
+             (cumsum_pings > threshold_pings & is.na(lag(cumsum_pings) < threshold_pings)))
+  output_df <- interim_df %>%
+    filter(include) %>%
+    group_by(grid_cell) %>%
+    summarize(years_active = n_distinct(year),
+              .groups = 'drop')
+  return(list(interim_df, output_df))
+}
+```
+
 ```{r}
-ex_1_threshold_df <- ex_1_df %>%
-  arrange(year, n_pings * -1) %>%
-  group_by(year) %>% 
-  mutate(year_pings = sum(n_pings),
-         threshold_pings = ceiling(threshold * year_pings)) %>%
-  ungroup() %>%
-  group_by(year) %>% 
-  mutate(cumulative_pings = cumsum(n_pings),
-         include = (cumulative_pings <= threshold_pings) | 
-           (cumulative_pings > threshold_pings & lag(cumulative_pings) < threshold_pings) | 
-           (cumulative_pings > threshold_pings & is.na(lag(cumulative_pings) < threshold_pings)))
+ex_1_ranked_list <- ranked_persistence(ex_1_df, threshold)
+ex_1_threshold_df <- ex_1_ranked_list[1]
+ex_1_threshold_map_df <- ex_1_ranked_list[2]
 kable(ex_1_threshold_df)
 ```
 
@@ -96,11 +129,6 @@ When mapping persistence for grid cells that contribute to the top 75% of fishin
 2.  Count the number of distinct years for each grid cell
 
 ```{r}
-ex_1_threshold_map_df <- ex_1_threshold_df %>%
-  filter(include) %>%
-  group_by(grid_cell) %>%
-  summarize(years_with_activity = n_distinct(year),
-            .groups = 'drop')
 kable(ex_1_threshold_map_df)
 ```
 
