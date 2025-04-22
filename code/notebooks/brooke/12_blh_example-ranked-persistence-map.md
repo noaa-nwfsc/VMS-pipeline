@@ -1,7 +1,7 @@
 12_blh_example-ranked-persistence-map
 ================
 Brooke Hawkins
-2025-04-18
+2025-04-21
 
 Create a ranked persistence map, which will visualize the top X% of
 fishing activity based on the number of interpolated pings for a given
@@ -309,14 +309,6 @@ the total number of pings and compare a grid cell against a threshold,
 we compare to the state total, not the whole coast total.
 
 ``` r
-# TODO iterate over states separately
-# make a list of dataframes, one dataframe per state
-state_df_list <- lapply(unique(ex_2_df$state), function(s) ex_2_df %>% filter(state == s))
-state_df_interim_list <- lapply(state_df_list, function(s) ranked_persistence_interim(df = s, threshold = ex_threshold))
-state_df_output_list <- lapply(state_df_interim_list, ranked_persistence_output)
-```
-
-``` r
 ex_2_b_threshold_df <- ex_2_df %>%
   arrange(year, state, n_pings * -1) %>% # state is still included here
   group_by(year, state) %>% # state is now included here too
@@ -365,6 +357,37 @@ When considering each state separately for context, grid cells a, b, and
 c in California contributed to the top 75% fishing activity in 1 year
 each, and grid cells d and e contributed to the top 75% fishing activity
 in two years each.
+
+``` r
+# make a list of dataframes, one dataframe per state
+state_vector <- unique(ex_2_df$state)
+# split dataframes into a list by state
+state_df_list <- lapply(state_vector, function(s) ex_2_df %>% filter(state == s))
+# rank pings in each state separately
+state_df_interim_list <- lapply(state_df_list, function(s) ranked_persistence_interim(df = s, threshold = ex_threshold))
+# create grid cell summaries in each state separately
+state_df_output_list <- lapply(state_df_interim_list, ranked_persistence_output)
+# join dataframes across states, including state identifier
+state_df_output_labelled_list <- lapply(1:length(state_vector), function(i) cbind(state = state_vector[i], state_df_output_list[[i]]))
+# bind dataframes back together
+state_df_output <- bind_rows(state_df_output_labelled_list)
+# check result
+state_df_output
+```
+
+    ##   state grid_cell years_active
+    ## 1     C         a            1
+    ## 2     C         b            1
+    ## 3     C         c            1
+    ## 4     O         d            2
+    ## 5     O         e            2
+
+This is the same output, but uses the `ranked_persistence_interim` and
+`ranked_persistence_output` functions from earlier. There is probably a
+better way to do this, like rewriting the functions to include state and
+assume the dataframes for input include that column. I’d like a version
+that’s a little more flexible, though, including any regional level for
+the aggregation grouping.
 
 ## Ranked - Coast - Monthly
 
