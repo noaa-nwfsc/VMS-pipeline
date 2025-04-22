@@ -59,7 +59,7 @@ vms_df <- purrr::map(load_years, function(ly) {
 }) %>% bind_rows()
 
 # load 5km grid shape file
-grid_5km <- read_sf(here('spatial_data', 'master_5km_grid_tmer.shp'))
+grid_5km <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
 
 # load inflation adjustment
 fred_pcepi <- read.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_pcepi.csv")) %>%
