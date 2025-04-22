@@ -2,7 +2,7 @@
 title: "11_blh_dungeness-crab-maps"
 author: "Brooke Hawkins"
 date: "`r Sys.Date()`"
-output: github_document
+output: html_document
 ---
 
 # Set up

@@ -2,7 +2,7 @@
 title: "10_blh_dungeness-crab-time-series"
 author: "Brooke Hawkins"
 date: "`r Sys.Date()`"
-output: github_document
+output: html_document
 ---
 
 # Set up
@@ -74,7 +74,7 @@ Pre-requisite: Create a FRED account and [API key](https://fred.stlouisfed.org/d
 
 ```{r inflation-adjustment}
 # insert your FRED API key
-fredr_set_key('5e2af3e47daaff0d8767fc901c6c8fc1')
+fredr_set_key('')
 
 # download the monthly inflation adjustments from FRED from start of min load year to end of max load year
 fred_pcepi <- fredr(
