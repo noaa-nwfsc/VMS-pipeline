@@ -138,7 +138,7 @@ unique(grid_5km_v2$WDFW_WSMA)
 unique(grid_5km_v2$Derville)
 ```
 
-What do the management zones look like on a map?
+What do the EEZ & management zones look like on a map?
 
 ```{r}
 plot_grid <- function(grid, fill_var, background) {
@@ -151,6 +151,7 @@ plot_grid <- function(grid, fill_var, background) {
     labs(fill = fill_var)
 }
 
+plot_grid(grid = grid_5km_v2, fill_var = "EEZ", background = background_map)
 plot_grid(grid = grid_5km_v2, fill_var = "RAMP_area", background = background_map)
 plot_grid(grid = grid_5km_v2, fill_var = "RAMP_zone", background = background_map)
 plot_grid(grid = grid_5km_v2, fill_var = "Derville", background = background_map)
