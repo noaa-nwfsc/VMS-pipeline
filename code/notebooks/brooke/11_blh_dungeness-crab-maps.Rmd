@@ -74,6 +74,7 @@ Transform the joined, cleaned, interpolated VMS and fish ticket data:
 2.  Add temporal columns.
 3.  Adjust revenue for inflation with data from FRED.
 4.  Join spatial grid to VMS data, which is one of the slowest parts of the script.
+5.  Filter grid to include only US EEZ and remove Puget Sound fishing.
 
 Some commonly used acronyms for variable naming in the code include:
 
@@ -110,7 +111,7 @@ dcrb_vms_df <- vms_df %>%
     season_character = as.character(ifelse(month_factor %in% winter_months, "Winter", "Spring-Summer")),
     year_month_date = ym(year_month_character)
   ) %>%
-  # apply filters
+  # apply VMS filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
@@ -152,7 +153,10 @@ dcrb_vms_df <- vms_df %>%
   st_as_sf(coords = c('LON', 'LAT'), crs = 4326) %>%
   st_transform(st_crs(grid_5km)) %>%
   st_join(grid_5km) %>%
-  st_set_geometry(NULL)
+  st_set_geometry(NULL) %>%
+  # apply grid filters 
+  filter(EEZ == "USA") %>%
+  filter(Salish_Sea == 0)
 
 # count total records, trips and years
 n_records <- nrow(dcrb_vms_df)
