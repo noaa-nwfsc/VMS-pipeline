@@ -196,3 +196,20 @@ ggplot() +
 ```
 
 Seems like they're all around the edges, which I won't be using for these maps anyways, so no problems there.
+
+I'm going to play around with some of the map aesthetics. How to rotate California coastline?
+
+```{r}
+# non-rotated version
+ca_grid <- grid_5km_v2 %>% filter(STATE == "CA")
+plot_grid(ca_grid, "STATE", background_map)
+plot(ca_grid, max.plot = 1)
+
+# rotated version 1
+# from https://r-spatial.github.io/sf/articles/sf3.html#affine-transformations
+rot <- function(a) matrix(c(cos(a), sin(a), -sin(a), cos(a)), 2, 2)
+ca_grid_rotated <- ca_grid
+ca_grid_rotated$geometry <- ca_grid$geometry * rot(pi * 20/180)
+plot(ca_grid_rotated, max.plot = 1)
+# issue: there's no CRS when it's rotated this way, so geom_sf throws an error
+```
