@@ -156,7 +156,18 @@ dcrb_vms_df <- vms_df %>%
   st_set_geometry(NULL) %>%
   # apply grid filters 
   filter(EEZ == "USA") %>%
-  filter(Salish_Sea == 0)
+  filter(Salish_Sea == 0) %>%
+  # add map region column to split maps later on
+  mutate(map_region = case_when(
+    STATE == "WA" ~ "Washington",
+    STATE == "OR" ~ "Oregon",
+    STATE == "CA" & RAMP_area == "Northern" ~ "Northern California",
+    STATE == "CA" & RAMP_area %in% c("Central", "San Francisco") ~ "Central California",
+    STATE == "CA" & RAMP_area == "Southern" ~ "Southern California",
+    .default = "Other"
+  )) %>%
+  # drop some columns not currently in use, though these can be used later for joining to Chris Free's data
+  select(-c("LL_EAST", "UL_EAST", "UR_EAST", "LR_EAST", "LL_NORTH", "UL_NORTH", "UR_NORTH", "LR_NORTH", "LL_LATITUD", "UL_LATITUD", "UR_LATITUD", "LR_LATITUD", "LL_LONGITU", "UL_LONGITU", "UR_LONGITU", "LR_LONGITU"))
 
 # count total records, trips and years
 n_records <- nrow(dcrb_vms_df)
@@ -212,8 +223,9 @@ dcrb_5km_monthly_df <- dcrb_vms_df %>%
   group_by(
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
-    # state, used to facet maps later on
+    # state and map_region, used to facet maps later on
     STATE,
+    map_region,
     # temporal columns, makes this a monthly summary
     crab_year_character,
     year_numeric,
@@ -434,6 +446,7 @@ dcrb_5km_persistence_ranked_state_sf <- dcrb_5km_persistence_ranked_state_df %>%
 # get unique states from gridded fishing summary
 state_vector <- sort(unique(dcrb_5km_persistence_ranked_state_sf$STATE))
 
+
 for (s in state_vector) {
   # filter data and set bounding box for state
   state_sf <- dcrb_5km_persistence_ranked_state_sf %>% filter(STATE == s)
@@ -457,33 +470,33 @@ for (s in state_vector) {
 
 ```{r monthly-maps-state}
 # get unique states from gridded fishing summary
-state_vector <- sort(unique(dcrb_5km_monthly_sf$STATE))
+region_vector <- sort(unique(dcrb_5km_monthly_sf$map_region))
 
-for (s in state_vector) {
+for (r in region_vector) {
   # filter data and set bounding box for state
-  state_sf <- dcrb_5km_monthly_sf %>% filter(STATE == s)
-  state_bbox <- st_bbox(state_sf)
+  region_sf <- dcrb_5km_monthly_sf %>% filter(map_region == r)
+  region_bbox <- st_bbox(region_sf)
   
-  # set limits for min and max fill for # VMS pings across whole time frame (not just one month)
-  state_fill_range <- range(state_sf$log_10_n_vms_records)
+  # set limits for min and max fill for # VMS pings across region for whole time frame (not just one month)
+  region_fill_range <- range(region_sf$log_10_n_vms_records)
   
   # get unique years and months from gridded fishing summary
-  state_year_month_vector <- sort(unique(state_sf$year_month_character))
+  region_year_month_vector <- sort(unique(region_sf$year_month_character))
   
   # iterate over months
-  for (ym in state_year_month_vector) {
+  for (ym in region_year_month_vector) {
     # filter data for given month
-    ym_data_sf <- state_sf %>% filter(year_month_character == ym) 
+    ym_data_sf <- region_sf %>% filter(year_month_character == ym) 
     # make and save map of # VMS pings for each month
     vms_map <- fishing_map(
       data_sf = ym_data_sf,
       fill_var = "log_10_n_vms_records",
-      fill_range = state_fill_range,
+      fill_range = region_fill_range,
       background_sf = west_coast_states,
-      map_bbox = state_bbox,
+      map_bbox = region_bbox,
       title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
       fill_label = "Log-10 Interpolated VMS Records",
-      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "monthly", s, paste0("log_10_n_vms_records_", ym, ".png"))
+      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "monthly", r, paste0("log_10_n_vms_records_", ym, ".png"))
     )
   }
 }
