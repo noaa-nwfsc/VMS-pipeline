@@ -213,3 +213,37 @@ ca_grid_rotated$geometry <- ca_grid$geometry * rot(pi * 20/180)
 plot(ca_grid_rotated, max.plot = 1)
 # issue: there's no CRS when it's rotated this way, so geom_sf throws an error
 ```
+
+I'm going to add the new 30 and 40 fathom lines.
+
+```{r}
+# load both versions
+fathoms_poly <- read_sf(here('spatial_data', 'fathom_30to40_polygon_lamb.shp'))
+bbox_poly <- st_bbox(fathoms_poly)
+fathoms_line <- read_sf(here('spatial_data', 'fathom_30to40_lines_lamb.shp'))
+bbox_line <- st_bbox(fathoms_line)
+
+# start with one state
+or_grid <- grid_5km_v2 %>%
+  filter(EEZ == "USA") %>%
+  filter(STATE == "OR")
+or_bbox <- st_bbox(or_grid)
+
+# plot the lines version
+ggplot() +
+  geom_sf(data = or_grid) +
+  geom_sf(data = fathoms_line, lwd = 0.1) +
+  geom_sf(data = background_map) +
+  xlim(bbox_line[1], or_bbox[3]) +
+  ylim(or_bbox[2], or_bbox[4])
+
+# plot the polygons version
+ggplot() +
+  geom_sf(data = or_grid) +
+  geom_sf(data = fathoms_poly, lwd = 0.1, fill = 'gray10') +
+  geom_sf(data = background_map) +
+  xlim(bbox_poly[1], or_bbox[3]) +
+  ylim(or_bbox[2], or_bbox[4])
+```
+
+I lean towards using the lines rather than the polygons version.
