@@ -289,6 +289,16 @@ fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, 
   ggsave(filename = png_name, create.dir = TRUE)
   return(map_output)
 }
+
+# blank map, to fill in gif for months with no data
+blank_map <- function(background_sf, map_bbox, title_label, png_name) {
+  map_output <- ggplot() +
+    geom_sf(data = background_sf, fill = 'gray80') +
+    labs(title = title_label) +
+    xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
+  ggsave(filename = png_name, create.dir = TRUE)
+  return(map_output)
+}
 ```
 
 ## Coastal maps
@@ -494,25 +504,44 @@ for (r in region_vector) {
   
   # set limits for min and max fill for # VMS pings across region for whole time frame (not just one month)
   region_fill_range <- range(region_sf$log_10_n_vms_records)
-  
-  # get unique years and months from gridded fishing summary
-  region_year_month_vector <- sort(unique(region_sf$year_month_character))
-  
+
   # iterate over months
-  for (ym in region_year_month_vector) {
-    # filter data for given month
-    ym_data_sf <- region_sf %>% filter(year_month_character == ym) 
-    # make and save map of # VMS pings for each month
-    vms_map <- fishing_map(
-      data_sf = ym_data_sf,
-      fill_var = "log_10_n_vms_records",
-      fill_range = region_fill_range,
-      background_sf = west_coast_states,
-      map_bbox = region_bbox,
-      title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
-      fill_label = "Log-10 Interpolated VMS Records",
-      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "monthly", r, paste0("log_10_n_vms_records_", ym, ".png"))
-    )
+  for (y in year_vector) {
+    for (m in 1:12) {
+      
+      # filter data for year month
+      ym_data_sf <- region_sf %>% 
+        filter(year_numeric == y) %>%
+        filter(month_numeric == m)
+      
+      # if there is data, map # VMS pings for each month
+      if (nrow(ym_data_sf) > 0) {
+        vms_map <- fishing_map(
+          data_sf = ym_data_sf,
+          fill_var = "log_10_n_vms_records",
+          fill_range = region_fill_range,
+          background_sf = west_coast_states,
+          map_bbox = region_bbox,
+          title_label = paste(y, month.name[m]),
+          fill_label = "Log-10 Interpolated VMS Records",
+          png_name = here("Confidential", "hindcast_output",
+            output_subdir_name, "maps", "monthly", r, 
+            paste0("log_10_n_vms_records_", y, "_", m, ".png")
+          )
+        )
+      # else save a blank map
+      } else {
+        vms_map <- blank_map(
+          background_sf = west_coast_states,
+          map_bbox = region_bbox,
+          title_label = paste(y, month.name[m]),
+          png_name = here("Confidential", "hindcast_output",
+            output_subdir_name, "maps", "monthly", r, 
+            paste0("log_10_n_vms_records_", y, "_", m, "_blank.png")
+          )
+        )
+      }
+    }
   }
 }
 ```
