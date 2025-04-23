@@ -39,6 +39,25 @@ output_subdir <- here('Confidential', 'hindcast_output', output_subdir_name)
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 ```
 
+Choose years and map regions.
+
+The current options for years are *2011-2023* and are filtered based on the VMS data.
+
+The current options for map regions are filtered based on the grid:
+
+-   *Washington*: Washington state
+-   *Oregon*: Oregon state
+-   *Northern California:* California state, Northern California RAMP area
+-   *Central California*: California state, Central and San Francisco RAMP areas
+-   *Southern California*: California state, Southern RAMP area
+
+```{r}
+# choose years, numeric vector
+year_vector <- 2012:2013
+# choose map regions, string vector
+region_vector <- c('Washington', 'Oregon', 'Northern California', 'Central California')
+```
+
 # Data
 
 ## Load data
@@ -50,13 +69,11 @@ if (!dir.exists(output_subdir)) dir.create(output_subdir)
 Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB. Run notebook 10, which creates the inflation adjustment table and output directories.
 
 ```{r load-data}
-# choose years of data to load
-load_years <- 2011:2023
-
-# load VMS and fish ticket data
-vms_df <- purrr::map(load_years, function(ly) {
-  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'interpolated', paste0('interpolated_', ly, '.rds')))
+# iterate over years from the year_vector set at the top of the script to load VMS and fish ticket data
+vms_df <- purrr::map(year_vector, function(y) {
+  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'interpolated', paste0('interpolated_', y, '.rds')))
 }) %>% bind_rows()
+rm(y)
 
 # load 5km grid shape file
 grid_5km <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
@@ -469,9 +486,7 @@ for (s in state_vector) {
 ### Monthly
 
 ```{r monthly-maps-state}
-# get unique states from gridded fishing summary
-region_vector <- sort(unique(dcrb_5km_monthly_sf$map_region))
-
+# iterate over map regions from the region_vector set at the top of the script
 for (r in region_vector) {
   # filter data and set bounding box for state
   region_sf <- dcrb_5km_monthly_sf %>% filter(map_region == r)
