@@ -582,6 +582,19 @@ for (r in region_vector) {
 # end timer
 end_timer <- proc.time()
 total_timer <- end_timer - start_timer
+
+# write CSV with chosen parameters and runtime
+log_df <- tibble(
+  variable = c('year_vector', 'region_vector', 'confidential_flag', 'end_time', 'run_time_minutes'),
+ value = c(
+   paste(year_vector, collapse = ", "), 
+   paste(region_vector, collapse = ", "), 
+   confidential_flag,
+   end_time = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+   run_time = round(total_timer[3]/60, 2)
+ )
+)
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "map_log.csv"), x = log_df, row.names = FALSE)
 ```
 
 This script took `r round(total_timer[3]/60, 2)` minutes to run.
