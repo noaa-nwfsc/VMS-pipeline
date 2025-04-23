@@ -290,16 +290,6 @@ fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, 
   ggsave(filename = png_name, create.dir = TRUE)
   return(map_output)
 }
-
-# blank map, to fill in gif for months with no data
-blank_map <- function(background_sf, map_bbox, title_label, png_name) {
-  map_output <- ggplot() +
-    geom_sf(data = background_sf, fill = 'gray80') +
-    labs(title = title_label) +
-    xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4])
-  ggsave(filename = png_name, create.dir = TRUE)
-  return(map_output)
-}
 ```
 
 ## Coastal maps
@@ -517,66 +507,33 @@ for (r in region_vector) {
         filter(year_numeric == y) %>%
         filter(month_numeric == m)
       
-      # if there is data, map # VMS pings for each month
+      # get png directory name
+      png_dir_name <- here("Confidential", "hindcast_output", output_subdir_name, "maps", "monthly", r)
+      
+      # create file name, adding "blank" to the file name if there's no data
       if (nrow(ym_data_sf) > 0) {
-        
-        # create file name
         png_name <- here(
-          "Confidential", 
-          "hindcast_output",
-          output_subdir_name,
-          "maps", 
-          "monthly", 
-          r, 
-          paste0(
-            "log_10_n_vms_records_",
-            y, 
-            "_",
-            ifelse(nchar(m) == 1, paste0("0", m), m),
-            ".png"
-          )
+          png_dir_name, 
+          paste0("log_10_n_vms_records_", y, "_", ifelse(nchar(m) == 1, paste0("0", m), m), ".png")
         )
-        
-        # make png
-        vms_map <- fishing_map(
-          data_sf = ym_data_sf,
-          fill_var = "log_10_n_vms_records",
-          fill_range = region_fill_range,
-          background_sf = west_coast_states,
-          map_bbox = region_bbox,
-          title_label = paste(y, month.name[m]),
-          fill_label = "Log-10 Interpolated VMS Records",
-          png_name = png_name
-        )
-        
-      # else save a blank map
       } else {
-        
-        # create file name
         png_name <- here(
-          "Confidential", 
-          "hindcast_output",
-          output_subdir_name,
-          "maps", 
-          "monthly", 
-          r, 
-          paste0(
-            "log_10_n_vms_records_",
-            y, 
-            "_",
-            ifelse(nchar(m) == 1, paste0("0", m), m),
-            "_blank.png"
-          )
-        )
-        
-        # make png
-        region_blank_map <- blank_map(
-          background_sf = west_coast_states,
-          map_bbox = region_bbox,
-          title_label = paste(y, month.name[m]),
-          png_name = png_name
+          png_dir_name, 
+          paste0("log_10_n_vms_records_", y, "_", ifelse(nchar(m) == 1, paste0("0", m), m), "_blank.png")
         )
       }
+      
+      # make png
+      vms_map <- fishing_map(
+        data_sf = ym_data_sf,
+        fill_var = "log_10_n_vms_records",
+        fill_range = region_fill_range,
+        background_sf = west_coast_states,
+        map_bbox = region_bbox,
+        title_label = paste(y, month.name[m]),
+        fill_label = "Log-10 Interpolated VMS Records",
+        png_name = png_name
+      )
     }
   }
 }
