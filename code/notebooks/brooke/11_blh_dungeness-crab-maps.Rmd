@@ -40,7 +40,7 @@ output_subdir <- here('Confidential', 'hindcast_output', output_subdir_name)
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 ```
 
-Choose years and map regions.
+Choose years, map regions, and whether maps should be confidential.
 
 The current options for years are *2011-2023* and are filtered based on the VMS data.
 
@@ -52,11 +52,15 @@ The current options for map regions are filtered based on the grid:
 -   *Central California*: California state, Central and San Francisco RAMP areas
 -   *Southern California*: California state, Southern RAMP area
 
+Setting the confidential flag to `TRUE` will include all data in the maps. Setting the flag to `FALSE` will filter out grid cells with less than three unique vessels per month before making the maps.
+
 ```{r}
 # choose years, numeric vector
 year_vector <- 2012:2013
 # choose map regions, string vector
 region_vector <- c('Washington', 'Oregon', 'Northern California', 'Central California')
+# choose confidential or not
+confidential_flag <- FALSE
 ```
 
 # Data
@@ -219,7 +223,9 @@ Next, create a monthly gridded summary of fishing activity.
 -   `dcrb_rev`: the total revenue per VMS record in a given grid cell in a given month
 -   `n_vms_records`: the number of VMS records in a given grid cell in a given month
 -   `n_unique_vessels`: the number of unique vessels in a given grid cell in a given month
--   `confidential_flag`: determines whether the grid cell month has \<3 unique vessels; in which case, the data in this grid cell and month needs to be excluded from non-confidential reports
+-   `remove_for_confidentiality`: determines whether the grid cell month has \<3 unique vessels; in which case, the data in this grid cell and month needs to be excluded from non-confidential reports
+
+4.  Optionally filter for non-confidentiality, depending on `confidential_flag` set at the top of the script.
 
 ```{r gridded-summary}
 # count records per trip (fish ticket)
@@ -227,7 +233,7 @@ trip_df <- dcrb_vms_df %>%
   group_by(Rec_ID) %>%
   summarise(trip_n_vms_records = n())
 
-# create monthly gridded summary, based on 
+# create monthly gridded summary
 dcrb_5km_monthly_df <- dcrb_vms_df %>% 
   # join records per trip to VMS data
   left_join(trip_df, by = "Rec_ID") %>%
@@ -262,6 +268,11 @@ dcrb_5km_monthly_df <- dcrb_vms_df %>%
   ) %>% 
   # remove for confidentiality if a grid cell and month has < 3 distinct vessels
   mutate(remove_for_confidentiality = n_unique_vessels < 3)
+
+# if confidential flag is set to false, then filter out records that should be removed for confidentiality
+if (!confidential_flag) {
+  dcrb_5km_monthly_df <- dcrb_5km_monthly_df %>% filter(!remove_for_confidentiality)
+}
 
 # write monthly gridded summary
 write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_monthly_df.csv"), x = dcrb_5km_monthly_df, row.names = FALSE)
