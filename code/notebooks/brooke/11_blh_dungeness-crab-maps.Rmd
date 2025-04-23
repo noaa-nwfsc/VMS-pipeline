@@ -23,6 +23,7 @@ library(here)
 library(sf)
 library(rnaturalearth)
 library(viridis)
+library(magick)
 
 # adjust ggplot theme
 theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
@@ -495,6 +496,8 @@ for (s in state_vector) {
 
 ### Monthly
 
+#### PNGs
+
 ```{r monthly-maps-state}
 # iterate over map regions from the region_vector set at the top of the script
 for (r in region_vector) {
@@ -516,6 +519,25 @@ for (r in region_vector) {
       
       # if there is data, map # VMS pings for each month
       if (nrow(ym_data_sf) > 0) {
+        
+        # create file name
+        png_name <- here(
+          "Confidential", 
+          "hindcast_output",
+          output_subdir_name,
+          "maps", 
+          "monthly", 
+          r, 
+          paste0(
+            "log_10_n_vms_records_",
+            y, 
+            "_",
+            ifelse(nchar(m) == 1, paste0("0", m), m),
+            ".png"
+          )
+        )
+        
+        # make png
         vms_map <- fishing_map(
           data_sf = ym_data_sf,
           fill_var = "log_10_n_vms_records",
@@ -524,25 +546,68 @@ for (r in region_vector) {
           map_bbox = region_bbox,
           title_label = paste(y, month.name[m]),
           fill_label = "Log-10 Interpolated VMS Records",
-          png_name = here("Confidential", "hindcast_output",
-            output_subdir_name, "maps", "monthly", r, 
-            paste0("log_10_n_vms_records_", y, "_", m, ".png")
-          )
+          png_name = png_name
         )
+        
       # else save a blank map
       } else {
+        
+        # create file name
+        png_name <- here(
+          "Confidential", 
+          "hindcast_output",
+          output_subdir_name,
+          "maps", 
+          "monthly", 
+          r, 
+          paste0(
+            "log_10_n_vms_records_",
+            y, 
+            "_",
+            ifelse(nchar(m) == 1, paste0("0", m), m),
+            "_blank.png"
+          )
+        )
+        
+        # make png
         region_blank_map <- blank_map(
           background_sf = west_coast_states,
           map_bbox = region_bbox,
           title_label = paste(y, month.name[m]),
-          png_name = here("Confidential", "hindcast_output",
-            output_subdir_name, "maps", "monthly", r, 
-            paste0("log_10_n_vms_records_", y, "_", m, "_blank.png")
-          )
+          png_name = png_name
         )
       }
     }
   }
+}
+
+rm(r, y, m)
+```
+
+#### GIFs
+
+For each region, combine maps into animated gif.
+
+```{r gif-function}
+# function to combine fishing activity maps in map_directory into an animation.gif in the same folder
+fishing_activity_gif <- function (map_directory) {
+  # get list of files in the map directory
+  png_list <- list.files(map_directory)
+  # read in all images
+  image_list <- lapply(here(map_directory, png_list), image_read)
+  # join and animate images
+  image_gif <- image_animate(image_join(image_list), fps = 2)
+  # write GIF
+  image_write(image = image_gif, path = here(map_directory, "animation.gif"))
+  # return GIF
+  return(image_gif)
+}
+```
+
+```{r monthly-map-state-gifs}
+# iterate over map regions from the region_vector set at the top of the script
+for (r in region_vector) {
+  fishing_activity_gif(here("Confidential", "hindcast_output", output_subdir_name, "maps", "monthly", r))
 }
 ```
 
