@@ -293,7 +293,7 @@ simple_persistence_map <- fishing_map(
   map_bbox = st_bbox(dcrb_5km_persistence_simple_sf),
   title_label = paste0("Persistence Map (Simple), ", min(load_years), "-", max(load_years)),
   fill_label = "Crab Years with Fishing Activity",
-  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("simple_persistence_all_time.png"))
+  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "persistence", "all", paste0("simple_persistence_all_time.png"))
 )
 ```
 
@@ -353,7 +353,7 @@ ranked_persistence_map <- fishing_map(
   map_bbox = st_bbox(dcrb_5km_persistence_ranked_sf),
   title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(load_years), "-", max(load_years)),
   fill_label = "Crab Years with Fishing Activity",
-  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence/all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
+  png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "persistence", "all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
 )
 ```
 
@@ -387,7 +387,7 @@ for (ym in year_month_vector) {
     map_bbox = coast_bbox,
     title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
     fill_label = "Log-10 Interpolated VMS Records",
-    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly/all", paste0("log_10_n_vms_records_", ym, ".png"))
+    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "monthly", "all", paste0("log_10_n_vms_records_", ym, ".png"))
   )
 }
 ```
@@ -448,7 +448,7 @@ for (s in state_vector) {
     map_bbox = st_bbox(state_sf),
     title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(load_years), "-", max(load_years)),
     fill_label = "Crab Years with Fishing Activity",
-    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/persistence", s, paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
+    png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "persistence", s, paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
   )
 }
 ```
@@ -483,7 +483,7 @@ for (s in state_vector) {
       map_bbox = state_bbox,
       title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
       fill_label = "Log-10 Interpolated VMS Records",
-      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps/monthly", s, paste0("log_10_n_vms_records_", ym, ".png"))
+      png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "monthly", s, paste0("log_10_n_vms_records_", ym, ".png"))
     )
   }
 }
