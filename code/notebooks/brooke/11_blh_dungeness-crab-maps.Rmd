@@ -74,7 +74,6 @@ Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar
 vms_df <- purrr::map(year_vector, function(y) {
   read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'interpolated', paste0('interpolated_', y, '.rds')))
 }) %>% bind_rows()
-rm(y)
 
 # load 5km grid shape file
 grid_5km <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
