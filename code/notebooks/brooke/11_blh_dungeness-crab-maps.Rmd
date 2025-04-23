@@ -295,7 +295,7 @@ blank_map <- function(background_sf, map_bbox, title_label, png_name) {
   map_output <- ggplot() +
     geom_sf(data = background_sf, fill = 'gray80') +
     labs(title = title_label) +
-    xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
+    xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4])
   ggsave(filename = png_name, create.dir = TRUE)
   return(map_output)
 }
@@ -330,7 +330,7 @@ simple_persistence_map <- fishing_map(
   fill_range = range(dcrb_5km_persistence_simple_sf$crab_years_with_fishing_activity),
   background_sf = west_coast_states,
   map_bbox = st_bbox(dcrb_5km_persistence_simple_sf),
-  title_label = paste0("Persistence Map (Simple), ", min(load_years), "-", max(load_years)),
+  title_label = paste0("Persistence Map (Simple), ", min(year_vector), "-", max(year_vector)),
   fill_label = "Crab Years with Fishing Activity",
   png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "persistence", "all", paste0("simple_persistence_all_time.png"))
 )
@@ -390,7 +390,7 @@ ranked_persistence_map <- fishing_map(
   fill_range = range(dcrb_5km_persistence_ranked_sf$crab_years_with_fishing_activity),
   background_sf = west_coast_states,
   map_bbox = st_bbox(dcrb_5km_persistence_ranked_sf),
-  title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(load_years), "-", max(load_years)),
+  title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(year_vector), "-", max(year_vector)),
   fill_label = "Crab Years with Fishing Activity",
   png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "persistence", "all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
 )
@@ -486,7 +486,7 @@ for (s in state_vector) {
     fill_range = range(state_sf$crab_years_with_fishing_activity),
     background_sf = west_coast_states,
     map_bbox = st_bbox(state_sf),
-    title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(load_years), "-", max(load_years)),
+    title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(year_vector), "-", max(year_vector)),
     fill_label = "Crab Years with Fishing Activity",
     png_name = here("Confidential", "hindcast_output",  output_subdir_name, "maps", "persistence", s, paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
   )
@@ -531,7 +531,7 @@ for (r in region_vector) {
         )
       # else save a blank map
       } else {
-        vms_map <- blank_map(
+        region_blank_map <- blank_map(
           background_sf = west_coast_states,
           map_bbox = region_bbox,
           title_label = paste(y, month.name[m]),
