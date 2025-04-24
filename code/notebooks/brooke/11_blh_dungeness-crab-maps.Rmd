@@ -653,7 +653,7 @@ for (r in region_vector) {
         fathoms_sf = fathoms_sf,
         background_sf = west_coast_states,
         map_bbox = region_bbox,
-        title_label = paste(y, month.name[m]),
+        title_label = paste(r, y, month.name[m]),
         fill_label = "Log-10 Interpolated VMS Records",
         png_name = png_name
       )
