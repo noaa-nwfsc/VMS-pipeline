@@ -67,6 +67,7 @@ confidential_flag <- FALSE
 1.  Load the joined, cleaned, interpolated VMS and fish ticket data for specified years, which will be used to map fishing activity distribution.
 2.  Load the spatial 5km grid, which will also be used to map fishing activity distribution.
 3.  Load the inflation adjustment table, which will be used to adjust revenue for inflation.
+4.  Load the spatial fathom lines for depth restrictions, which will be used as a reference line in some maps.
 
 Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB. Run notebook 10, which creates the inflation adjustment table and output directories.
 
@@ -82,6 +83,9 @@ grid_5km <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
 # load inflation adjustment
 fred_pcepi <- read.csv(file = here(output_dir, "tables", "inflation_pcepi.csv")) %>%
   mutate(year_month = date(year_month))
+
+# load 30 and 40 fathoms
+fathoms_sf <- read_sf(here('spatial_data', 'fathom_30to40_lines_lamb.shp'))
 ```
 
 ## Transform data
@@ -298,10 +302,11 @@ west_coast_states <- rnaturalearth::ne_states(country = 'United States of Americ
   st_transform(st_crs(grid_5km))
 
 # fishing activity map
-fishing_map <- function(data_sf, fill_var, fill_range, background_sf, map_bbox, title_label, fill_label, png_name) {
+fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf, map_bbox, title_label, fill_label, png_name) {
   map_output <- ggplot() +
     geom_sf(data = background_sf, fill = 'gray80') +
     geom_sf(data = data_sf, aes(fill = get(fill_var)), lwd = 0) +
+    geom_sf(data = fathoms_sf, lwd = 0.1) +
     labs(title = title_label, fill = paste(fill_label, "per 5x5 cell")) +
     xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
     scale_fill_viridis(limits = fill_range) +
@@ -357,6 +362,7 @@ simple_persistence_map <- fishing_map(
   data_sf = dcrb_5km_persistence_simple_sf,
   fill_var = "crab_years_with_fishing_activity",
   fill_range = range(dcrb_5km_persistence_simple_sf$crab_years_with_fishing_activity),
+  fathoms_sf = fathoms_sf,
   background_sf = west_coast_states,
   map_bbox = st_bbox(dcrb_5km_persistence_simple_sf),
   title_label = paste0("Persistence Map (Simple), ", min(year_vector), "-", max(year_vector)),
@@ -448,6 +454,7 @@ ranked_persistence_map <- fishing_map(
   data_sf = dcrb_5km_persistence_ranked_sf,
   fill_var = "crab_years_with_fishing_activity",
   fill_range = range(dcrb_5km_persistence_ranked_sf$crab_years_with_fishing_activity),
+  fathoms_sf = fathoms_sf,
   background_sf = west_coast_states,
   map_bbox = st_bbox(dcrb_5km_persistence_ranked_sf),
   title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(year_vector), "-", max(year_vector)),
@@ -489,6 +496,7 @@ for (ym in year_month_vector) {
     data_sf = ym_data_sf,
     fill_var = "log_10_n_vms_records",
     fill_range = log_10_n_vms_records_fill_range,
+    fathoms_sf = fathoms_sf,
     background_sf = west_coast_states,
     map_bbox = coast_bbox,
     title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
@@ -581,6 +589,7 @@ for (s in state_vector) {
     data_sf = state_sf,
     fill_var = "crab_years_with_fishing_activity",
     fill_range = range(state_sf$crab_years_with_fishing_activity),
+    fathoms_sf = fathoms_sf,
     background_sf = west_coast_states,
     map_bbox = st_bbox(state_sf),
     title_label = paste0("Persistence Map (", persistence_threshold * 100, "% Effort), ", min(year_vector), "-", max(year_vector)),
@@ -641,6 +650,7 @@ for (r in region_vector) {
         data_sf = ym_data_sf,
         fill_var = "log_10_n_vms_records",
         fill_range = region_fill_range,
+        fathoms_sf = fathoms_sf,
         background_sf = west_coast_states,
         map_bbox = region_bbox,
         title_label = paste(y, month.name[m]),
