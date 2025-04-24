@@ -32,12 +32,9 @@ theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
 ```
 
 ```{r create-output-directories}
-# create hindcast output subdirectory name based on system date
-output_subdir_name <- paste0("hindcast_output_", Sys.Date())
-
 # make hindcast output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential', 'hindcast_output', output_subdir_name)
-if (!dir.exists(output_subdir)) dir.create(output_subdir)
+output_dir <- here('Confidential', 'hindcast_output', paste0("hindcast_output_", Sys.Date()))
+if (!dir.exists(output_dir)) dir.create(output_dir)
 ```
 
 Choose years, map regions, and whether maps should be confidential.
@@ -83,7 +80,7 @@ vms_df <- purrr::map(year_vector, function(y) {
 grid_5km <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
 
 # load inflation adjustment
-fred_pcepi <- read.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_pcepi.csv")) %>%
+fred_pcepi <- read.csv(file = here(output_dir, "tables", "inflation_pcepi.csv")) %>%
   mutate(year_month = date(year_month))
 ```
 
@@ -277,13 +274,13 @@ if (!confidential_flag) {
 # write monthly gridded summary, specifying whether output is confidential
 if (confidential_flag) {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_monthly_confidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_monthly_confidential_df.csv"),
     x = dcrb_5km_monthly_df, 
     row.names = FALSE
   )
 } else {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_monthly_nonconfidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_monthly_nonconfidential_df.csv"),
     x = dcrb_5km_monthly_df, 
     row.names = FALSE
   )
@@ -331,13 +328,13 @@ dcrb_5km_persistence_simple_df <- dcrb_5km_monthly_df %>%
 # write simple persistence summary, specifying whether output is confidential
 if (confidential_flag) {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_simple_confidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_simple_confidential_df.csv"),
     x = dcrb_5km_persistence_simple_df, 
     row.names = FALSE
   )
 } else {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_simple_nonconfidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_simple_nonconfidential_df.csv"),
     x = dcrb_5km_persistence_simple_df, 
     row.names = FALSE
   )
@@ -350,9 +347,9 @@ dcrb_5km_persistence_simple_sf <- dcrb_5km_persistence_simple_df %>%
 
 # set map directory name, specifying whether output is confidential
 if (confidential_flag) {
-  png_name = here(output_subdir, "maps_confidential", "persistence", "all", paste0("simple_persistence_all_time.png"))
+  png_name = here(output_dir, "maps_confidential", "persistence", "all", paste0("simple_persistence_all_time.png"))
 } else {
-  png_name = here(output_subdir, "maps_nonconfidential", "persistence", "all", paste0("simple_persistence_all_time.png"))
+  png_name = here(output_dir, "maps_nonconfidential", "persistence", "all", paste0("simple_persistence_all_time.png"))
 }
 
 # fishing activity map - whole time series
@@ -401,13 +398,13 @@ dcrb_5km_persistence_ranked_interim_df <- dcrb_5km_yearly_df %>%
 # write intermediate output, specifying whether output is confidential
 if (confidential_flag) {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_interim_confidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_interim_confidential_df.csv"),
     x = dcrb_5km_persistence_ranked_interim_df, 
     row.names = FALSE
   )
 } else {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_interim_nonconfidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_interim_nonconfidential_df.csv"),
     x = dcrb_5km_persistence_ranked_interim_df, 
     row.names = FALSE
   )
@@ -422,13 +419,13 @@ dcrb_5km_persistence_ranked_df <- dcrb_5km_persistence_ranked_interim_df %>%
 # write ranked output, specifying whether output is confidential
 if (confidential_flag) {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_confidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_confidential_df.csv"),
     x = dcrb_5km_persistence_ranked_df, 
     row.names = FALSE
   )
 } else {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_nonconfidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_nonconfidential_df.csv"),
     x = dcrb_5km_persistence_ranked_df, 
     row.names = FALSE
   )
@@ -441,9 +438,9 @@ dcrb_5km_persistence_ranked_sf <- dcrb_5km_persistence_ranked_df %>%
 
 # set map directory name, specifying whether output is confidential
 if (confidential_flag) {
-  png_name = here(output_subdir, "maps_confidential", "persistence", "all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
+  png_name = here(output_dir, "maps_confidential", "persistence", "all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
 } else {
-  png_name = here(output_subdir, "maps_nonconfidential", "persistence", "all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
+  png_name = here(output_dir, "maps_nonconfidential", "persistence", "all", paste0("ranked_persistence_all_time_", persistence_threshold * 100, ".png"))
 }
 
 # fishing activity map - whole time series
@@ -478,9 +475,9 @@ year_month_vector <- sort(unique(dcrb_5km_monthly_df$year_month_character))
 
 # set map directory name, specifying whether output is confidential
 if (confidential_flag) {
-  map_subdir = here(output_subdir, "maps_confidential", "monthly", "all")
+  map_subdir = here(output_dir, "maps_confidential", "monthly", "all")
 } else {
-  map_subdir = here(output_subdir, "maps_nonconfidential", "monthly", "all")
+  map_subdir = here(output_dir, "maps_nonconfidential", "monthly", "all")
 }
 
 # iterate over months
@@ -526,13 +523,13 @@ dcrb_5km_persistence_ranked_interim_state_df <- dcrb_5km_yearly_df %>%
 # write intermediate output, specifying whether output is confidential
 if (confidential_flag) {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_interim_state_confidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_interim_state_confidential_df.csv"),
     x = dcrb_5km_persistence_ranked_interim_state_df, 
     row.names = FALSE
   )
 } else {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_interim_state_nonconfidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_interim_state_nonconfidential_df.csv"),
     x = dcrb_5km_persistence_ranked_interim_state_df, 
     row.names = FALSE
   )
@@ -547,13 +544,13 @@ dcrb_5km_persistence_ranked_state_df <- dcrb_5km_persistence_ranked_interim_stat
 # write ranked output, specifying whether output is confidential
 if (confidential_flag) {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_state_confidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_state_confidential_df.csv"),
     x = dcrb_5km_persistence_ranked_state_df, 
     row.names = FALSE
   )
 } else {
   write.csv(
-    file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "dcrb_5km_persistence_ranked_state_nonconfidential_df.csv"),
+    file = here(output_dir, "tables", "dcrb_5km_persistence_ranked_state_nonconfidential_df.csv"),
     x = dcrb_5km_persistence_ranked_state_df, 
     row.names = FALSE
   )
@@ -569,9 +566,9 @@ state_vector <- sort(unique(dcrb_5km_persistence_ranked_state_sf$STATE))
 
 # set map directory name, specifying whether output is confidential
 if (confidential_flag) {
-  map_subdir = here(output_subdir, "maps_confidential", "persistence")
+  map_subdir = here(output_dir, "maps_confidential", "persistence")
 } else {
-  map_subdir = here(output_subdir, "maps_nonconfidential", "persistence")
+  map_subdir = here(output_dir, "maps_nonconfidential", "persistence")
 }
 
 for (s in state_vector) {
@@ -600,9 +597,9 @@ for (s in state_vector) {
 ```{r monthly-maps-state}
 # set map directory name, specifying whether output is confidential
 if (confidential_flag) {
-  map_subdir = here(output_subdir, "maps_confidential", "monthly")
+  map_subdir = here(output_dir, "maps_confidential", "monthly")
 } else {
-  map_subdir = here(output_subdir, "maps_nonconfidential", "monthly")
+  map_subdir = here(output_dir, "maps_nonconfidential", "monthly")
 }
 
 # iterate over map regions from the region_vector set at the top of the script
@@ -700,7 +697,7 @@ log_df <- tibble(
    run_time = round(total_timer[3]/60, 2)
  )
 )
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "map_log.csv"), x = log_df, row.names = FALSE)
+write.csv(file = here(output_dir, "map_log.csv"), x = log_df, row.names = FALSE)
 ```
 
 This script took `r round(total_timer[3]/60, 2)` minutes to run.
