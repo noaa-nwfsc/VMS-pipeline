@@ -192,3 +192,5 @@ x<-proc.time()-alltime
 ```
 
 **This pipeline for `r process_year` VMS data took `r round(x[3]/60,2)` minutes to run.**
+
+Once you have run `main_process.Rmd`, run `move_markdown_html.R` to rename and move the markdown document that was created.
