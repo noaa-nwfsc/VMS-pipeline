@@ -36,7 +36,8 @@ if (!dir.exists(output_dir)) dir.create(output_dir)
 Indicate the PacFIN codes for the fish ticket species you are interested in tracking, as well as the gears. Landings and revenue for these species and gears will be tracked in the pipeline, for both targeted and non-targeted trips. Keep in mind that although the pipeline will record all species that are landed on each fish ticket, exact landings and revenues for these species will ONLY be reported if they are included in `spp_codes`. Likewise, `gear_codes` should be thought of NOT as a filter on which gears you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings, regardless of target species.
 
 ```{r}
-spp_codes <- c("DCRB") # species code for Dungeness crab
+spp_codes <- c("SPRW") # species code for CA spot prawn
+# spp_codes <- c("DCRB") # species code for Dungeness crab
 # spp_codes <- c("CHNK") # species code for Chinook salmon
 # spp_codes <- c("ALBC") # species code for Albacore tuna
 # spp_codes <- c("DOVR") # species code for Dover sole (if running just for LE groundfish bottom trawl)
@@ -46,7 +47,8 @@ spp_codes <- c("DCRB") # species code for Dungeness crab
 # here's your options
 # https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/sp.txt
 
-gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING") ## gear types for Dungeness 
+gear_codes <- c("PRAWN TRAP","CRAB OR LOBSTER POT") ## gear types for CA spot prawn
+# gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING") ## gear types for Dungeness
 # gear_codes <- c("TROLL, (SALMON)","OCEAN TROLL","TROLL (SALMON)","DRAG SEINE","DIP BAG NET","HOOK AND LINE","PURSE SEINE (SALMON)") ## gear types for salmon (Chinook)
 # gear_codes <- c("OCEAN TROLL","TROLL (SALMON)","TROLL (ALBACORE)","HOOK AND LINE","JIG (ALBACORE)") ## gear types for Albacore
 # gear_codes <- c("BALLOON TRAWL","BEAM TRAWL","bottom trawl - mud(sole) gear","bottom trawl - roller gear","DANISH/SCOTTISH SEINE (TRAWL)","GROUNDFISH TRAWL","GROUNDFISH TRAWL, SMALL FOOTROPE (< 8 in.)","GROUNDFISH(OTTER) TRAWL","OTTER TRAWL","PAIR TRAWL","PARANZELLA","ROLLER TRAWL","SELECTIVE FLATFISH TRAWL","SELECTIVE FLATFISH TRAWL, SMALL FOOTROPE","TRAWL NET","TRAWL, FOOTROPE GREATER THAN 8 INCHES IN DIAMETER","TRAWL, FOOTROPE LESS THAN 8 INCHES IN DIAMETER") ## these are for groundfish bottom trawl only
@@ -91,7 +93,7 @@ We enforce a "lookback window" when matching the VMS and fish tickets such that 
 Create lookback object. Here is where the lookback window duration can be changed. Default is 7 days.
 
 ```{r lookback}
-lookback_window <- 7 # in days (7 for DCRB, CHNK, groundfish, 40 for ALBC)
+lookback_window <- 7 # in days (7 for DCRB, CHNK, SPRW, groundfish, 40 for ALBC)
 year_begin <- lubridate::ymd(paste0(process_year,"-01-01"), tz= "America/Los_Angeles")
 year_end <- lubridate::ymd(paste0(process_year,"-12-31"), tz= "America/Los_Angeles")
 lookback_begin <- year_begin - lubridate::days(lookback_window)
