@@ -171,22 +171,20 @@ COMBO_freq <- rawdat %>%
 
 ## create summary freq table for all the fish tickets in a VMS Pipeline run that had VMS or didn't and include fish ticket date
 # append all of the YEAR_matched_alltix_withFTID files together and create summary freq table for all the fish tickets in a given year that had VMS or didn't
-vms2009 <- read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2009_matched_alltix_withFTID.rds'))
-vms_all <- vms2009 %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2010_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2011_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2012_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2013_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2014_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2015_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2016_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2017_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2018_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2019_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2020_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2021_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2022_matched_alltix_withFTID.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'Groundfish bottom trawl 03Oct2024', '2023_matched_alltix_withFTID.rds')))
+vms2011 <- read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2011.rds')
+vms_all <- vms2011 %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2012.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2013.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2014.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2015.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2016.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2017.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2018.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2019.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2020.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2021.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2022.rds')) %>%
+  bind_rows(read_rds('/Volumes/Thunderblade 4TB/Various large GIS files/Ecosystem_Sci/VMS Pipeline/Confidential/Pipeline run output raw file BACKUPS/SPRW_processed_2025-04-22/matched/matched_alltix_withFTID_2023.rds'))
 
 # create summary freq table by grouping by FTID, date, has_vms
 FTID_by_date_VMS <- vms_all %>%
@@ -194,4 +192,4 @@ FTID_by_date_VMS <- vms_all %>%
   summarize(Freq=n())
 
 # save .csv of FTID_by_date_VMS df
-write.csv(FTID_by_date_lbs_VMS, 'Groundfish_bottom_trawl_FTIDs_by_date_lbs_and_VMS_status_03Oct2024.csv')
+write.csv(FTID_by_date_VMS, 'Spot_prawn_FTIDs_by_date_lbs_and_VMS_status_2011-2023.csv')
