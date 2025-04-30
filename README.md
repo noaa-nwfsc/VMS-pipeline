@@ -49,6 +49,8 @@ This VMS-fish ticket data processing pipeline is organized in six steps required
 
 6. **Create an interpolated, regularized version of the matched data**. For some applications, analytical methods require spatial records to be evenly distributed across time. We perform linear interpolation of each fishing trip, placing some new VMS points along vessel trajectories such that there is one record exactly every hour.
 
+After the pipeline has run and the markdown document is ready, run `move_markdown_html.R` to rename and move the knit document into the Confidential output folder.
+
 Here is a flowchart of the VMS pipeline, indicating each step in the pipeline with its corresponding parameters and outputs:
 <img src="readme_vms_flowchart.jpg" align="center" width="650">
 
