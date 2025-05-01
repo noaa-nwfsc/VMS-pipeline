@@ -68,6 +68,7 @@ confidential_flag <- FALSE
 2.  Load the spatial 5km grid, which will also be used to map fishing activity distribution.
 3.  Load the inflation adjustment table, which will be used to adjust revenue for inflation.
 4.  Load the spatial fathom lines for depth restrictions, which will be used as a reference line in some maps.
+5.  Load the rotated 21 and 30 degree extents, which will be used to rotate coastal and California maps later on.
 
 Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB. Run notebook 10, which creates the inflation adjustment table and output directories.
 
@@ -86,6 +87,23 @@ fred_pcepi <- read.csv(file = here(output_dir, "tables", "inflation_pcepi.csv"))
 
 # load 30 and 40 fathoms
 fathoms_sf <- read_sf(here('spatial_data', 'fathom_30to40_lines_lamb.shp'))
+
+# load 21 and 30 degree rotated coordinate reference systems
+crs_21 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_21.shp')) %>% st_crs()
+crs_30 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_30.shp')) %>% st_crs()
+```
+
+Assign coordinate reference systems for the different maps. The values include 'Coast' and the regions that are options for region_vector at the top of the script.
+
+```{r}
+crs_list <- list(
+  'Coast' = st_crs(crs_21),
+  'Washington' = st_crs(grid_5km),
+  'Oregon' = st_crs(grid_5km),
+  'California' = st_crs(crs_30),
+  'Northern California' = st_crs(grid_5km),
+  'Central California' = st_crs(crs_30)
+)
 ```
 
 ## Transform data
@@ -303,15 +321,18 @@ west_coast_states <- rnaturalearth::ne_states(country = 'United States of Americ
 
 # fishing activity map
 fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf, map_bbox, title_label, fill_label, png_name) {
+  # make plot
   map_output <- ggplot() +
-    geom_sf(data = background_sf, fill = 'gray80') +
     geom_sf(data = data_sf, aes(fill = get(fill_var)), lwd = 0) +
+    geom_sf(data = background_sf, fill = 'gray80') +
     geom_sf(data = fathoms_sf, lwd = 0.1) +
     labs(title = title_label, fill = paste(fill_label, "per 5x5 cell")) +
     xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
     scale_fill_viridis(limits = fill_range) +
     theme(legend.position = "bottom")
   ggsave(filename = png_name, create.dir = TRUE)
+  
+  # return plot
   return(map_output)
 }
 ```
@@ -325,7 +346,8 @@ dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
   st_as_sf()
 
 # set bounding box across whole time frame (not just one month)
-coast_bbox <- st_bbox(dcrb_5km_monthly_sf)
+coast_bbox <- st_transform(x = dcrb_5km_monthly_sf, crs = crs_list[['Coast']]) %>%
+  st_bbox()
 
 # set limits for min and max fill for # VMS pings across whole time frame (not just one month)
 log_10_n_vms_records_fill_range <- range(dcrb_5km_monthly_sf$log_10_n_vms_records)
@@ -343,7 +365,9 @@ if (confidential_flag) {
 # iterate over months
 for (ym in year_month_vector) {
   # filter data for given month
-  ym_data_sf <- dcrb_5km_monthly_sf %>% filter(year_month_character == ym)
+  ym_data_sf <- dcrb_5km_monthly_sf %>% 
+    filter(year_month_character == ym) %>%
+    st_transform(crs = crs_list[['Coast']])
   # make and save map of # VMS pings for each month
   vms_map <- fishing_map(
     data_sf = ym_data_sf,
@@ -375,7 +399,9 @@ if (confidential_flag) {
 for (r in region_vector) {
   # filter data and set bounding box for state
   region_sf <- dcrb_5km_monthly_sf %>% filter(map_region == r)
-  region_bbox <- st_bbox(region_sf)
+  region_bbox <- region_sf %>%
+    st_transform(crs = crs_list[[r]]) %>%
+    st_bbox(region_sf)
   
   # set limits for min and max fill for # VMS pings across region for whole time frame (not just one month)
   region_fill_range <- range(region_sf$log_10_n_vms_records)
@@ -387,7 +413,8 @@ for (r in region_vector) {
       # filter data for year month
       ym_data_sf <- region_sf %>% 
         filter(year_numeric == y) %>%
-        filter(month_numeric == m)
+        filter(month_numeric == m) %>%
+        st_transform(crs = crs_list[[r]])
       
       # get png directory name
       png_dir_name <- here(map_subdir, r)
