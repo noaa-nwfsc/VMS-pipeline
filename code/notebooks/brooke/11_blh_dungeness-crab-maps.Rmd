@@ -314,16 +314,16 @@ west_coast_states <- rnaturalearth::ne_states(country = 'United States of Americ
 
 ```{r map-function}
 # fishing activity map
-fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf, map_bbox, title_label, fill_label, png_name) {
+fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf, map_bbox, title, subtitle, fill_label, png_name) {
   # make plot
   map_output <- ggplot() +
     geom_sf(data = data_sf, aes(fill = get(fill_var)), lwd = 0) +
     geom_sf(data = background_sf, fill = 'gray80') +
     geom_sf(data = fathoms_sf, lwd = 0.1) +
-    labs(title = title_label, fill = paste(fill_label, "per 5x5 cell")) +
-    xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
-    scale_fill_viridis(limits = fill_range) +
-    theme(legend.position = "bottom") 
+    labs(title = title, subtitle = subtitle, fill = fill_label) +
+    xlim(map_bbox[1], map_bbox[3]) +
+    ylim(map_bbox[2], map_bbox[4]) +
+    scale_fill_viridis(limits = fill_range)
   ggsave(filename = png_name, create.dir = TRUE)
   
   # return plot
@@ -417,8 +417,9 @@ for (r in region_vector) {
         fathoms_sf = fathoms_sf,
         background_sf = west_coast_states,
         map_bbox = region_bbox,
-        title_label = paste(r, y, month.name[m]),
-        fill_label = "Log-10 Interpolated VMS Records",
+        title = r,
+        subtitle = paste(y, month.name[m]),
+        fill_label = "Log(VMS)",
         png_name = png_name
       )
     }
