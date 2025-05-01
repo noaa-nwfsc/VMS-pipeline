@@ -469,7 +469,7 @@ if (gif_flag) {
 end_timer <- proc.time()
 total_timer <- end_timer - start_timer
 
-# write CSV with chosen parameters and runtime
+# create dataframe with parameters and runtime
 log_df <- tibble(
   variable = c('year_vector', 'region_vector', 'confidential_flag', 'gif_flag', 'end_time', 'run_time_minutes'),
  value = c(
@@ -481,7 +481,13 @@ log_df <- tibble(
    run_time = round(total_timer[3]/60, 2)
  )
 )
-write.csv(file = here(output_dir, "map_log.csv"), x = log_df, row.names = FALSE)
+
+# write dataframe to CSV
+write.csv(
+  file = here(output_dir, paste0("map_log_", format(Sys.time(),"%F_%H-%M-%S"), ".csv")),
+  x = log_df,
+  row.names = FALSE
+)
 ```
 
 This script took `r round(total_timer[3]/60, 2)` minutes to run.
