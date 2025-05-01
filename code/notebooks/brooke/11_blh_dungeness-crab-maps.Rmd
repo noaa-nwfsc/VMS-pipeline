@@ -42,9 +42,10 @@ Choose years, map regions, and whether maps should be confidential.
 The current options for years are *2011-2023* and are filtered based on the VMS data.
 
 The current options for map regions are filtered based on the grid:
-
+-   *Coast*: United States west coast, include Washington, Oregon and California state
 -   *Washington*: Washington state
 -   *Oregon*: Oregon state
+-   *California*: California state
 -   *Northern California:* California state, Northern California RAMP area
 -   *Central California*: California state, Central and San Francisco RAMP areas
 -   *Southern California*: California state, Southern RAMP area
@@ -53,9 +54,9 @@ Setting the confidential flag to `TRUE` will include all data in the maps. Setti
 
 ```{r}
 # choose years, numeric vector
-year_vector <- 2012:2013
+year_vector <- 2012
 # choose map regions, string vector
-region_vector <- c('Washington', 'Oregon', 'Northern California', 'Central California')
+region_vector <- c('Coast', 'Washington', 'Oregon', 'California', 'Northern California', 'Central California', 'Southern California')
 # choose confidential or not
 confidential_flag <- FALSE
 ```
@@ -93,7 +94,7 @@ crs_21 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_21.shp')) %>% st
 crs_30 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_30.shp')) %>% st_crs()
 ```
 
-Assign coordinate reference systems for the different maps. The values include 'Coast' and the regions that are options for region_vector at the top of the script.
+Assign coordinate reference systems for the different maps. The elements are named after the regions that are options for `region_vector` at the top of the script.
 
 ```{r}
 crs_list <- list(
@@ -102,7 +103,8 @@ crs_list <- list(
   'Oregon' = st_crs(grid_5km),
   'California' = st_crs(crs_30),
   'Northern California' = st_crs(grid_5km),
-  'Central California' = st_crs(crs_30)
+  'Central California' = st_crs(crs_30),
+  'Southern California' = st_crs(grid_5km)
 )
 ```
 
@@ -197,15 +199,6 @@ dcrb_vms_df <- vms_df %>%
   # apply grid filters 
   filter(EEZ == "USA") %>%
   filter(Salish_Sea == 0) %>%
-  # add map region column to split maps later on
-  mutate(map_region = case_when(
-    STATE == "WA" ~ "Washington",
-    STATE == "OR" ~ "Oregon",
-    STATE == "CA" & RAMP_area == "Northern" ~ "Northern California",
-    STATE == "CA" & RAMP_area %in% c("Central", "San Francisco") ~ "Central California",
-    STATE == "CA" & RAMP_area == "Southern" ~ "Southern California",
-    .default = "Other"
-  )) %>%
   # drop some columns not currently in use, though these can be used later for joining to Chris Free's data
   select(-c("LL_EAST", "UL_EAST", "UR_EAST", "LR_EAST", "LL_NORTH", "UL_NORTH", "UR_NORTH", "LR_NORTH", "LL_LATITUD", "UL_LATITUD", "UR_LATITUD", "LR_LATITUD", "LL_LONGITU", "UL_LONGITU", "UR_LONGITU", "LR_LONGITU"))
 
@@ -265,9 +258,6 @@ dcrb_5km_monthly_df <- dcrb_vms_df %>%
   group_by(
     # grid cell ID, makes this a gridded summary
     GRID5KM_ID,
-    # state and map_region, used to facet maps later on
-    STATE,
-    map_region,
     # temporal columns, makes this a monthly summary
     crab_year_character,
     year_numeric,
@@ -311,14 +301,16 @@ if (confidential_flag) {
 
 # Plots
 
-Create fishing activity maps, based on the gridded summary above. This is one of the slowest parts of the script.
+Create fishing activity maps, based on the gridded summary above.
 
 ```{r background-map}
 # set west coast as background map
 west_coast_states <- rnaturalearth::ne_states(country = 'United States of America', returnclass = 'sf') %>% 
   filter(name %in% c('California', 'Oregon', 'Washington', 'Nevada')) %>% 
   st_transform(st_crs(grid_5km))
+```
 
+```{r map-function}
 # fishing activity map
 fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf, map_bbox, title_label, fill_label, png_name) {
   # make plot
@@ -329,7 +321,7 @@ fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf
     labs(title = title_label, fill = paste(fill_label, "per 5x5 cell")) +
     xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4]) +
     scale_fill_viridis(limits = fill_range) +
-    theme(legend.position = "bottom")
+    theme(legend.position = "bottom") 
   ggsave(filename = png_name, create.dir = TRUE)
   
   # return plot
@@ -337,57 +329,11 @@ fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf
 }
 ```
 
-## Coastal maps
+## PNGs
 
-```{r monthly-maps-coastal}
-# join geometry from 5km grid to gridded fishing summary
-dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
-  left_join(grid_5km, by = join_by(GRID5KM_ID, STATE)) %>%
-  st_as_sf()
+Make one map per region, year and month.
 
-# set bounding box across whole time frame (not just one month)
-coast_bbox <- st_transform(x = dcrb_5km_monthly_sf, crs = crs_list[['Coast']]) %>%
-  st_bbox()
-
-# set limits for min and max fill for # VMS pings across whole time frame (not just one month)
-log_10_n_vms_records_fill_range <- range(dcrb_5km_monthly_sf$log_10_n_vms_records)
-
-# get unique years and months from gridded fishing summary
-year_month_vector <- sort(unique(dcrb_5km_monthly_df$year_month_character))
-
-# set map directory name, specifying whether output is confidential
-if (confidential_flag) {
-  map_subdir = here(output_dir, "maps_confidential", "monthly", "all")
-} else {
-  map_subdir = here(output_dir, "maps_nonconfidential", "monthly", "all")
-}
-
-# iterate over months
-for (ym in year_month_vector) {
-  # filter data for given month
-  ym_data_sf <- dcrb_5km_monthly_sf %>% 
-    filter(year_month_character == ym) %>%
-    st_transform(crs = crs_list[['Coast']])
-  # make and save map of # VMS pings for each month
-  vms_map <- fishing_map(
-    data_sf = ym_data_sf,
-    fill_var = "log_10_n_vms_records",
-    fill_range = log_10_n_vms_records_fill_range,
-    fathoms_sf = fathoms_sf,
-    background_sf = west_coast_states,
-    map_bbox = coast_bbox,
-    title_label = paste(substr(ym, 1, 4), month.name[as.numeric(substr(ym, 6, 7))]),
-    fill_label = "Log-10 Interpolated VMS Records",
-    png_name = here(map_subdir, paste0("log_10_n_vms_records_", ym, ".png"))
-  )
-}
-```
-
-## State maps
-
-#### PNGs
-
-```{r monthly-maps-state}
+```{r monthly-maps}
 # set map directory name, specifying whether output is confidential
 if (confidential_flag) {
   map_subdir = here(output_dir, "maps_confidential", "monthly")
@@ -395,10 +341,39 @@ if (confidential_flag) {
   map_subdir = here(output_dir, "maps_nonconfidential", "monthly")
 }
 
+# rejoin spatial data to gridded data
+dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
+  left_join(grid_5km, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+
 # iterate over map regions from the region_vector set at the top of the script
 for (r in region_vector) {
-  # filter data and set bounding box for state
-  region_sf <- dcrb_5km_monthly_sf %>% filter(map_region == r)
+  
+  # filter data
+  if (r == "Coast") {
+    region_sf <- dcrb_5km_monthly_sf
+  } else if (r == "Washington") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "WA")
+  } else if (r == "Oregon") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "OR")
+  } else if (r == "California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA")
+  } else if (r == "Northern California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA" & RAMP_area == "Northern")
+  } else if (r == "Central California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA" & RAMP_area %in% c("Central", "San Francisco"))
+  } else if (r == "Southern California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA" & RAMP_area == "Southern")
+  } else {
+    next
+  }
+  
+  # if there is no data for the region, move on
+  if(nrow(region_sf) == 0) {
+    next
+  }
+  
+  # set bounding box
   region_bbox <- region_sf %>%
     st_transform(crs = crs_list[[r]]) %>%
     st_bbox(region_sf)
@@ -451,27 +426,33 @@ for (r in region_vector) {
 rm(r, y, m)
 ```
 
-#### GIFs
+## GIFs
 
 For each region, combine maps into animated gif.
 
 ```{r gif-function}
 # function to combine fishing activity maps in map_directory into an animation.gif in the same folder
 fishing_activity_gif <- function (map_directory) {
+  
   # get list of files in the map directory
   png_list <- list.files(map_directory)
-  # read in all images
-  image_list <- lapply(here(map_directory, png_list), image_read)
-  # join and animate images
-  image_gif <- image_animate(image_join(image_list), fps = 2)
-  # write GIF
-  image_write(image = image_gif, path = here(map_directory, "animation.gif"))
-  # return GIF
-  return(image_gif)
+  
+  if (length(png_list) > 0) {
+    # read in all images
+    image_list <- lapply(here(map_directory, png_list), image_read)
+    # join and animate images
+    image_gif <- image_animate(image_join(image_list), fps = 2)
+    # write GIF
+    image_write(image = image_gif, path = here(map_directory, "animation.gif"))
+    # return GIF
+    return(image_gif)
+  } else {
+    return(FALSE)
+  }
 }
 ```
 
-```{r monthly-map-state-gifs}
+```{r make-gifs}
 # iterate over map regions from the region_vector set at the top of the script
 for (r in region_vector) {
   fishing_activity_gif(here(map_subdir, r))
