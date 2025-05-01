@@ -59,6 +59,8 @@ year_vector <- 2012
 region_vector <- c('Coast', 'Washington', 'Oregon', 'California', 'Northern California', 'Central California', 'Southern California')
 # choose confidential or not
 confidential_flag <- FALSE
+# choose to make gifs or not (slow step)
+gif_flag <- FALSE
 ```
 
 # Data
@@ -454,8 +456,10 @@ fishing_activity_gif <- function (map_directory) {
 
 ```{r make-gifs}
 # iterate over map regions from the region_vector set at the top of the script
-for (r in region_vector) {
-  fishing_activity_gif(here(map_subdir, r))
+if (gif_flag) {
+  for (r in region_vector) {
+    fishing_activity_gif(here(map_subdir, r))
+  }
 }
 ```
 
@@ -466,11 +470,12 @@ total_timer <- end_timer - start_timer
 
 # write CSV with chosen parameters and runtime
 log_df <- tibble(
-  variable = c('year_vector', 'region_vector', 'confidential_flag', 'end_time', 'run_time_minutes'),
+  variable = c('year_vector', 'region_vector', 'confidential_flag', 'gif_flag', 'end_time', 'run_time_minutes'),
  value = c(
    paste(year_vector, collapse = ", "), 
    paste(region_vector, collapse = ", "), 
    confidential_flag,
+   gif_flag,
    end_time = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
    run_time = round(total_timer[3]/60, 2)
  )
