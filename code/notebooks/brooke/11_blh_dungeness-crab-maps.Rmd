@@ -338,9 +338,9 @@ Make one map per region, year and month.
 ```{r monthly-maps}
 # set map directory name, specifying whether output is confidential
 if (confidential_flag) {
-  map_subdir = here(output_dir, "maps_confidential", "monthly")
+  map_subdir = here(output_dir, "monthly_maps_confidential")
 } else {
-  map_subdir = here(output_dir, "maps_nonconfidential", "monthly")
+  map_subdir = here(output_dir, "monthly_maps_nonconfidential")
 }
 
 # rejoin spatial data to gridded data
