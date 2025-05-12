@@ -7,7 +7,7 @@ If you have questions that aren't addressed here or in the README/METADATA, then
 
 ## `bathymetry`
 
-* `composite_bath`: raster data, bathymetry used to filter out VMS points that are too deep or not underwater. Since this is a large file, we don't upload it to GitHub (it's in the `.gitignore`) - see the link in `README_bathymetry-file-link.txt` to find where to download it.
+* `composite_bath`: raster data, bathymetry used to filter out VMS points that are too deep or not underwater in steps 3 and 6. Since this is a large file, we don't upload it to GitHub (it's in the `.gitignore`) - see the link in `README_bathymetry-file-link.txt` to find where to download it.
 * `fathom_30to40`: vector data, lines or polygons, 30 and 40 fathom isobaths used to plot a common depth restriction used to manage Dungeness crab fishing
 
 ## `grids`
