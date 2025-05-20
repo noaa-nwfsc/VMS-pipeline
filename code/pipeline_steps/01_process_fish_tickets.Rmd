@@ -152,7 +152,8 @@ rawdat.sub <- rawdat %>%
     LANDING_YEAR,
     NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,
     LANDED_WEIGHT_LBS,
-    EXVESSEL_REVENUE
+    EXVESSEL_REVENUE,
+    FOS_GROUNDFISH_SECTOR_CODE
   ) %>%
   # change some column names
   set_colnames(c(
@@ -173,7 +174,8 @@ rawdat.sub <- rawdat %>%
     "year",
     "NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE",
     "LANDED_WEIGHT_LBS",
-    "EXVESSEL_REVENUE"
+    "EXVESSEL_REVENUE",
+    "FOS_GROUNDFISH_SECTOR_CODE"
   ))
 ```
 
@@ -334,10 +336,26 @@ rawdat.w.targets <- rawdat.sub %>%
 #     select(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
 # As of 09/2024, we are moving forward with this last option
 recID_attributes <- rawdat.sub %>%
-  group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
+  group_by(Rec_ID, NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
   slice(1) %>%
-  ungroup()%>%
-  select(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+  ungroup() %>%
+  select(
+    Rec_ID,
+    FTID,
+    NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,
+    pacfin_port_code,
+    port_group_code,
+    dealerID,
+    gear_code,
+    gear_name,
+    gear_group,
+    FOS_GROUNDFISH_SECTOR_CODE,
+    drvid,
+    agency_code,
+    date,
+    month,
+    year
+  )
 
 # Test the join and count
   # rawdat.w.targets.test1 <- rawdat.w.targets %>%
@@ -500,6 +518,7 @@ dat_out %<>%
     dealerID,
     drvid,
     agency_code,
+    FOS_GROUNDFISH_SECTOR_CODE,
     gear_code_all,
     date,
     month,
