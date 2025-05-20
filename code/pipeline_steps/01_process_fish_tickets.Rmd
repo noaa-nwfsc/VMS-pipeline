@@ -83,8 +83,14 @@ This should be a .csv file containing raw PacFIN data. We only read in columns t
 
 ```{r rawdata}
 # read in fish ticket data for current process year, and prior year to catch lookback window (i.e. fish tickets on Jan. 1, process_year that have fishing activity in prior )
-rawdat <- read_rds(here::here('Confidential', 'raw_data', 'fish_tickets', 'all_fishtickets_1994_2023.rds'))
-rawdat <- rawdat %>% filter(LANDING_DATE >= lookback_begin & LANDING_DATE <= year_end)
+rawdat <- read_rds(here::here(
+  'Confidential',
+  'raw_data',
+  'fish_tickets',
+  'all_fishtickets_1994_2023.rds'
+))
+rawdat <- rawdat %>%
+  filter(LANDING_DATE >= lookback_begin & LANDING_DATE <= year_end)
 
 #earlier years:
 #tixfiles <- list.files(here::here('data','raw','fish_tickets'),full.names = T)
@@ -127,11 +133,48 @@ problems(rawdat) %>% select(col) %>% distinct()
 First, subset the raw data to include only the columns that are needed. Rename the columns that will be retained in the final processed data. The last three columns are used to calculate per-species / total revenue and landed weight, but will not ultimately be retained.
 
 ```{r}
-rawdat.sub <- rawdat %>% 
-  dplyr::select(FISH_TICKET_ID, FTID, PACFIN_PORT_CODE, PACFIN_GROUP_PORT_CODE, DEALER_ID, VESSEL_NUM, AGENCY_CODE, GEAR_CODE, GEAR_NAME, PACFIN_GROUP_GEAR_CODE, REMOVAL_TYPE_CODE, REMOVAL_TYPE_NAME, LANDING_DATE, LANDING_MONTH, LANDING_YEAR, NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE, LANDED_WEIGHT_LBS, EXVESSEL_REVENUE) %>% 
-# change some column names
-  set_colnames(c("Rec_ID", "FTID", "pacfin_port_code", "port_group_code","dealerID","drvid", "agency_code","gear_code", "gear_name", "gear_group", "removal_type_code", "removal_type_name", "date", "month", "year", 
-                          "NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE", "LANDED_WEIGHT_LBS", "EXVESSEL_REVENUE"))
+rawdat.sub <- rawdat %>%
+  dplyr::select(
+    FISH_TICKET_ID,
+    FTID,
+    PACFIN_PORT_CODE,
+    PACFIN_GROUP_PORT_CODE,
+    DEALER_ID,
+    VESSEL_NUM,
+    AGENCY_CODE,
+    GEAR_CODE,
+    GEAR_NAME,
+    PACFIN_GROUP_GEAR_CODE,
+    REMOVAL_TYPE_CODE,
+    REMOVAL_TYPE_NAME,
+    LANDING_DATE,
+    LANDING_MONTH,
+    LANDING_YEAR,
+    NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,
+    LANDED_WEIGHT_LBS,
+    EXVESSEL_REVENUE
+  ) %>%
+  # change some column names
+  set_colnames(c(
+    "Rec_ID",
+    "FTID",
+    "pacfin_port_code",
+    "port_group_code",
+    "dealerID",
+    "drvid",
+    "agency_code",
+    "gear_code",
+    "gear_name",
+    "gear_group",
+    "removal_type_code",
+    "removal_type_name",
+    "date",
+    "month",
+    "year",
+    "NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE",
+    "LANDED_WEIGHT_LBS",
+    "EXVESSEL_REVENUE"
+  ))
 ```
 
 Remove the columns where the vessel identifier (drvid) is either "UNKNOWN" or blank ("")
@@ -167,7 +210,13 @@ Concatenate all species information for the fish ticket.
 #   summarise(species_code_all = ifelse(length(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)) > 1, paste(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE), collapse="/"), as.character(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE))))
 all.species <- rawdat.sub %>%
   group_by(Rec_ID) %>%
-  summarise(species_code_all = ifelse(length(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)) > 1, paste(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE), collapse="/"), as.character(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)))) %>% 
+  summarise(
+    species_code_all = ifelse(
+      length(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)) > 1,
+      paste(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE), collapse = "/"),
+      as.character(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE))
+    )
+  ) %>%
   ungroup()
 ```
 
@@ -178,10 +227,21 @@ Concatenate the gear information for the fish ticket
 #   group_by(Rec_ID, removal_type_name) %>%
 #   summarise(gear_name_all = ifelse(length(unique(gear_name)) > 1, paste(unique(gear_name), collapse="/"), as.character(unique(gear_name))),
 #             gear_code_all = ifelse(length(unique(gear_name)) > 1, paste(unique(gear_code), collapse="/"), as.character(unique(gear_code))))
+
 gear.info <- rawdat.sub %>%
   group_by(Rec_ID) %>%
-  summarise(gear_name_all = ifelse(length(unique(gear_name)) > 1, paste(unique(gear_name), collapse="/"), as.character(unique(gear_name))),
-            gear_code_all = ifelse(length(unique(gear_name)) > 1, paste(unique(gear_code), collapse="/"), as.character(unique(gear_code)))) %>% 
+  summarise(
+    gear_name_all = ifelse(
+      length(unique(gear_name)) > 1,
+      paste(unique(gear_name), collapse = "/"),
+      as.character(unique(gear_name))
+    ),
+    gear_code_all = ifelse(
+      length(unique(gear_name)) > 1,
+      paste(unique(gear_code), collapse = "/"),
+      as.character(unique(gear_code))
+    )
+  ) %>%
   ungroup()
 ```
 
@@ -194,11 +254,11 @@ We need to define the target species for each landed ticket. We will do this by 
 Right now, each row of the data is a landing amount for a particular gear/ticket/species combo. We want to collapse these tickets in order to just have one row for each ticket, with an associated amount of landings for the TARGET species.
 
 ```{r}
-rawdat.sub %>% 
-  count(Rec_ID) %>% 
-  ggplot(aes(n,..count..))+
-  geom_histogram(fill="seagreen",bins=30)+
-  labs(x="Number of records per ticket","kernel density")
+rawdat.sub %>%
+  count(Rec_ID) %>%
+  ggplot(aes(n, ..count..)) +
+  geom_histogram(fill = "seagreen", bins = 30) +
+  labs(x = "Number of records per ticket", "kernel density")
 ```
 
 Calculate landed pounds and revenue by species for each fish ticket. Then use these data to define proportions of pounds and revenue by species/ticket, in order to designate a "target" species for each fishing trip. We denote the target species for both revenue and pounds landed. If a ticket does not have a definitive target (classified as a proportion of landed pounds or revenue that is >10 percent more than the second-place species), denote "NONE" for the target.
@@ -325,13 +385,15 @@ For each fish ticket, sum up an "Other" category based on the choice made in the
 
 ```{r calc other}
 dat_targets_other <- rawdat.w.targets %>%
-  group_by(Rec_ID) %>% 
+  group_by(Rec_ID) %>%
   # denote whether a record is in the Other category
-  mutate(is_other=gear_name %in% gear_codes) %>% 
-  
+  mutate(is_other = gear_name %in% gear_codes) %>%
+
   # sum the other category for each ticket
-  mutate(all_species_rev=sum(spp_revenue[is_other]),
-         all_species_lbs=sum(spp_lbs[is_other])) %>% 
+  mutate(
+    all_species_rev = sum(spp_revenue[is_other]),
+    all_species_lbs = sum(spp_lbs[is_other])
+  ) %>%
   ungroup()
 ```
 
@@ -341,23 +403,35 @@ Here we add some species-specific columns based on the choice made in the beginn
 
 ```{r}
 # Use pivoting to define pounds and revenue for each species of interest
-RecID_spp_cols <- dat_targets_other %>% 
-  select(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,spp_lbs,spp_lbs_no_revenue,spp_revenue) %>% 
+RecID_spp_cols <- dat_targets_other %>%
+  select(
+    Rec_ID,
+    NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,
+    spp_lbs,
+    spp_lbs_no_revenue,
+    spp_revenue
+  ) %>%
   filter(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE %in% spp_codes) %>%
-  distinct() %>% 
-  pivot_longer(spp_lbs:spp_revenue) %>% 
-  mutate(type=case_when(
-    name=="spp_lbs" ~ 'lbs',
-    name=="spp_lbs_no_revenue"~'lbs_no_revenue',
-    name=="spp_revenue" ~ 'revenue'
-  )) %>% 
-  # mutate(type=ifelse(str_detect(name,'lbs'),'lbs','revenue')) %>% 
-  select(-name) %>% 
-  group_by(Rec_ID) %>% 
+  distinct() %>%
+  pivot_longer(spp_lbs:spp_revenue) %>%
+  mutate(
+    type = case_when(
+      name == "spp_lbs" ~ 'lbs',
+      name == "spp_lbs_no_revenue" ~ 'lbs_no_revenue',
+      name == "spp_revenue" ~ 'revenue'
+    )
+  ) %>%
+  # mutate(type=ifelse(str_detect(name,'lbs'),'lbs','revenue')) %>%
+  select(-name) %>%
+  group_by(Rec_ID) %>%
   # spread to create the columns
-  pivot_wider(names_from=c(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,type),values_from = value,values_fill = list(value=0)) %>%
+  pivot_wider(
+    names_from = c(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE, type),
+    values_from = value,
+    values_fill = list(value = 0)
+  ) %>%
   ungroup()
-    
+
 # add back to main data
 dat_targets_other %<>%
   left_join(RecID_spp_cols)
@@ -369,14 +443,20 @@ Change existing date columns to date objects and format.
 
 ```{r dates}
 dat_targets_other %<>%
-  mutate(date=as.Date(date,"%d-%b-%y")) %>% 
-  mutate(month=lubridate::month(date),
-         month=month.name[month],
-         year_mo=paste(year,lubridate::month(date),sep="_"),
-         jdate=yday(date),
-         year_jdate=paste(year,jdate,sep="_"),
-         Week=week(date),
-         year_Wk=ifelse(Week < 10, paste0(year,"_0",Week), paste0(year,"_",Week)))
+  mutate(date = as.Date(date, "%d-%b-%y")) %>%
+  mutate(
+    month = lubridate::month(date),
+    month = month.name[month],
+    year_mo = paste(year, lubridate::month(date), sep = "_"),
+    jdate = yday(date),
+    year_jdate = paste(year, jdate, sep = "_"),
+    Week = week(date),
+    year_Wk = ifelse(
+      Week < 10,
+      paste0(year, "_0", Week),
+      paste0(year, "_", Week)
+    )
+  )
 ```
 
 ## Duplicated Dates
@@ -411,8 +491,30 @@ Clean up the output by reording the columns of interest
 ```{r reorder_dataframe}
 #Added FTID to select list
 dat_out %<>%
-  select(-(spp_lbs:prop_revenue_spp),-is_other) %>% 
-  select(Rec_ID,FTID,pacfin_port_code,port_group_code,dealerID,drvid,agency_code,gear_code_all,date,month,year,year_mo,jdate,year_jdate,Week,year_Wk,contains("_lbs"),contains("_rev"),species_code_all,all_species_lbs,all_species_rev) %>% 
+  select(-(spp_lbs:prop_revenue_spp), -is_other) %>%
+  select(
+    Rec_ID,
+    FTID,
+    pacfin_port_code,
+    port_group_code,
+    dealerID,
+    drvid,
+    agency_code,
+    gear_code_all,
+    date,
+    month,
+    year,
+    year_mo,
+    jdate,
+    year_jdate,
+    Week,
+    year_Wk,
+    contains("_lbs"),
+    contains("_rev"),
+    species_code_all,
+    all_species_lbs,
+    all_species_rev
+  ) %>%
   # the last distinct() removes records for which we no longer care about individual sub-trip species catches (we only care about catches of the focal species, plus total catch and TARGETs)
   distinct()
 ```
@@ -424,11 +526,23 @@ Save the data!
 
 ```{r save}
 # create output subdirectory, if doesn't yet exist
-output_subdir <- here('Confidential', 'processed_data', output_dir_name, 'fish_tickets')
+output_subdir <- here(
+  'Confidential',
+  'processed_data',
+  output_dir_name,
+  'fish_tickets'
+)
 if (!dir.exists(output_subdir)) dir.create(output_subdir)
 
 # write output
-dat_out %>% write_rds(here::here('Confidential','processed_data', output_dir_name, 'fish_tickets', paste0("fishtix_withFTID_", process_year, ".rds", collapse="")))
+dat_out %>%
+  write_rds(here::here(
+    'Confidential',
+    'processed_data',
+    output_dir_name,
+    'fish_tickets',
+    paste0("fishtix_withFTID_", process_year, ".rds", collapse = "")
+  ))
 
 # for(y in unique(rawdat$LANDING_YEAR)){
 #   year.final.processdat <- filter(final.processdat, year == y )
