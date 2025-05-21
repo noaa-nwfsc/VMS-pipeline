@@ -4,6 +4,7 @@ FILENAMES IN REPO
 - master_2km_grid_tmer.shp
 - master_5km_grid_tmer.shp
 - fivekm_grid_polys_shore_lamb.shp
+- ten_arcminute_grid_shore_lamb.shp
 - five km grid polys shore METADATA.xlsx
 - fivekm_raster_grid_lamb.tif
 
@@ -15,6 +16,8 @@ master_5km_grid_tmer.shp was created by Blake Feist on 29 Aug 2024, which was ba
 master_2km_grid_tmer.shp was created by Blake Feist on 19 Aug 2022, which was originally used for offshore wind energy fishing activity mapping by NMFS in support of NCCOS marine spatial planning modeling for BOEM.
 
 fivekm_grid_polys_shore_lamb.shp was created by Blake Feist on 31 Mar 2021, which was originally used by Leena Riekkola in Riekkola et al. 2023 (DOI: 10.1016/j.biocon.2022.109880). Updated 16 Apr 2025 with numerous additional attributes, useful for summarizing the gridded data across multiple spatial extents and not just coastwide. Refer to "five km grid polys shore METADATA.xlsx" for detailed information.
+
+ten_arcminute_grid_shore_lamb.shp was created by Blake Feist on 21 May 2025. This grid can be used for spatial correspondence testing between landings information reported on fish tickets for catch landed at California ports, with VMS Pipeline based fishing activity. Use the fish ticket "CDFW_AREA_BLOCK" attribute for joining to the "BLOCK10_ID" attribute in the grid attribute table. CAUTION: CDFW blocks that are further offshore are a coarser spatial grain, varying from groupings of 3 to 12, 10-arcminute grid cells. The "BLOCK10_n" attribute flags these larger blocks in the CDFW data. BLOCK10_n = 1 is a single 10-arcminute grid cell, but those >=3 should be grouped accordingly when joining to fish tickets. For example, 9, 10-arcminute grid cells will have a BLOCK10_ID = 138, so a fish ticket listing CDFW_AREA_BLOCK = 138 will be attributed to 9 grid cells, so the value of each of those 9 grid cells should be multiplied by 1/9. While this shapefile spans the entire EEZ of the US West Coast, the boundaries of the individual grid cells that overlap with the CDFW block grid cells align perfectly. The spatial resolution of this "grid" in spherical geometry is 10-arcminute, or ~10 nautical miles (~18.5km) at the Equator and the polygons that span the shoreline are clipped to the shoreline. The grid was generated in a geographic coordinate system and then transformed to Cartesian for area calculations. NOTE: Across the US West Coast, the distance between the meridians decreases with increasing latitude, so the actual area of these grid cells is not constant across space. The attribute named "Area_m2" has the area calculated in Cartesian space for each grid cell and should be referenced for all calculations, especially those involving density.
 
 five km grid polys shore METADATA.xlsx is an Excel spreadsheet that provides details about the fivekm_grid_polys_shore_lamb.shp geospatial data layer. Spreadsheet has two worksheets, "General", which covers what the fivekm_grid_polys_shore_lamb.shp is and "Attributes", with details about the various demographic data that are now incorporated in the grid.
 
