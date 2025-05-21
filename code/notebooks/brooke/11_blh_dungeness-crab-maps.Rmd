@@ -1,0 +1,493 @@
+---
+title: "11_blh_dungeness-crab-maps"
+author: "Brooke Hawkins"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Set up
+
+```{r, include=FALSE}
+# start timer
+start_timer <- proc.time()
+```
+
+## Focus: Maps
+
+Make persistence maps from gridded output for one-sliders and monthly maps from gridded output for appendix.
+
+```{r setup, include=FALSE}
+# import libraries
+library(tidyverse)
+library(here)
+library(sf)
+library(rnaturalearth)
+library(viridis)
+library(magick)
+
+# adjust ggplot theme
+theme_replace(axis.text.x=element_text(angle=45, vjust=1, hjust=1),
+              axis.ticks.x=element_blank(),
+              axis.ticks.y=element_blank())
+```
+
+```{r create-output-directories}
+# make hindcast output subdirectory, if doesn't yet exist
+output_dir <- here('Confidential', 'hindcast_output', paste0("hindcast_output_", Sys.Date()))
+if (!dir.exists(output_dir)) dir.create(output_dir)
+```
+
+Choose years, map regions, and whether maps should be confidential.
+
+The current options for years are *2011-2023* and are filtered based on the VMS data.
+
+The current options for map regions are filtered based on the grid:
+-   *Coast*: United States west coast, include Washington, Oregon and California state
+-   *Washington*: Washington state
+-   *Oregon*: Oregon state
+-   *California*: California state
+-   *Northern California:* California state, Northern California RAMP area
+-   *Central California*: California state, Central and San Francisco RAMP areas
+-   *Southern California*: California state, Southern RAMP area
+
+Setting the confidential flag to `TRUE` will include all data in the maps. Setting the flag to `FALSE` will filter out grid cells with less than three unique vessels per month before making the maps.
+
+```{r}
+# choose years, numeric vector
+year_vector <- 2012
+# choose map regions, string vector
+region_vector <- c('Coast', 'Washington', 'Oregon', 'California', 'Northern California', 'Central California', 'Southern California')
+# choose confidential or not
+confidential_flag <- FALSE
+# choose to make gifs or not (slow step)
+gif_flag <- FALSE
+```
+
+# Data
+
+## Load data
+
+1.  Load the joined, cleaned, interpolated VMS and fish ticket data for specified years, which will be used to map fishing activity distribution.
+2.  Load the spatial 5km grid, which will also be used to map fishing activity distribution.
+3.  Load the inflation adjustment table, which will be used to adjust revenue for inflation.
+4.  Load the spatial fathom lines for depth restrictions, which will be used as a reference line in some maps.
+5.  Load the rotated 21 and 30 degree extents, which will be used to rotate coastal and California maps later on.
+
+Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB. Run notebook 10, which creates the inflation adjustment table and output directories.
+
+```{r load-data}
+# iterate over years from the year_vector set at the top of the script to load VMS and fish ticket data
+vms_df <- purrr::map(year_vector, function(y) {
+  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'interpolated', paste0('interpolated_', y, '.rds')))
+}) %>% bind_rows()
+
+# load 5km grid shape file
+grid_5km <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
+
+# load inflation adjustment
+fred_pcepi <- read.csv(file = here(output_dir, "tables", "inflation_pcepi.csv")) %>%
+  mutate(year_month = date(year_month))
+
+# load 30 and 40 fathoms
+fathoms_sf <- read_sf(here('spatial_data', 'fathom_30to40_lines_lamb.shp'))
+
+# load 21 and 30 degree rotated coordinate reference systems
+crs_21 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_21.shp')) %>% st_crs()
+crs_30 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_30.shp')) %>% st_crs()
+```
+
+Assign coordinate reference systems for the different maps. The elements are named after the regions that are options for `region_vector` at the top of the script.
+
+```{r}
+crs_list <- list(
+  'Coast' = st_crs(crs_21),
+  'Washington' = st_crs(grid_5km),
+  'Oregon' = st_crs(grid_5km),
+  'California' = st_crs(crs_30),
+  'Northern California' = st_crs(grid_5km),
+  'Central California' = st_crs(crs_30),
+  'Southern California' = st_crs(grid_5km)
+)
+```
+
+## Transform data
+
+Transform the joined, cleaned, interpolated VMS and fish ticket data:
+
+1.  Filter for dungeness crab related records, min/max depth and speed filters.
+2.  Add temporal columns.
+3.  Adjust revenue for inflation with data from FRED.
+4.  Join spatial grid to VMS data, which is one of the slowest parts of the script.
+5.  Filter grid to include only US EEZ and remove Puget Sound fishing.
+
+Some commonly used acronyms for variable naming in the code include:
+
+-   `dcrb` dungeness crab
+-   `rev` revenue
+-   `lbs` landings
+-   `VMS` vessel monitoring system
+-   `afi` adjusted for inflation
+
+```{r transform-vms-data}
+# define filters
+target_rev <- "DCRB"         # revenue target
+target_lbs <- "DCRB"         # landings target
+min_depth <- 0               # minimum depth in meters
+max_depth <- -150            # maximum depth in meters
+min_speed <- 0               # minimum speed in m/s
+max_speed <- 4.11556         # maximum speed in m/s (4.11556 m/s = 8 knots)
+crab_year_start <- 11        # month defines start of crab year
+winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
+
+# transform VMS and fish ticket data
+dcrb_vms_df <- vms_df %>%
+  # add temporal columns
+  mutate(
+    year_numeric = year(westcoastdate_notime),
+    month_numeric = month(westcoastdate_notime),
+    week_numeric = week(westcoastdate_notime),
+    day_numeric = yday(westcoastdate_notime),
+    month_factor = month(westcoastdate_notime, label = TRUE, abbr = FALSE),
+    year_month_character = paste0(year(westcoastdate_notime),"_", substr(ymd(westcoastdate_notime), 6, 7)),
+    crab_year_character = ifelse(month_numeric >= crab_year_start, 
+                                 paste0(year_numeric, "_", 1+year_numeric),
+                                 paste0(year_numeric-1, "_", year_numeric)),
+    season_character = as.character(ifelse(month_factor %in% winter_months, "Winter", "Spring-Summer")),
+    year_month_date = ym(year_month_character)
+  ) %>%
+  # apply VMS filters
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
+  filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
+  # join inflation adjustment factor and adjust revenue
+  left_join(fred_pcepi, by = join_by(year_month_date == year_month)) %>%
+  mutate(DCRB_revenue_afi = DCRB_revenue * 100 / pcepi) %>%
+  # select columns
+  dplyr::select(
+    # identifiers
+    Rec_ID,           # fish ticket ID
+    VMS_RECNO,        # VMS ping ID
+    drvid,            # vessel ID
+    pacfin_port_code, # port ID
+    port_group_code,  # port group ID
+    agency_code,      # state agency code
+    # temporal fields
+    westcoastdate,
+    westcoastdate_notime,
+    year_month_date,
+    crab_year_character,
+    year_month_character,
+    month_factor,
+    year_numeric,
+    month_numeric,
+    week_numeric,
+    day_numeric,
+    # vessel length
+    FINAL_LENGTH,
+    # inflation adjustment index
+    pcepi,
+    # dungeness crab fields
+    DCRB_lbs,
+    DCRB_revenue_afi,
+    # spatial fields
+    LAT,
+    LON
+  ) %>%
+  # join 5km grid
+  st_as_sf(coords = c('LON', 'LAT'), crs = 4326) %>%
+  st_transform(st_crs(grid_5km)) %>%
+  st_join(grid_5km) %>%
+  st_set_geometry(NULL) %>%
+  # apply grid filters 
+  filter(EEZ == "USA") %>%
+  filter(Salish_Sea == 0) %>%
+  # drop some columns not currently in use, though these can be used later for joining to Chris Free's data
+  select(-c("LL_EAST", "UL_EAST", "UR_EAST", "LR_EAST", "LL_NORTH", "UL_NORTH", "UR_NORTH", "LR_NORTH", "LL_LATITUD", "UL_LATITUD", "UR_LATITUD", "LR_LATITUD", "LL_LONGITU", "UL_LONGITU", "UR_LONGITU", "LR_LONGITU"))
+
+# count total records, trips and years
+n_records <- nrow(dcrb_vms_df)
+n_trips   <- n_distinct(dcrb_vms_df$Rec_ID)
+n_years   <- n_distinct(dcrb_vms_df$year_numeric)
+
+# take a peek at the resulting dataframe
+glimpse(dcrb_vms_df)
+```
+
+The dungeness crab VMS dataframe has `r n_records` records (interpolated VMS pings), `r n_trips` trips (fish tickets), across `r n_years` years.
+
+```{r}
+# clean up
+remove(vms_df, n_records, n_trips, n_years)
+```
+
+Next, create a monthly gridded summary of fishing activity.
+
+1.  Add trip-level attributes:
+
+-   `trip_n_vms_records`: the number of interpolated VMS records associated with a fishing trip (fish ticket)
+
+2.  Add VMS record attributes, calculated using the trip-level attribute:
+
+-   `dcrb_lbs_per_vms_record`: the total landings for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with 1200 lbs landed and 20 VMS records would have 60 lbs per VMS record)
+-   `dcrb_rev_per_vms_record`: the total revenue for a fishing trip, divided by the number of VMS records associated with that trip (e.g. a fish ticket with \$4000 revenue and 20 VMS pings would have \$200 revenue per VMS record)
+
+3.  Summarize fishing activity at a monthly gridded level:
+
+-   `dcrb_lbs`: the total landings per VMS record in a given grid cell in a given month
+-   `dcrb_rev`: the total revenue per VMS record in a given grid cell in a given month
+-   `n_vms_records`: the number of VMS records in a given grid cell in a given month
+-   `n_unique_vessels`: the number of unique vessels in a given grid cell in a given month
+-   `remove_for_confidentiality`: determines whether the grid cell month has \<3 unique vessels; in which case, the data in this grid cell and month needs to be excluded from non-confidential reports
+
+4.  Optionally filter for non-confidentiality, depending on `confidential_flag` set at the top of the script.
+
+```{r gridded-summary}
+# count records per trip (fish ticket)
+trip_df <- dcrb_vms_df %>%
+  group_by(Rec_ID) %>%
+  summarise(trip_n_vms_records = n())
+
+# create monthly gridded summary
+dcrb_5km_monthly_df <- dcrb_vms_df %>% 
+  # join records per trip to VMS data
+  left_join(trip_df, by = "Rec_ID") %>%
+  # attribute landings and revenue to each VMS record
+  mutate(
+    dcrb_lbs_per_vms_record = DCRB_lbs / trip_n_vms_records,
+    dcrb_rev_per_vms_record = DCRB_revenue_afi / trip_n_vms_records
+  ) %>%
+  # create monthly gridded summary
+  group_by(
+    # grid cell ID, makes this a gridded summary
+    GRID5KM_ID,
+    # temporal columns, makes this a monthly summary
+    crab_year_character,
+    year_numeric,
+    year_month_character,
+    year_month_date,
+    month_factor,
+    month_numeric
+  ) %>%
+  # sum landings and revenue, count VMS records and unique vessels
+  summarise(
+    dcrb_lbs = sum(dcrb_lbs_per_vms_record),
+    dcrb_rev = sum(dcrb_rev_per_vms_record),
+    n_vms_records = n(),
+    log_10_n_vms_records = log10(n_vms_records),
+    n_unique_vessels = n_distinct(drvid),
+    .groups = "drop"
+  ) %>% 
+  # remove for confidentiality if a grid cell and month has < 3 distinct vessels
+  mutate(remove_for_confidentiality = n_unique_vessels < 3)
+
+# if confidential flag is set to false, then filter out records that should be removed for confidentiality
+if (!confidential_flag) {
+  dcrb_5km_monthly_df <- dcrb_5km_monthly_df %>% filter(!remove_for_confidentiality)
+}
+
+# write monthly gridded summary, specifying whether output is confidential
+if (confidential_flag) {
+  write.csv(
+    file = here(output_dir, "tables", "dcrb_5km_monthly_confidential_df.csv"),
+    x = dcrb_5km_monthly_df, 
+    row.names = FALSE
+  )
+} else {
+  write.csv(
+    file = here(output_dir, "tables", "dcrb_5km_monthly_nonconfidential_df.csv"),
+    x = dcrb_5km_monthly_df, 
+    row.names = FALSE
+  )
+}
+```
+
+# Plots
+
+Create fishing activity maps, based on the gridded summary above.
+
+```{r background-map}
+# set west coast as background map
+west_coast_states <- rnaturalearth::ne_states(country = 'United States of America', returnclass = 'sf') %>% 
+  filter(name %in% c('California', 'Oregon', 'Washington', 'Nevada')) %>% 
+  st_transform(st_crs(grid_5km))
+```
+
+```{r map-function}
+# fishing activity map
+fishing_map <- function(data_sf, fill_var, fill_range, fathoms_sf, background_sf, map_bbox, title, subtitle, fill_label, png_name) {
+  # make plot
+  map_output <- ggplot() +
+    geom_sf(data = data_sf, aes(fill = get(fill_var)), lwd = 0) +
+    geom_sf(data = background_sf, fill = 'gray80') +
+    geom_sf(data = fathoms_sf, lwd = 0.1) +
+    labs(title = title, subtitle = subtitle, fill = fill_label) +
+    xlim(map_bbox[1], map_bbox[3]) +
+    ylim(map_bbox[2], map_bbox[4]) +
+    scale_fill_viridis(limits = fill_range)
+  ggsave(filename = png_name, create.dir = TRUE)
+  
+  # return plot
+  return(map_output)
+}
+```
+
+## PNGs
+
+Make one map per region, year and month.
+
+```{r monthly-maps}
+# set map directory name, specifying whether output is confidential
+if (confidential_flag) {
+  map_subdir = here(output_dir, "monthly_maps_confidential")
+} else {
+  map_subdir = here(output_dir, "monthly_maps_nonconfidential")
+}
+
+# rejoin spatial data to gridded data
+dcrb_5km_monthly_sf <- dcrb_5km_monthly_df %>%
+  left_join(grid_5km, by = join_by(GRID5KM_ID)) %>%
+  st_as_sf()
+
+# iterate over map regions from the region_vector set at the top of the script
+for (r in region_vector) {
+  
+  # filter data
+  if (r == "Coast") {
+    region_sf <- dcrb_5km_monthly_sf
+  } else if (r == "Washington") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "WA")
+  } else if (r == "Oregon") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "OR")
+  } else if (r == "California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA")
+  } else if (r == "Northern California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA" & RAMP_area == "Northern")
+  } else if (r == "Central California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA" & RAMP_area %in% c("Central", "San Francisco"))
+  } else if (r == "Southern California") {
+    region_sf <- dcrb_5km_monthly_sf %>% filter(STATE == "CA" & RAMP_area == "Southern")
+  } else {
+    next
+  }
+  
+  # if there is no data for the region, move on
+  if(nrow(region_sf) == 0) {
+    next
+  }
+  
+  # set bounding box
+  region_bbox <- region_sf %>%
+    st_transform(crs = crs_list[[r]]) %>%
+    st_bbox(region_sf)
+  
+  # set limits for min and max fill for # VMS pings across region for whole time frame (not just one month)
+  region_fill_range <- range(region_sf$log_10_n_vms_records)
+
+  # iterate over months
+  for (y in year_vector) {
+    for (m in 1:12) {
+      
+      # filter data for year month
+      ym_data_sf <- region_sf %>% 
+        filter(year_numeric == y) %>%
+        filter(month_numeric == m) %>%
+        st_transform(crs = crs_list[[r]])
+      
+      # get png directory name
+      png_dir_name <- here(map_subdir, r)
+      
+      # create file name, adding "blank" to the file name if there's no data
+      if (nrow(ym_data_sf) > 0) {
+        png_name <- here(
+          png_dir_name, 
+          paste0("log_10_n_vms_records_", y, "_", ifelse(nchar(m) == 1, paste0("0", m), m), ".png")
+        )
+      } else {
+        png_name <- here(
+          png_dir_name, 
+          paste0("log_10_n_vms_records_", y, "_", ifelse(nchar(m) == 1, paste0("0", m), m), "_blank.png")
+        )
+      }
+      
+      # make png
+      vms_map <- fishing_map(
+        data_sf = ym_data_sf,
+        fill_var = "log_10_n_vms_records",
+        fill_range = region_fill_range,
+        fathoms_sf = fathoms_sf,
+        background_sf = west_coast_states,
+        map_bbox = region_bbox,
+        title = r,
+        subtitle = paste(y, month.name[m]),
+        fill_label = "Log(VMS)",
+        png_name = png_name
+      )
+    }
+  }
+}
+
+rm(r, y, m)
+```
+
+## GIFs
+
+For each region, combine maps into animated gif.
+
+```{r gif-function}
+# function to combine fishing activity maps in map_directory into an animation.gif in the same folder
+fishing_activity_gif <- function (map_directory) {
+  
+  # get list of files in the map directory
+  png_list <- list.files(map_directory)
+  
+  if (length(png_list) > 0) {
+    # read in all images
+    image_list <- lapply(here(map_directory, png_list), image_read)
+    # join and animate images
+    image_gif <- image_animate(image_join(image_list), fps = 2)
+    # write GIF
+    image_write(image = image_gif, path = here(map_directory, "animation.gif"))
+    # return GIF
+    return(image_gif)
+  } else {
+    return(FALSE)
+  }
+}
+```
+
+```{r make-gifs}
+# iterate over map regions from the region_vector set at the top of the script
+if (gif_flag) {
+  for (r in region_vector) {
+    fishing_activity_gif(here(map_subdir, r))
+  }
+}
+```
+
+```{r, include=FALSE}
+# end timer
+end_timer <- proc.time()
+total_timer <- end_timer - start_timer
+
+# create dataframe with parameters and runtime
+log_df <- tibble(
+  variable = c('year_vector', 'region_vector', 'confidential_flag', 'gif_flag', 'end_time', 'run_time_minutes'),
+ value = c(
+   paste(year_vector, collapse = ", "), 
+   paste(region_vector, collapse = ", "), 
+   confidential_flag,
+   gif_flag,
+   end_time = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+   run_time = round(total_timer[3]/60, 2)
+ )
+)
+
+# write dataframe to CSV
+write.csv(
+  file = here(output_dir, paste0("map_log_", format(Sys.time(),"%F_%H-%M-%S"), ".csv")),
+  x = log_df,
+  row.names = FALSE
+)
+```
+
+This script took `r round(total_timer[3]/60, 2)` minutes to run.
