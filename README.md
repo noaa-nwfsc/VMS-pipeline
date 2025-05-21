@@ -16,7 +16,7 @@ If it’s your first time running the pipeline (ever or after a break), you will
 
 The directory structure you have will mostly be set up from pulling these changes, but there are some exceptions that are not tracked on GitHub (they are in `.gitignore`) that you will have to set up yourself. Those files are:
 
-* `spatial_data/composite_bath.tif` This file is quite large and is therefore not tracked on GitHub. Visit the link in `spatial_data/README_bathymetry-file-link.txt` to download it.
+* `spatial_data/bathymetry/composite_bath.tif` This file is quite large and is therefore not tracked on GitHub. Visit the link in `spatial_data/bathymetry/README_bathymetry-file-link.txt` to download it.
 * `Confidential/raw_data` This directory contains confidential information and is therefore not tracked on GitHub. Here are the files and file structure you will need to run the pipeline:
   * `raw_data/fish_tickets/all_fishtickets_1994_2023.rds`
   * `raw_data/vessel_registration/2009_2023_vesselreg.csv`
