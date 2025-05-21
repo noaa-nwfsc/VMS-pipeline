@@ -1,0 +1,82 @@
+---
+title: "15_blh_sablefish-VMS-coverage"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+```{r}
+# load fish tickets
+tickets <- read_rds(here(
+  'Confidential',
+  'processed_data',
+  'processed_2025-05-20',
+  'fish_tickets',
+  'fishtix_withFTID_2018.rds'
+))
+
+# filter for sablefish
+sabl_tickets <- tickets %>%
+  filter(TARGET_lbs == "SABL" | TARGET_rev == "SABL") %>%
+  select(
+    Rec_ID,
+    FTID,
+    date,
+    FOS_GROUNDFISH_SECTOR_CODE,
+    SABL_lbs,
+    SABL_revenue
+  ) %>%
+  distinct() %>%
+  rename(
+    ticket_date = "date",
+    sector = "FOS_GROUNDFISH_SECTOR_CODE",
+    landings = "SABL_lbs",
+    revenue = "SABL_revenue"
+  )
+
+# check count - how many Rec_ID vs. FTID? before and after filtering on target?
+length(unique(tickets$Rec_ID))
+length(unique(sabl_tickets$Rec_ID))
+
+# check count - how many Rec_ID mismatch in target for landings vs. revenue?
+tickets %>%
+  filter(TARGET_lbs == "SABL" & TARGET_rev == "SABL") %>%
+  summarize(n_distinct(Rec_ID))
+tickets %>%
+  filter(TARGET_lbs != "SABL" & TARGET_rev == "SABL") %>%
+  summarize(n_distinct(Rec_ID))
+tickets %>%
+  filter(TARGET_lbs == "SABL" & TARGET_rev != "SABL") %>%
+  summarize(n_distinct(Rec_ID))
+
+# check count - what are the unique groundfish sector codes?
+sector_codes <-
+  tickets %>%
+  group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
+  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
+  summarize(n_distinct(Rec_ID))
+sabl_tickets %>%
+  group_by(sector) %>%
+  filter(sector %in% sector_codes) %>%
+  summarize(n_distinct(Rec_ID))
+
+# check count - how many sablefish records, going based on the groundfish sector codes?
+```
+
+Based on the [PacFIN Comprehensive FT documentation](https://pacfin.psmfc.org/wp-content/uploads/2022/05/PacFIN_Comprehensive_Fish_Tickets.pdf), the FTID is:
+* FISH_TICKET_ID (renamed Rec_ID in VMS pipeline): PacFIN assigned unique number for each fish ticket. (Source: PacFIN)
+* FTID: Source agency fish ticket identifier. This number is unique within a
+year and agency, but not necessarily across years or agencies. (Source: Agency)
+
+I should check with Kayleigh how she determines if a ticket is a sablefish ticket or not.
+Looking back at Michaela's code, I see these sector codes:
+* CS: "Catch Shares" or "Catch Shares EM"
+* LE: "Limited Entry Sablefish"
+* OA: "OA Fixed Gear"
+
+```{r}
+
+```
