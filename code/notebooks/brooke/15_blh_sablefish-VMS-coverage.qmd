@@ -6,9 +6,46 @@ format:
 ---
 
 ```{r setup}
+#| include: false
 library(tidyverse)
 library(here)
 ```
+
+I'm using cleaned fish tickets from step 1 of the VMS output.
+
+```{r filters}
+# filters for fish tickets
+sector_codes <- c(
+  "Catch Shares",
+  "Catch Shares EM",
+  "Limited Entry Sablefish",
+  "OA Fixed Gear"
+)
+
+# filters for VMS
+target_rev <- "SABL" # revenue target
+target_lbs <- "SABL" # landings target
+min_depth <- 0 # minimum depth in meters
+max_depth <- -1500 # maximum depth in meters
+min_speed <- 0 # minimum speed in m/s
+max_speed <- 4.11556 # maximum speed in m/s (4.11556 m/s = 8 knots)
+```
+
+I'm starting with one year of data for now (2018, not chosen for any reason).
+
+Based on the [PacFIN Comprehensive FT documentation](https://pacfin.psmfc.org/wp-content/uploads/2022/05/PacFIN_Comprehensive_Fish_Tickets.pdf), the FTID is:
+
+* FISH_TICKET_ID (renamed Rec_ID in VMS pipeline): PacFIN assigned unique number for each fish ticket. (Source: PacFIN)
+* FTID: Source agency fish ticket identifier. This number is unique within a
+year and agency, but not necessarily across years or agencies. (Source: Agency)
+
+I checked with Kayleigh how she determines if a ticket is a sablefish pot ticket or not, and it's by filtering with the sector codes and pot group gear code.
+
+Based on our discussions around Michaela's BiOp code, I am using these sector codes:
+
+* CS: "Catch Shares" or "Catch Shares EM"
+* LE: "Limited Entry Sablefish"
+* OA: "OA Fixed Gear"
 
 ```{r checks}
 # load fish tickets
@@ -20,75 +57,12 @@ tickets <- read_rds(here(
   'fishtix_withFTID_2018.rds'
 ))
 
-# filter for sablefish
+# filter for sablefish pot tickets
 sabl_tickets <- tickets %>%
-  filter(TARGET_lbs == "SABL" | TARGET_rev == "SABL") %>%
-  select(
-    Rec_ID,
-    FTID,
-    date,
-    FOS_GROUNDFISH_SECTOR_CODE,
-    SABL_lbs,
-    SABL_revenue
+  filter(
+    FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes,
+    PACFIN_GROUP_GEAR_CODE == "POT"
   ) %>%
-  distinct() %>%
-  rename(
-    ticket_date = "date",
-    sector = "FOS_GROUNDFISH_SECTOR_CODE",
-    landings = "SABL_lbs",
-    revenue = "SABL_revenue"
-  )
-
-# check count - how many Rec_ID vs. FTID? before and after filtering on target?
-length(unique(tickets$Rec_ID))
-length(unique(sabl_tickets$Rec_ID))
-
-# check count - how many Rec_ID mismatch in target for landings vs. revenue?
-tickets %>%
-  filter(TARGET_lbs == "SABL" & TARGET_rev == "SABL") %>%
-  summarize(n_distinct(Rec_ID))
-tickets %>%
-  filter(TARGET_lbs != "SABL" & TARGET_rev == "SABL") %>%
-  summarize(n_distinct(Rec_ID))
-tickets %>%
-  filter(TARGET_lbs == "SABL" & TARGET_rev != "SABL") %>%
-  summarize(n_distinct(Rec_ID))
-
-# check count - what are the unique groundfish sector codes?
-sector_codes <- c(
-  "Catch Shares",
-  "Catch Shares EM",
-  "Limited Entry Sablefish",
-  "OA Fixed Gear"
-)
-tickets %>%
-  group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
-  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
-  summarize(n_distinct(Rec_ID))
-sabl_tickets %>%
-  group_by(sector) %>%
-  filter(sector %in% sector_codes) %>%
-  summarize(n_distinct(Rec_ID))
-```
-
-Based on the [PacFIN Comprehensive FT documentation](https://pacfin.psmfc.org/wp-content/uploads/2022/05/PacFIN_Comprehensive_Fish_Tickets.pdf), the FTID is:
-* FISH_TICKET_ID (renamed Rec_ID in VMS pipeline): PacFIN assigned unique number for each fish ticket. (Source: PacFIN)
-* FTID: Source agency fish ticket identifier. This number is unique within a
-year and agency, but not necessarily across years or agencies. (Source: Agency)
-
-I should check with Kayleigh how she determines if a ticket is a sablefish ticket or not.
-Looking back at Michaela's code, I see these sector codes:
-* CS: "Catch Shares" or "Catch Shares EM"
-* LE: "Limited Entry Sablefish"
-* OA: "OA Fixed Gear"
-
-This next section reads in WCGOP & EM data, which I got from Kayleigh and is stored in `Confidential/raw_data/wcgop`. (WCGOP & EM = West Coast Groundfish Observer Program & Electronic Monitoring, data shared in December 2024)
-
-```{r tickets}
-# restart using WCGOP approach to sablefish trip definition
-# filter for sablefish
-sabl_tickets <- tickets %>%
-  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
   select(
     Rec_ID,
     FTID,
@@ -107,6 +81,8 @@ sabl_tickets <- tickets %>%
     revenue = "SABL_revenue"
   )
 ```
+
+This next section reads in WCGOP & EM data, which I got from Kayleigh and is stored in `Confidential/raw_data/wcgop`. (WCGOP & EM = West Coast Groundfish Observer Program & Electronic Monitoring, data shared in December 2024)
 
 ```{r wcgop}
 # read in WCGOP/EM data
@@ -159,14 +135,6 @@ vms_df <- read_rds(here(
 
 # check out shape of result
 vms_df %>% group_by(FOS_GROUNDFISH_SECTOR_CODE) %>% summarise(n_distinct(FTID))
-
-# define VMS filters
-target_rev <- "SABL" # revenue target
-target_lbs <- "SABL" # landings target
-min_depth <- 0 # minimum depth in meters
-max_depth <- -150 # maximum depth in meters
-min_speed <- 0 # minimum speed in m/s
-max_speed <- 4.11556 # maximum speed in m/s (4.11556 m/s = 8 knots)
 
 # add speed and depth filters, then check again
 filtered_vms_df <- vms_df %>%
