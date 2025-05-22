@@ -33,12 +33,6 @@ max_speed <- 4.11556 # maximum speed in m/s (4.11556 m/s = 8 knots)
 
 I'm starting with one year of data for now (2018, not chosen for any reason).
 
-Based on the [PacFIN Comprehensive FT documentation](https://pacfin.psmfc.org/wp-content/uploads/2022/05/PacFIN_Comprehensive_Fish_Tickets.pdf), the FTID is:
-
-* FISH_TICKET_ID (renamed Rec_ID in VMS pipeline): PacFIN assigned unique number for each fish ticket. (Source: PacFIN)
-* FTID: Source agency fish ticket identifier. This number is unique within a
-year and agency, but not necessarily across years or agencies. (Source: Agency)
-
 I checked with Kayleigh how she determines if a ticket is a sablefish pot ticket or not, and it's by filtering with the sector codes and pot group gear code.
 
 Based on our discussions around Michaela's BiOp code, I am using these sector codes:
@@ -59,10 +53,10 @@ tickets <- read_rds(here(
 
 # filter for sablefish pot tickets
 sabl_tickets <- tickets %>%
-  filter(
-    FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes,
-    PACFIN_GROUP_GEAR_CODE == "POT"
-  ) %>%
+  # filter for sablefish pot sectors (OA, LE, CS)
+  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
+  # filter for pot gear (will be > 0 for catch based on gear codes in main_process of VMS)
+  filter(all_species_lbs > 0 | all_species_rev > 0) %>%
   select(
     Rec_ID,
     FTID,
@@ -111,9 +105,19 @@ pot_wcgop %>% group_by(sector) %>% summarise(n_distinct(FTID))
 pot_wcgop <- pot_wcgop %>% select(-sector)
 ```
 
+Now read in the VMS data, and applying the same filters I apply when gridding and mapping. 
+
+I'm using FTID rather than Rec_ID (FISH_TICKET_ID) because Kayleigh said WCGOP uses the agency provided fish ticket ID, not the PacFIN provided fish ticket ID.
+
+Based on the [PacFIN Comprehensive FT documentation](https://pacfin.psmfc.org/wp-content/uploads/2022/05/PacFIN_Comprehensive_Fish_Tickets.pdf), the FTID is:
+
+* FISH_TICKET_ID (renamed Rec_ID in VMS pipeline): PacFIN assigned unique number for each fish ticket. (Source: PacFIN)
+* FTID: Source agency fish ticket identifier. This number is unique within a
+year and agency, but not necessarily across years or agencies. (Source: Agency)
+
 ```{r vms}
 # read in VMS data
-vms_df <- read_rds(here(
+vms <- read_rds(here(
   'Confidential',
   'processed_data',
   'processed_2025-05-20',
@@ -133,39 +137,40 @@ vms_df <- read_rds(here(
   distinct() %>%
   mutate(vms_rep = 1)
 
-# check out shape of result
-vms_df %>% group_by(FOS_GROUNDFISH_SECTOR_CODE) %>% summarise(n_distinct(FTID))
-
-# add speed and depth filters, then check again
-filtered_vms_df <- vms_df %>%
+# apply filters
+sabl_vms <- vms %>%
+  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
-  filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed)
-filtered_vms_df %>%
+  filter(NGDC_M <= min_depth, NGDC_M >= max_depth) %>%
+  filter(avg_speed_recalc <= max_speed, avg_speed_recalc >= min_speed) %>%
+  select(FTID, FOS_GROUNDFISH_SECTOR_CODE) %>%
+  distinct() %>%
+  mutate(vms_rep = 1)
+
+# check out shape of result
+nrow(sabl_vms)
+sabl_vms %>%
   group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
   summarise(n_distinct(FTID))
 
-# add groundfish sector filters, then check again
-filtered_vms_df <- filtered_vms_df %>%
-  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes)
-filtered_vms_df %>%
-  group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
-  summarise(n_distinct(FTID))
+# drop sector before rejoining to tickets
+sabl_vms <- sabl_vms %>% select(-FOS_GROUNDFISH_SECTOR_CODE)
 ```
 
-```{r join}
+Now left join WCGOP and VMS data onto the fish tickets, using FTID as the join key.
 
+```{r join}
 joined_df <- sabl_tickets %>%
-  # join the three dataframes
+  # join dataframes
   left_join(pot_wcgop, by = join_by(FTID == FTID)) %>%
-  left_join(filtered_vms_df, by = join_by(FTID == FTID)) %>%
-  # drop duplicate or unneeded columns
-  select(-FOS_GROUNDFISH_SECTOR_CODE, -NGDC_M) %>%
-  # combine catch shares into the same sector and create a coverage variable
+  left_join(sabl_vms, by = join_by(FTID == FTID)) %>%
   mutate(
+    # fill 0's instead of NAs if dataset not representative
     wcgop_rep = coalesce(wcgop_rep, 0),
     vms_rep = coalesce(vms_rep, 0),
+    # combine Catch Shares EM and Catch Shares into Catch Shares sector
     sector = ifelse(sector == "Catch Shares EM", "Catch Shares", sector),
+    # create a categorical coverage variable, then make it a factor
     coverage = case_when(
       wcgop_rep + vms_rep == 2 ~ "both",
       wcgop_rep == 1 ~ "wcgop_only",
@@ -177,7 +182,9 @@ joined_df <- sabl_tickets %>%
       levels = c("neither", "wcgop_only", "vms_only", "both")
     )
   )
+```
 
+```{r vis}
 vis_df <- joined_df %>%
   group_by(sector, coverage_factor) %>%
   summarize(n_tickets = n_distinct(FTID)) %>%
@@ -194,6 +201,121 @@ vis_df %>%
   geom_col(position = "fill")
 
 vis_df %>%
+  ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
+  geom_col()
+```
+
+Read in raw fish tickets instead, rather than cleaned fish tickets. I wanted to avoid this since it's slow, but I want to use the filters Kayleigh suggested for Pot and Sector and see if I get more complete results than with the cleaned version.
+
+I'm also adding some additional filters documented by Abigail, see issue [#38](https://github.com/noaa-nwfsc/VMS-pipeline/issues/38):
+
+* Fleet code: FLEET_CODE != "TI" purpose is to remove tribal catch
+* Vessel id: drvid == "MISSING" purpose is to remove tickets with missing vessel ID, currently VMS pipeline removes blanks and "UNKNOWN"
+* Council code: COUNCIL_CODE != "N" (equivalent to COUNCIL_CODE = "P" | COUNCIL_CODE = "*") purpose is to remove fish tickets landed in AK and transported to the WC
+* Participation group code: PARTICIPATION_GROUP_CODE != "A" purpose is to remove aquaculture fish tickets; may be equivalent to removing records with blank vessel IDs and including only records with VMS data joined in, since the aquaculture tickets presumably have no vessel ID or VMS data associated with them
+
+```{r}
+# load data
+raw_tickets <- read_rds(here(
+  'Confidential',
+  'raw_data',
+  'fish_tickets',
+  'all_fishtickets_1994_2023.rds'
+))
+
+# filter data
+sabl_raw_tickets <- raw_tickets %>%
+  filter(
+    # filter for 2018
+    LANDING_YEAR == 2018,
+    # filter gear type
+    PACFIN_GROUP_GEAR_CODE == "POT",
+    # filter species
+    SPECIES_CODE_NAME == "SABLEFISH",
+    # filter sector codes
+    FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes,
+    # remove missing vessel ID
+    VESSEL_NUM != "MISSING",
+    VESSEL_NUM != "UNKNOWN",
+    VESSEL_NUM != "",
+    # remove tickets landed in AK and transported to WC
+    COUNCIL_CODE != "N",
+    # remove tribal fishing
+    FLEET_CODE != "TI",
+    # remove aquaculture
+    PARTICIPATION_GROUP_CODE != "A"
+  )
+
+# check out shape of result
+nrow(sabl_raw_tickets)
+sabl_raw_tickets %>%
+  group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
+  summarise(n_distinct(FTID))
+```
+
+Redo the join and vis, using the raw fish ticket data instead.
+
+```{r}
+joined_raw_df <- sabl_raw_tickets %>%
+  # select a couple columns
+  select(
+    LANDING_DATE,
+    FISH_TICKET_ID,
+    FTID,
+    VESSEL_NUM,
+    AGENCY_CODE,
+    FOS_GROUNDFISH_SECTOR_CODE,
+    LANDED_WEIGHT_LBS,
+    EXVESSEL_REVENUE
+  ) %>%
+  # de-dupe, may not be necessary
+  distinct() %>%
+  # join dataframes
+  left_join(pot_wcgop, by = join_by(FTID == FTID)) %>%
+  left_join(sabl_vms, by = join_by(FTID == FTID)) %>%
+  rename(sector = "FOS_GROUNDFISH_SECTOR_CODE") %>%
+  mutate(
+    # fill 0's instead of NAs if dataset not representative
+    wcgop_rep = coalesce(wcgop_rep, 0),
+    vms_rep = coalesce(vms_rep, 0),
+    # combine Catch Shares EM and Catch Shares into Catch Shares sector
+    sector = ifelse(sector == "Catch Shares EM", "Catch Shares", sector),
+    # create a categorical coverage variable, then make it a factor
+    coverage = case_when(
+      wcgop_rep + vms_rep == 2 ~ "both",
+      wcgop_rep == 1 ~ "wcgop_only",
+      vms_rep == 1 ~ "vms_only",
+      .default = "neither"
+    ),
+    coverage_factor = factor(
+      coverage,
+      levels = c("neither", "wcgop_only", "vms_only", "both")
+    )
+  )
+
+# check n_tickets per sector, regardless of coverage
+joined_raw_df %>%
+  group_by(sector) %>%
+  summarize(n_tickets = n_distinct(FTID))
+
+# check n_tickets per sector, by coverage
+vis_raw_df <- joined_raw_df %>%
+  group_by(sector, coverage_factor) %>%
+  summarize(n_tickets = n_distinct(FTID)) %>%
+  ungroup() %>%
+  group_by(sector) %>%
+  mutate(
+    percentage = n_tickets / sum(n_tickets),
+    label_y_pos = (cumsum(percentage)) - (percentage / 2)
+  ) %>%
+  ungroup()
+vis_raw_df
+
+vis_raw_df %>%
+  ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
+  geom_col(position = "fill")
+
+vis_raw_df %>%
   ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
   geom_col()
 ```
