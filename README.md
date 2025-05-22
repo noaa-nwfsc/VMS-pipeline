@@ -52,6 +52,7 @@ This VMS-fish ticket data processing pipeline is organized in six steps required
 After the pipeline has run and the markdown document is ready, run `move_markdown_html.R` to rename and move the knit document into the Confidential output folder.
 
 Here is a flowchart of the VMS pipeline, indicating each step in the pipeline with its corresponding parameters and outputs:
+
 <img src="readme_vms_flowchart.jpg" align="center" width="650">
 
 ## Pipeline Options
@@ -60,8 +61,8 @@ Each individual process step (i.e., Steps 01-06 in the `pipeline_steps` folder) 
 
 | Choice  | Parameter | Description |
 | ---- | :-----: | ------- |
-| Species  | `spp_codes`    | For which species ([PacFIN species codes](https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/sp.txt)) do you want specific landings information (weight and value) NOTE: this does NOT filter which fish tickets are processed, but rather adds extra variables |
-| Gear types | `gear_codes`  | similar to above, should be thought of NOT as a filter on which gears ([PacFIN gear codes](https://pacfin.psmfc.org/pacfin_pub/data_rpts_pub/code_lists/agency_gears.txt)) you get out of the pipeline, but rather as all of the gear types for which you would like total revenue and landings (e.g. "CRAB POT"), regardless of target species. |
+| Species  | `spp_codes`    | Which species do you want landings (weight and revenue) summed for? Note this does *not* filter which fish tickets are processed, but adds extra columns to the output. For example, if you choose `SABL` for the species code, the VMS output will include columns `SABL_revenue` and `SABL_landings` for the sablefish revenue and landings for each ticket. See options at [PacFIN Species Code List](https://reports.psmfc.org/pacfin/f?p=501:811:12652162289843:INITIAL::).|
+| Gear types | `gear_codes`  | Which gear types would you like all landings (weight and revenue) summed for? Again, note this does *not* filter which fish tickets are processed, but adds extra columns to the output. For example, if you choose `CRAB POT` for the gear code, the VMS output will include `all_species_rev` and `all_species_lbs` for the crab pot revenue and landings for each fish ticket. See options at [PacFIN Gear Code List](https://reports.psmfc.org/pacfin/f?p=501:804:15350132650778:INITIAL::). |
 | Target cutoff    | `target_cutoff` | Determines how the target species of each trip is calculated. For trips that land multiple species, how much "more important" does your target need to be than the species with the second greatest catch? Expressed as a ratio. |
 | Revenue metric | `pacfin_revenue_metric` | Which PacFIN-reported revenue metric to use in calculation of landings |
 | Weight metric | `pacfin_weight_metric` | Which PacFIN-reported weight metric to use in calculation of landings |
