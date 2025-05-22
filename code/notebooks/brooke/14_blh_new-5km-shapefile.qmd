@@ -1,0 +1,345 @@
+---
+title: "14_blh_new-5km-shapefile"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+## New 5km Shapefile
+
+I ran the monthly maps code and noticed a couple differences, all are reasonable:
+
+-   Grid cells are trimmed to the coastline. Great, much prettier maps.
+
+-   New BC subdirectory. Makes sense for a couple grid cells at the northern end of Washington, and will go away once I filter out the Puget Sound.
+
+-   A couple of grid cells moved from northern end of OR map to southern end of WA map. Seems fine, not a huge impact on the output, and the data doesn't seem to be lost, just moved along the border.
+
+Not related to the change in shape files, but related to the map visualizations - We still need to decide if it makes more sense to facet based on fishing effort (where the VMS ping is, how it's done now) vs. landings (where the ticket is landed, how it could be done). I think the answer should probably be similar to our decision to visualize by whale season, what makes the most sense from a management perspective? What regulations are the fishers held to, is it based on area fished or area landed?
+
+I want to get a sense of the unique values and combinations of values for the new features, compared to the old features.
+
+I'm going to load the two versions and compare.
+
+```{r, include=FALSE}
+library(here)
+library(tidyverse)
+library(sf)
+library(rnaturalearth)
+```
+
+```{r}
+grid_5km_v1 <- read_sf(here('spatial_data', 'master_5km_grid_tmer.shp'))
+grid_5km_v2 <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
+```
+
+What dimensions?
+
+```{r}
+dim(grid_5km_v1)
+dim(grid_5km_v2)
+```
+
+How many unique grid cells are there?
+
+```{r}
+n_distinct(grid_5km_v1$GRID5KM_ID)
+n_distinct(grid_5km_v2$GRID5KM_ID)
+```
+
+There are more grid cells in the older version, which makes me wonder if the extent is slightly broader. There are 31 more columns in the newer version, which makes sense because Blake made this to include more features I asked for.
+
+What features do they each have?
+
+```{r}
+colnames(grid_5km_v1)
+colnames(grid_5km_v2)
+```
+
+```{r}
+# what is the same?
+intersect(colnames(grid_5km_v1), colnames(grid_5km_v2))
+
+# what is unique to V1?
+setdiff(colnames(grid_5km_v1), colnames(grid_5km_v2))
+
+# what is unique to V2?
+setdiff(colnames(grid_5km_v2), colnames(grid_5km_v1))
+```
+
+The newer version has more information about:
+
+-   Area. The new version includes the area assuming the grid cell is 5km x 5km, and the actual area trimmed to exclude the coastline.
+
+-   Shoreline. Binary for whether a grid cell intersects the shoreline.
+
+-   Depth. The older version only had the weighted mean depth of the grid cell, the new version also includes the median, standard deviation, variance, minimum and maximum.
+
+-   Water zone. Does the grid cell fall within \<3, 3-200, \>200 nautical miles from shoreline.
+
+-   Salish sea. Does the grid cell fall within the Puget Sound or not.
+
+-   Management areas. CDFW RAMP areas and zones for California, Derville zones for Oregon, and Marine Fish and Shellfish Manage Catch Reporting areas for Washington.
+
+-   Corner coordinates. Since I want to be able to join this map to Chris Free's dataframe which has latitude over time, Blake added the upper and lower left and right corner locations of each grid cell.
+
+This is all based on the metadata file that Blake created, which is super helpful, since that detail is not knowable from column names alone.
+
+What geometry type?
+
+```{r}
+class(grid_5km_v1$geometry)
+class(grid_5km_v2$geometry)
+```
+
+Version 1 is polygons. Version 2 is multipolygons, because it trims the grid cells to the coast, and the shore can sometimes split a grid cell into multiple polygons.
+
+What coordinate system?
+
+```{r}
+st_crs(grid_5km_v1)
+st_crs(grid_5km_v2)
+```
+
+What extent?
+
+```{r}
+st_bbox(grid_5km_v1)
+st_bbox(grid_5km_v2)
+```
+
+Well, they're different, but that's otherwise meaningless to me.
+
+What's it look like on a map?
+
+```{r}
+background_map <- ne_states(country = 'United States of America')
+bbox_v1 <- st_bbox(grid_5km_v1)
+bbox_v2 <- st_bbox(grid_5km_v2)
+
+ggplot() +
+  geom_sf(data = grid_5km_v1, aes(fill = STATE), lwd = 0) + 
+  geom_sf(data = background_map) +
+  xlim(bbox_v1[1], bbox_v1[3]) +
+  ylim(bbox_v1[2], bbox_v1[4])
+
+ggplot() +
+  geom_sf(data = grid_5km_v2, aes(fill = STATE), lwd = 0) + 
+  geom_sf(data = background_map) +
+  xlim(bbox_v2[1], bbox_v2[3]) +
+  ylim(bbox_v2[2], bbox_v2[4])
+```
+
+What are the unique values for the new management zone variables?
+
+```{r}
+unique(grid_5km_v2$RAMP_area)
+unique(grid_5km_v2$RAMP_zone)
+unique(grid_5km_v2$WDFW_WSMA)
+unique(grid_5km_v2$Derville)
+```
+
+What do the EEZ & management zones look like on a map?
+
+```{r}
+plot_grid <- function(grid, fill_var, background) {
+  bbox <- st_bbox(grid)
+  ggplot() +
+    geom_sf(data = grid, aes(fill = get(fill_var)), lwd = 0) + 
+    geom_sf(data = background) +
+    xlim(bbox[1], bbox[3]) +
+    ylim(bbox[2], bbox[4]) +
+    labs(fill = fill_var)
+}
+
+plot_grid(grid = grid_5km_v2, fill_var = "EEZ", background = background_map)
+plot_grid(grid = grid_5km_v2, fill_var = "RAMP_area", background = background_map)
+plot_grid(grid = grid_5km_v2, fill_var = "RAMP_zone", background = background_map)
+plot_grid(grid = grid_5km_v2, fill_var = "Derville", background = background_map)
+plot_grid(grid = grid_5km_v2, fill_var = "WDFW_WSMA", background = background_map)
+```
+
+How many cells intersect the shoreline?
+
+```{r}
+sum(grid_5km_v2$Shoreline)
+```
+
+How many cells in the Salish sea?
+
+```{r}
+sum(grid_5km_v2$Salish_Sea)
+```
+
+Are all the grid cells from the newer version, or are any lost?
+
+```{r}
+length(setdiff(grid_5km_v2$GRID5KM_ID, grid_5km_v1$GRID5KM_ID))
+length(setdiff(grid_5km_v1$GRID5KM_ID, grid_5km_v2$GRID5KM_ID))
+```
+
+All of them are from the older version.
+
+Where are the old grid cells?
+
+```{r}
+old_grid_cell_ids <- setdiff(grid_5km_v1$GRID5KM_ID, grid_5km_v2$GRID5KM_ID)
+old_grid_5km_v2 <- grid_5km_v1 %>% 
+  mutate(is_old = GRID5KM_ID %in% old_grid_cell_ids) %>%
+  filter(is_old)
+old_bbox <- st_bbox(old_grid_5km_v2)
+
+ggplot() +
+  geom_sf(data = old_grid_5km_v2, color = 'orange') + 
+  geom_sf(data = background_map) +
+  xlim(old_bbox[1], old_bbox[3]) +
+  ylim(old_bbox[2], old_bbox[4])
+```
+
+Seems like they're all around the edges, which I won't be using for these maps anyways, so no problems there.
+
+## New Fathom Lines
+
+I'm going to add the new 30 and 40 fathom lines.
+
+```{r}
+# load both versions
+fathoms_poly <- read_sf(here('spatial_data', 'fathom_30to40_polygon_lamb.shp'))
+bbox_poly <- st_bbox(fathoms_poly)
+fathoms_line <- read_sf(here('spatial_data', 'fathom_30to40_lines_lamb.shp'))
+bbox_line <- st_bbox(fathoms_line)
+
+# start with one state
+or_grid <- grid_5km_v2 %>%
+  filter(EEZ == "USA") %>%
+  filter(STATE == "OR")
+or_bbox <- st_bbox(or_grid)
+
+# plot the lines version
+ggplot() +
+  geom_sf(data = or_grid) +
+  geom_sf(data = fathoms_line, lwd = 0.1) +
+  geom_sf(data = background_map) +
+  xlim(bbox_line[1], or_bbox[3]) +
+  ylim(or_bbox[2], or_bbox[4])
+
+# plot the polygons version
+ggplot() +
+  geom_sf(data = or_grid) +
+  geom_sf(data = fathoms_poly, lwd = 0.1, fill = 'gray10') +
+  geom_sf(data = background_map) +
+  xlim(bbox_poly[1], or_bbox[3]) +
+  ylim(or_bbox[2], or_bbox[4])
+```
+
+I lean towards using the lines rather than the polygons version.
+
+## Map Rotation
+
+I'm going to play around with some of the map aesthetics. How to rotate California coastline?
+
+```{r}
+# non-rotated version
+ca_grid <- grid_5km_v2 %>% filter(STATE == "CA")
+plot_grid(ca_grid, "STATE", background_map)
+plot(ca_grid, max.plot = 1)
+
+# rotated version 1
+# from https://r-spatial.github.io/sf/articles/sf3.html#affine-transformations
+rot <- function(a) matrix(c(cos(a), sin(a), -sin(a), cos(a)), 2, 2)
+ca_grid_rotated <- ca_grid
+ca_grid_rotated$geometry <- ca_grid$geometry * rot(pi * 20/180)
+plot(ca_grid_rotated, max.plot = 1)
+# issue: there's no CRS when it's rotated this way, so geom_sf throws an error
+```
+
+I'm going to load the new rotated version of the CRS that Blake uploaded.
+
+```{r}
+# rotated version 2, project using CRS from Blake
+grid_21 <- read_sf(here("spatial_data", "fivekm_grid_extent_rect_21.shp"))
+# the data here isn't important, but here it is for reference
+glimpse(grid_21)
+# this is the important part, the coordinate reference system
+st_crs(grid_21)
+```
+
+```{r}
+# transform the newer 5km grid to match the projection of the 21 degree rotated grid
+grid_5km_v2_rotated_21 <- st_transform(x = grid_5km_v2, crs = st_crs(grid_21))
+# just take a check the CRS is correct
+st_crs(grid_5km_v2_rotated_21)
+# set bounding box based on grid
+coast_bbox <- grid_5km_v2_rotated_21 %>% 
+  filter(STATE != "NA") %>%
+  st_bbox()
+
+# see how it looks now
+ggplot() +
+  geom_sf(data = grid_5km_v2_rotated_21, aes(fill = STATE), lwd = 0) +
+  geom_sf(data = fathoms_line, lwd = 0.1) +
+  geom_sf(data = background_map) +
+  xlim(coast_bbox[1], coast_bbox[3]) +
+  ylim(coast_bbox[2], coast_bbox[4])
+```
+
+Looks great! I'm going to try again with California and the 30 degree rotation.
+
+```{r}
+# load 30 degree rotated grid
+# I'm saying 'grid' in the variable name, but more accurately its the grid extent, not the grid itself - I'm just keeping variable names shorter
+grid_30 <- read_sf(here("spatial_data", "fivekm_grid_extent_rect_30.shp"))
+grid_5km_v2_rotated_30 <- grid_5km_v2 %>% st_transform(st_crs(grid_30))
+
+# plot California, use latitudinal extent from grid where state == CA, and longitudinal extent from the fathom lines
+ca_bbox <- grid_5km_v2_rotated_30 %>% 
+  filter(STATE == "CA") %>%
+  st_bbox()
+
+ggplot() +
+  geom_sf(data = grid_5km_v2_rotated_30, aes(fill = STATE), lwd = 0) +
+  geom_sf(data = fathoms_line, lwd = 0.1) +
+  geom_sf(data = background_map) +
+  xlim(bbox_line[1], bbox_line[3]) +
+  ylim(ca_bbox[2], ca_bbox[4])
+```
+
+This isn't the extent I'd actually use to plot (I'd base it on fishing activity instead), but the rotation looks great.
+
+Now I want to see if we really need the shapefile, or if I can just get the CRS from the XML file.
+
+I don't usually leave commented code, but in this case, I want to remember what I tried that failed. So I'm commenting out lines that throw an error.
+
+```{r}
+# try with read_sf, don't expect this to work...
+#st_read(here("spatial_data", "fivekm_grid_extent_rect_21.shp.xml"))
+# errors, maybe something with drivers would, but I don't see anything obvious there?
+
+# try read_xml_map? random library found from google
+# https://rdrr.io/github/bogdanoancea/simutils/man/read_xml_map.html
+#install.packages('stimutils')
+# errors, R version issue
+```
+
+```{r}
+# read in XML
+library(xml2)
+xml_21 <- read_xml(here("spatial_data", "fivekm_grid_extent_rect_21.shp.xml"))
+
+# try to get CRS from xml
+#st_read(xml_21)
+# errors, can't open, not surprising
+
+st_crs(xml_21)
+# what is a CRS usually?
+test_crs <- st_crs(grid_21)
+class(test_crs)
+# test_CRS has two elements, input and wkt
+# can I get xml_21 into a similar format?
+
+# rgeos used to have readWKT
+# https://stackoverflow.com/questions/53159916/how-to-read-plot-and-convert-wkt-to-table-in-r
+#install.packages('rgeos')
+# error, R version issue
+```

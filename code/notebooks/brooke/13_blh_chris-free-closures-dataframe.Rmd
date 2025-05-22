@@ -1,0 +1,75 @@
+---
+title: "13_blh_chris-free-closures-dataframe"
+author: "Brooke Hawkins"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(tidyverse)
+library(sf)
+library(rnaturalearth)
+```
+
+## Quick data exploration
+
+```{r}
+# load data
+test_df <- readRDS("/Users/brooke.hawkins/Downloads/2015_2023_WC_dcrab_closures.Rds")
+
+# view sample records
+head(test_df)
+
+# check unique values for categories
+unique(test_df$comm_name)
+unique(test_df$fishery)
+for (s in unique(test_df$status)) {print (s)}
+
+# check range for space and time
+range(test_df$date)
+range(test_df$lat_dd)
+
+# check completeness for time
+test_df %>% select(date) %>% distinct() %>% mutate(present = 1) %>% ggplot(aes(y = present, x = date)) + geom_line()
+
+# check completeness for latitude over time
+test_df %>% ggplot(aes(x=date, y=lat_dd)) + geom_raster()
+```
+
+## Quick map
+
+```{r}
+# make one map for one day with multiple restrictions
+test_day <- date("2021-05-03")
+day_df <- test_df %>% filter(date == test_day)
+unique(day_df$status)
+
+# st_as_sf(day_df, coords = c("lat_dd"), crs = 4326)
+
+# load 5km grid
+grid_5km <- read_sf(here('spatial_data', 'master_5km_grid_tmer.shp'))
+
+# round centro_lat in order to join 5km grid to Chris's dataframe
+day_sf <- grid_5km %>% 
+  mutate(centro_lat_rounded = round(centro_lat, 2)) %>% 
+  left_join(day_df, by = join_by(centro_lat_rounded == lat_dd))
+
+# background map
+west_coast_states <- rnaturalearth::ne_states(country = 'United States of America', returnclass = 'sf') %>% 
+  filter(name %in% c('California', 'Oregon', 'Washington', 'Nevada')) %>% 
+  st_transform(st_crs(grid_5km))
+
+# bounding box
+map_bbox <- st_bbox(day_sf)
+
+# map closures
+ggplot() +
+  geom_sf(data = west_coast_states, fill = 'gray80') +
+  geom_sf(data = day_sf, aes(fill = status), lwd = 0) +
+  labs(title = test_day, fill = paste(" Dungeness crab commercial fishery status")) +
+  xlim(map_bbox[1], map_bbox[3]) + ylim(map_bbox[2], map_bbox[4])
+```
+
