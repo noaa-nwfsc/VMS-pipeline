@@ -9,9 +9,8 @@ format:
 #| include: false
 library(tidyverse)
 library(here)
+library(knitr)
 ```
-
-I'm using cleaned fish tickets from step 1 of the VMS output.
 
 ```{r filters}
 # filters for fish tickets
@@ -33,13 +32,15 @@ max_speed <- 4.11556 # maximum speed in m/s (4.11556 m/s = 8 knots)
 
 I'm starting with one year of data for now (2018, not chosen for any reason).
 
-I checked with Kayleigh how she determines if a ticket is a sablefish pot ticket or not, and it's by filtering with the sector codes and pot group gear code.
+I checked with Kayleigh how she determines if a ticket is a sablefish pot ticket or not, and it's by filtering with the groundfish sector codes and pot group gear code.
 
 Based on our discussions around Michaela's BiOp code, I am using these sector codes:
 
 * CS: "Catch Shares" or "Catch Shares EM"
 * LE: "Limited Entry Sablefish"
 * OA: "OA Fixed Gear"
+
+I'm using cleaned fish tickets from step 1 of the VMS output.
 
 ```{r checks}
 # load fish tickets
@@ -74,6 +75,12 @@ sabl_tickets <- tickets %>%
     landings = "SABL_lbs",
     revenue = "SABL_revenue"
   )
+
+# check out shape of result
+nrow(sabl_tickets)
+sabl_tickets %>%
+  group_by(sector) %>%
+  summarise(n_distinct(FTID))
 ```
 
 This next section reads in WCGOP & EM data, which I got from Kayleigh and is stored in `Confidential/raw_data/wcgop`. (WCGOP & EM = West Coast Groundfish Observer Program & Electronic Monitoring, data shared in December 2024)
@@ -104,6 +111,8 @@ pot_wcgop %>% group_by(sector) %>% summarise(n_distinct(FTID))
 # drop sector before rejoining to tickets
 pot_wcgop <- pot_wcgop %>% select(-sector)
 ```
+
+Weird that the WCGOP/EM data has more rows than the fish ticket data, which should be less complete.
 
 Now read in the VMS data, and applying the same filters I apply when gridding and mapping. 
 
@@ -184,6 +193,8 @@ joined_df <- sabl_tickets %>%
   )
 ```
 
+Summarize and visualize the results.
+
 ```{r vis}
 vis_df <- joined_df %>%
   group_by(sector, coverage_factor) %>%
@@ -196,6 +207,8 @@ vis_df <- joined_df %>%
   ) %>%
   ungroup()
 
+vis_df
+
 vis_df %>%
   ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
   geom_col(position = "fill")
@@ -205,7 +218,9 @@ vis_df %>%
   geom_col()
 ```
 
-Read in raw fish tickets instead, rather than cleaned fish tickets. I wanted to avoid this since it's slow, but I want to use the filters Kayleigh suggested for Pot and Sector and see if I get more complete results than with the cleaned version.
+This seems off to me, though, because I know there are more rows in the WCGOP/EM data than the fish ticket data, which can't be right. 
+
+Read in raw fish tickets instead, rather than cleaned fish tickets. I wanted to avoid this since it's slow, but I want to use the exact filters Kayleigh suggested rather than the closest available option from VMS output, and see if I get more complete results than with the VMS step 1 cleaned version.
 
 I'm also adding some additional filters documented by Abigail, see issue [#38](https://github.com/noaa-nwfsc/VMS-pipeline/issues/38):
 
@@ -214,7 +229,7 @@ I'm also adding some additional filters documented by Abigail, see issue [#38](h
 * Council code: COUNCIL_CODE != "N" (equivalent to COUNCIL_CODE = "P" | COUNCIL_CODE = "*") purpose is to remove fish tickets landed in AK and transported to the WC
 * Participation group code: PARTICIPATION_GROUP_CODE != "A" purpose is to remove aquaculture fish tickets; may be equivalent to removing records with blank vessel IDs and including only records with VMS data joined in, since the aquaculture tickets presumably have no vessel ID or VMS data associated with them
 
-```{r}
+```{r raw-tickets}
 # load data
 raw_tickets <- read_rds(here(
   'Confidential',
@@ -255,7 +270,7 @@ sabl_raw_tickets %>%
 
 Redo the join and vis, using the raw fish ticket data instead.
 
-```{r}
+```{r join-raw}
 joined_raw_df <- sabl_raw_tickets %>%
   # select a couple columns
   select(
@@ -293,29 +308,95 @@ joined_raw_df <- sabl_raw_tickets %>%
     )
   )
 
-# check n_tickets per sector, regardless of coverage
+# check # tickets, # vessels, total revenue and total landings per sector, regardless of coverage
 joined_raw_df %>%
   group_by(sector) %>%
-  summarize(n_tickets = n_distinct(FTID))
+  summarize(
+    n_tickets = n_distinct(FTID),
+    n_vessels = n_distinct(VESSEL_NUM),
+    total_revenue = sum(EXVESSEL_REVENUE),
+    total_landings = sum(LANDED_WEIGHT_LBS)
+  )
 
-# check n_tickets per sector, by coverage
+# check # tickets, # vessels, total revenue and total landings per sector, by coverage
 vis_raw_df <- joined_raw_df %>%
   group_by(sector, coverage_factor) %>%
-  summarize(n_tickets = n_distinct(FTID)) %>%
+  summarize(
+    n_tickets = n_distinct(FTID),
+    n_vessels = n_distinct(VESSEL_NUM),
+    total_revenue = sum(EXVESSEL_REVENUE),
+    total_landings = sum(LANDED_WEIGHT_LBS)
+  ) %>%
   ungroup() %>%
   group_by(sector) %>%
   mutate(
-    percentage = n_tickets / sum(n_tickets),
-    label_y_pos = (cumsum(percentage)) - (percentage / 2)
+    pct_tickets = n_tickets / sum(n_tickets),
+    pct_vessels = n_vessels / sum(n_vessels),
+    pct_revenue = total_revenue / sum(total_revenue),
+    pct_landings = total_landings / sum(total_landings)
   ) %>%
   ungroup()
-vis_raw_df
 
-vis_raw_df %>%
-  ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
-  geom_col(position = "fill")
+# save to csv
+table_raw_df <- vis_raw_df %>%
+  select(
+    sector,
+    coverage_factor,
+    n_tickets,
+    pct_tickets,
+    n_vessels,
+    pct_vessels,
+    total_revenue,
+    pct_revenue,
+    total_landings,
+    pct_landings
+  ) %>%
+  mutate(
+    pct_tickets = paste0(as.character(trunc(pct_tickets * 100)), "%"),
+    pct_vessels = paste0(as.character(trunc(pct_vessels * 100)), "%"),
+    pct_revenue = paste0(as.character(trunc(pct_revenue * 100)), "%"),
+    pct_landings = paste0(as.character(trunc(pct_landings * 100)), "%"),
+  )
+write.csv(
+  table_raw_df,
+  here("Confidential", "sablefish_vms", "table_raw_df.csv")
+)
 
+# view summary table
+kable(table_raw_df)
+
+# stacked bar chart (%)
 vis_raw_df %>%
-  ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
+  pivot_longer(
+    c("n_tickets", "n_vessels", "total_revenue", "total_landings"),
+    names_to = "variable",
+    values_to = "count"
+  ) %>%
+  ggplot(aes(x = sector, y = count, fill = coverage_factor)) +
+  facet_wrap(~variable) +
+  scale_y_continuous(labels = scales::percent) +
+  geom_col(position = "fill") +
+  labs(y = "percent")
+ggsave(
+  here("Confidential", "sablefish_vms", "bar_percent.png"),
+  width = 9.5,
+  height = 7
+)
+# stacked bar chart (count)
+vis_raw_df %>%
+  pivot_longer(
+    c("n_tickets", "n_vessels", "total_revenue", "total_landings"),
+    names_to = "variable",
+    values_to = "count"
+  ) %>%
+  ggplot(aes(x = sector, y = count, fill = coverage_factor)) +
+  facet_wrap(~variable, scales = "free_y") +
   geom_col()
+ggsave(
+  here("Confidential", "sablefish_vms", "bar_count.png"),
+  width = 9.5,
+  height = 7
+)
 ```
+
+I'm worried about the landings and revenue being miscounted or duplicated, since `sabl_raw_tickets` has 1251 rows, but only 681 unique FTID values. I didn't dig into that yet. I'm curious if it's the same issue that led to some duplication in the VMS pipeline, when take was landed for personal vs. commercial use (issue [#19](https://github.com/noaa-nwfsc/VMS-pipeline/issues/19)).
