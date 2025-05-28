@@ -30,11 +30,18 @@ library(glue)
 Import files for an example year to match. We use the matched, filtered with FTID VMS data
 
 ```{r}
-# matched and filteredVMS Pipeline data from 2009 produced by Blake Feist 28 May 2024
-vms2009 <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2009_matched_filtered_withFTID_length.rds'))
+# matched and filtered VMS Pipeline data from 2009 produced by Blake Feist 28 May 2024
+# vms2009 <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2009_matched_filtered_withFTID_length.rds'))
+
+# matched, filtered and interpolated VMS Pipeline data for SPRW from 2011 produced by Blake Feist 22 Apr 2025
+vms2011 <- read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2011.rds'))
 
 # 2x2 grid shapefile
-grd <- read_sf(here('GIS_layers', 'master_2km_grid_tmer.shp'))
+# grd <- read_sf(here('spatial_data', 'grids', 'master_2km_grid_tmer.shp'))
+# names(grd)
+
+# 10-arcminute grid shapefile
+grd <- read_sf(here('spatial_data', 'grids', 'ten_arcminute_grid_shore_lamb.shp'))
 names(grd)
 
 ```
@@ -43,7 +50,7 @@ names(grd)
 
 ```{r}
 # convert vms to spatial object (longitude/latitude)
-vms_sf <- vms2009 %>%
+vms_sf <- vms2011 %>%
   st_as_sf(coords=c('LON','LAT'),crs=4326) %>% 
   # then, convert to planar projection to match the grid
   st_transform(st_crs(grd))
@@ -57,12 +64,12 @@ proc.time()-pt
 
 ## Check
 
-Did the join work? How many unique 5km, 25km, and 50km cells are represented in the 2009 data?
+Did the join work? How many unique 5km, 25km, and 50km cells are represented in the 2011 data?
 
 ```{r checks}
 names(vms_grd_match)
 
-length(unique(vms_grd_match$CellID))
+length(unique(vms_grd_match$BLOCK10_ID))
 
 ```
 
@@ -80,21 +87,19 @@ rm(list=setdiff(ls(),'grd'))
 # 2009-2023 fish ticket and VMS data
 
 # load rds files
-vms_all <- vms2009 %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2010_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2011_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2012_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2013_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2014_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2015_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2016_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2017_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2018_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2019_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2020_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2021_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2022_matched_filtered_withFTID_length.rds'))) %>%
-  bind_rows(read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', '2023_matched_filtered_withFTID_length.rds')))
+vms_all <- vms2011 %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2012.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2013.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2014.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2015.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2016.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2017.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2018.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2019.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2020.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2021.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2022.rds'))) %>%
+  bind_rows(read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'interpolated_2023.rds')))
 
 glimpse(vms_all)
 
@@ -142,7 +147,7 @@ The join took`r round(x[3]/60,2)` minutes.
 glimpse(vms_all_grd_match)
 vms_all_grd_match %>% 
   st_set_geometry(NULL) %>% 
-  write_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_2km.rds'))
+  write_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'vms_all_w_grd_10_arcmin.rds'))
 ```
 
 ## Prep data for DCRB focused analysis
@@ -155,7 +160,7 @@ Start by choosing which variables to use to filter to fishing locations only.
 
 ```{r fishing data prep 1}
 
-vms_all_grd_match <- read_rds(here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'vms_all_w_grd_2km.rds'))
+vms_all_grd_match <- read_rds(here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'vms_all_w_grd_10_arcmin.rds'))
 glimpse(vms_all_grd_match)
 
 vms_all_grd_match <- vms_all_grd_match %>% mutate(
@@ -170,10 +175,10 @@ unique(vms_all_grd_match$year)
 # years <- seq(2009,2019,1)
 
 # state_agency_code <- "C"
-target_rev <- "DCRB"
-target_lbs <- "DCRB"
+target_rev <- "SPRW"
+target_lbs <- "SPRW"
 winter_months <- c("November", "December", "January", "February", "March")
-removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
+# removal_types <- c("COMMERCIAL (NON-EFP)", "COMMERCIAL(DIRECT SALES)", "UNKNOWN")
 max_speed <- 4.11556 # units of m/s. 4.11556m/s = 8knots (4DCRB) and 1.54333 m/s = 3 knots (4CHNK)
 min_speed <- 0 # units = m/s
 # placeholder for adding daytime filter appropriate for salmon trolling boats.
@@ -187,10 +192,10 @@ Now filter the data based on control variables above: California, DCRB trips onl
 ```{r filter fishing data}
 
 # subset the data based on above queries
-dcrb_vms_tix_analysis <- vms_all_grd_match %>%
+sprw_vms_tix_analysis <- vms_all_grd_match %>%
   # filter(agency_code == state_agency_code) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>% # comment out for groundfish?????
-  filter(removal_type_name %in% removal_types) %>%
+  # filter(removal_type_name %in% removal_types) %>%
   #filter(DEPTH_CATM == "0-100m" | DEPTH_CATM == "100-150m") %>%
   #filter(NGDC_M <= 0 & NGDC_M >= -12000) %>% # considered adding 052220. also see "evaluate fishing depths.R". probably unnecessary because NGDC_M refers to centroid depth and we can match depths by 5km grid cell later
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
@@ -212,11 +217,11 @@ dcrb_vms_tix_analysis <- vms_all_grd_match %>%
   dplyr::select(
     Rec_ID, VMS_RECNO, drvid,
     westcoastdate_notime, year, crab_year, year_month, month, month_as_numeric, week_of_year, day_of_year, season,
-    CellID, pacfin_port_code, port_group_code, NGDC_M,
-    TARGET_lbs, TARGET_rev, DCRB_lbs, DCRB_revenue, all_species_lbs, all_species_rev, species_code_all
+    BLOCK10_ID, pacfin_port_code, port_group_code, NGDC_M,
+    TARGET_lbs, TARGET_rev, SPRW_lbs, SPRW_revenue, all_species_lbs, all_species_rev, species_code_all
     ) # DEPTH_CATM, 
 
-glimpse(dcrb_vms_tix_analysis)
+glimpse(sprw_vms_tix_analysis)
 
 ```
 
@@ -227,27 +232,28 @@ Distribute rev and lbs to grid cells.
 ### create new columns that apportion pings/lbs/$ from each fish ticket based on proportion of pings related to each ticket in each grid cell
 
 # total records per trip (total number of VMS records associated with each fish ticket)
-VMSrecords_per_trip <- dcrb_vms_tix_analysis %>%
+VMSrecords_per_trip <- sprw_vms_tix_analysis %>%
+  # st_set_geometry(NULL) %>% # drop the geometry from this object, otherwise get error on add to fish ticket...
   group_by(Rec_ID) %>%
   summarise(trip_VMSrecords = n(),
             .groups = 'drop') #%>%
   #filter(trip_VMSrecords > 1)
 
 # add to fish ticket / vms data, make columns vessels, lbs, and $ per VMS location. note that columns with "...." in them, like ""TARGET...." reflect revenue 
-dcrb_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, dcrb_vms_tix_analysis, by="Rec_ID") %>%
+sprw_vms_tix_analysis_TripInfo <- left_join(VMSrecords_per_trip, sprw_vms_tix_analysis, by="Rec_ID") %>%
   mutate(
-    DCRB_lbs_per_VMSlocation = DCRB_lbs/trip_VMSrecords,
-    DCRB_rev_per_VMSlocation = DCRB_revenue/trip_VMSrecords,
+    SPRW_lbs_per_VMSlocation = SPRW_lbs/trip_VMSrecords,
+    SPRW_rev_per_VMSlocation = SPRW_revenue/trip_VMSrecords,
     all_species_lbs_per_VMSlocation = all_species_lbs/trip_VMSrecords,
     all_species_rev_per_VMSlocation = all_species_rev/trip_VMSrecords,
-    Num_DCRB_Vessels_per_VMSlocation = 1/trip_VMSrecords
+    Num_SPRW_Vessels_per_VMSlocation = 1/trip_VMSrecords
   )
-glimpse(dcrb_vms_tix_analysis_TripInfo)
+glimpse(sprw_vms_tix_analysis_TripInfo)
 
 # could add in depth filter by excluding all NGDC_M values >-1500
 
 # write out for Blake
-write_rds(dcrb_vms_tix_analysis_TripInfo,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'DCRB_vms_tix_daily_2009_2023_lbs_rev_per_geolocation_nodepthfilter.rds'))
+write_rds(sprw_vms_tix_analysis_TripInfo,here::here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'SPRW_vms_tix_daily_2011_2023_lbs_rev_per_geolocation_nodepthfilter.rds'))
 
 #####################################################
 
@@ -259,26 +265,26 @@ write_rds(dcrb_vms_tix_analysis_TripInfo,here::here('Confidential', 'processed',
 
 start.time <- Sys.time()
 
-con_df_daily_years_2km <- dcrb_vms_tix_analysis_TripInfo %>%
-  group_by(year, crab_year, year_month, season, month, month_as_numeric, week_of_year, day_of_year, CellID) %>%
+con_df_daily_years_10_arcmin <- sprw_vms_tix_analysis_TripInfo %>%
+  group_by(year, crab_year, year_month, season, month, month_as_numeric, week_of_year, day_of_year, BLOCK10_ID) %>%
   summarise(
-    DCRB_lbs = sum(DCRB_lbs_per_VMSlocation),
-    DCRB_rev = sum(DCRB_rev_per_VMSlocation),
+    SPRW_lbs = sum(SPRW_lbs_per_VMSlocation),
+    SPRW_rev = sum(SPRW_rev_per_VMSlocation),
     all_species_lbs = sum(all_species_lbs_per_VMSlocation),
     all_species_rev = sum(all_species_rev_per_VMSlocation),
-    Num_DCRB_VMS_pings = n(),
-    Num_DCRB_Vessels = sum(Num_DCRB_Vessels_per_VMSlocation),
-    Num_Unique_DCRB_Vessels = length(unique(as.character(drvid))),
+    Num_SPRW_VMS_pings = n(),
+    Num_SPRW_Vessels = sum(Num_SPRW_Vessels_per_VMSlocation),
+    Num_Unique_SPRW_Vessels = length(unique(as.character(drvid))),
     mean_depth = mean(NGDC_M)
   ) %>%
   ungroup() 
 Sys.time() - start.time
 
-glimpse(con_df_daily_years_2km)
+glimpse(con_df_daily_years_10_arcmin)
 
 ### if and when satisfied, write out rds
 
-write_rds(con_df_daily_years_2km,here::here('Confidential', 'processed', 'pipeline output', 'DCRB and CHNK 28May2024', 'DCRB_vms_tix_daily_2009_2023_lbs_rev_per_2kmgrid_nodepthfilter.rds'))
+write_rds(con_df_daily_years_10_arcmin,here::here('Confidential', 'processed_data', 'pipeline_output_ARCHIVE', 'SPRW_22Apr2025', 'interpolated', 'SPRW_vms_tix_daily_2011_2023_lbs_rev_per_10_arcmin_grid_nodepthfilter.rds'))
 
 
 ```
