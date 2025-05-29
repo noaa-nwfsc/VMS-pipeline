@@ -196,11 +196,11 @@ sprw_vms_tix_analysis <- vms_all_grd_match %>%
   # filter(agency_code == state_agency_code) %>%
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>% # comment out for groundfish?????
   # filter(removal_type_name %in% removal_types) %>%
-  #filter(DEPTH_CATM == "0-100m" | DEPTH_CATM == "100-150m") %>%
-  #filter(NGDC_M <= 0 & NGDC_M >= -12000) %>% # considered adding 052220. also see "evaluate fishing depths.R". probably unnecessary because NGDC_M refers to centroid depth and we can match depths by 5km grid cell later
+  # filter(DEPTH_CATM == "0-100m" | DEPTH_CATM == "100-150m") %>%
+  # filter(NGDC_M <= 0 & NGDC_M >= -12000) %>% # considered adding 052220. also see "evaluate fishing depths.R". probably unnecessary because NGDC_M refers to centroid depth and we can match depths by 5km grid cell later
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
-  #filter(is.na(in_port) == TRUE) %>% # only removes ~4000 records
-  #filter(port_group_code %in% ports) %>%
+  # filter(is.na(in_port) == TRUE) %>% # only removes ~4000 records
+  # filter(port_group_code %in% ports) %>%
   mutate(
          year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime),6,7)), # substr() ensures month is a 2 digit value
          month = lubridate::month(westcoastdate_notime, label=TRUE, abbr = FALSE),
@@ -233,7 +233,7 @@ Distribute rev and lbs to grid cells.
 
 # total records per trip (total number of VMS records associated with each fish ticket)
 VMSrecords_per_trip <- sprw_vms_tix_analysis %>%
-  # st_set_geometry(NULL) %>% # drop the geometry from this object, otherwise get error on add to fish ticket...
+  st_set_geometry(NULL) %>% # drop the geometry from this object, otherwise get error on add to fish ticket...
   group_by(Rec_ID) %>%
   summarise(trip_VMSrecords = n(),
             .groups = 'drop') #%>%
