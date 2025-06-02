@@ -5,6 +5,19 @@ format:
     embed-resources: true
 ---
 
+## Notes
+
+There were a few messy explorations in this file before, I'm tidying it up now, and noting takeaways / caveats below.
+
+* I used the raw PacFIN fish ticket data, rather than the cleaned fish tickets output from step 1 of the VMS pipeline. I tried using the step 1 output, but I was missing some tickets that were included in the WCGOP data when I did. I'm not sure why, and I didn't dig further into it.
+* I have extended this to 2016-2023, rather than 2011-2023, because the local file of PacFIN data I was working on was missing the sector code `FOS_GROUNDFISH_SECTOR_CODE` for 2011-2015. I can remedy that by re-pulling the data, but for now, I'm not going to worry about it.
+* I didn't include "LE Fixed Gear DTL" in this analysis. It is a small portion of the limited entry sector landings, it is not observed. It was used in expansions for the BiOp, though.
+* I had previously missed some records with the raw fish ticket data because I was using `SPECIES_CODE_NAME == "SABLEFISH"`, and updating that to `PACFIN_SPECIES_CODE == "SABL"` resolved the discrepancy I had compared to Kayleigh's counts for 2018 data.
+* I joined fish ticket data to observer data and VMS data with only FTID, but I did confirm that the number of unique fish ticket IDs was the same as the combination of agency-provided fish ticket ID, agency code, and landing year. The the fish ticket ID may not be unique across agencies and years, but the combination is. This is documented in the [PacFIN Comprehensive FT documentation](https://pacfin.psmfc.org/wp-content/uploads/2022/05/PacFIN_Comprehensive_Fish_Tickets.pdf), which states that `FISH_TICKET_ID` (renamed `Rec_ID` in VMS pipeline) is the "PacFIN assigned unique number for each fish ticket. (Source: PacFIN)" while `FTID` is the "Source agency fish ticket identifier. This number is unique within a year and agency, but not necessarily across years or agencies. (Source: Agency)"
+* There are some years that have non-zero catch shares with only VMS coverage (I see this in 2019, 2020 and 2021; for 1, 1, and 4 tickets respectively).
+
+## Code
+
 ```{r setup}
 #| include: false
 library(tidyverse)
@@ -12,222 +25,20 @@ library(here)
 library(knitr)
 ```
 
-```{r filters}
-# filters for fish tickets
-sector_codes <- c(
-  "Catch Shares",
-  "Catch Shares EM",
-  "Limited Entry Sablefish",
-  "OA Fixed Gear"
-)
+Let's start with the **fish tickets**.
 
-# filters for VMS
-target_rev <- "SABL" # revenue target
-target_lbs <- "SABL" # landings target
-min_depth <- 0 # minimum depth in meters
-max_depth <- -1500 # maximum depth in meters
-min_speed <- 0 # minimum speed in m/s
-max_speed <- 4.11556 # maximum speed in m/s (4.11556 m/s = 8 knots)
-```
+To filter for sablefish pot fishing effort for the three sectors, I filter using:
 
-I'm starting with one year of data for now (2018, not chosen for any reason).
+* PACFIN_GROUP_GEAR_CODE == "POT" to filter for pot
+* PACFIN_SPECIES_CODE == "SABL" to filter for sablefish
+* FOS_GROUNDFISH_SECTOR_CODE %in% c("Catch Shares", "Catch Shares EM", "Limited Entry Sablefish", "OA Fixed Gear") to filter for catch shares, limited entry, and open access
 
-I checked with Kayleigh how she determines if a ticket is a sablefish pot ticket or not, and it's by filtering with the groundfish sector codes and pot group gear code.
+I'm also applying some filters documented by Abigail, see VMS pipeline issue [#38](https://github.com/noaa-nwfsc/VMS-pipeline/issues/38):
 
-Based on our discussions around Michaela's BiOp code, I am using these sector codes:
-
-* CS: "Catch Shares" or "Catch Shares EM"
-* LE: "Limited Entry Sablefish"
-* OA: "OA Fixed Gear"
-
-I'm using cleaned fish tickets from step 1 of the VMS output.
-
-```{r checks}
-# load fish tickets
-tickets <- read_rds(here(
-  'Confidential',
-  'processed_data',
-  'processed_2025-05-20',
-  'fish_tickets',
-  'fishtix_withFTID_2018.rds'
-))
-
-# filter for sablefish pot tickets
-sabl_tickets <- tickets %>%
-  # filter for sablefish pot sectors (OA, LE, CS)
-  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
-  # filter for pot gear (will be > 0 for catch based on gear codes in main_process of VMS)
-  filter(all_species_lbs > 0 | all_species_rev > 0) %>%
-  select(
-    Rec_ID,
-    FTID,
-    date,
-    drvid,
-    agency_code,
-    FOS_GROUNDFISH_SECTOR_CODE,
-    SABL_lbs,
-    SABL_revenue
-  ) %>%
-  distinct() %>%
-  rename(
-    ticket_date = "date",
-    sector = "FOS_GROUNDFISH_SECTOR_CODE",
-    landings = "SABL_lbs",
-    revenue = "SABL_revenue"
-  )
-
-# check out shape of result
-nrow(sabl_tickets)
-sabl_tickets %>%
-  group_by(sector) %>%
-  summarise(n_distinct(FTID))
-```
-
-This next section reads in WCGOP & EM data, which I got from Kayleigh and is stored in `Confidential/raw_data/wcgop`. (WCGOP & EM = West Coast Groundfish Observer Program & Electronic Monitoring, data shared in December 2024)
-
-```{r wcgop}
-# read in WCGOP/EM data
-wcgop <- read_csv(here(
-  'Confidential',
-  'raw_data',
-  'wcgop',
-  'TRT_Sablefish_WCGOPEM_HaulData_2024-12-12.csv'
-))
-# filter for one year of data, and filter for pot
-# split fish tickets from one haul record into separate fish ticket IDs
-pot_wcgop <- wcgop %>%
-  filter(YEAR == 2018 & gear == 'Pot') %>%
-  select(FISH_TIX, sector) %>%
-  mutate(FTID = str_split(FISH_TIX, ';')) %>%
-  unnest(FTID) %>%
-  select(-FISH_TIX) %>%
-  distinct() %>%
-  mutate(wcgop_rep = 1)
-
-# check out shape of result
-nrow(pot_wcgop)
-pot_wcgop %>% group_by(sector) %>% summarise(n_distinct(FTID))
-
-# drop sector before rejoining to tickets
-pot_wcgop <- pot_wcgop %>% select(-sector)
-```
-
-Weird that the WCGOP/EM data has more rows than the fish ticket data, which should be less complete.
-
-Now read in the VMS data, and applying the same filters I apply when gridding and mapping. 
-
-I'm using FTID rather than Rec_ID (FISH_TICKET_ID) because Kayleigh said WCGOP uses the agency provided fish ticket ID, not the PacFIN provided fish ticket ID.
-
-Based on the [PacFIN Comprehensive FT documentation](https://pacfin.psmfc.org/wp-content/uploads/2022/05/PacFIN_Comprehensive_Fish_Tickets.pdf), the FTID is:
-
-* FISH_TICKET_ID (renamed Rec_ID in VMS pipeline): PacFIN assigned unique number for each fish ticket. (Source: PacFIN)
-* FTID: Source agency fish ticket identifier. This number is unique within a
-year and agency, but not necessarily across years or agencies. (Source: Agency)
-
-```{r vms}
-# read in VMS data
-vms <- read_rds(here(
-  'Confidential',
-  'processed_data',
-  'processed_2025-05-20',
-  'interpolated',
-  'interpolated_2018.rds'
-)) %>%
-  select(
-    FTID,
-    FOS_GROUNDFISH_SECTOR_CODE,
-    SABL_lbs,
-    SABL_revenue,
-    TARGET_lbs,
-    TARGET_rev,
-    avg_speed_recalc,
-    NGDC_M
-  ) %>%
-  distinct() %>%
-  mutate(vms_rep = 1)
-
-# apply filters
-sabl_vms <- vms %>%
-  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
-  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
-  filter(NGDC_M <= min_depth, NGDC_M >= max_depth) %>%
-  filter(avg_speed_recalc <= max_speed, avg_speed_recalc >= min_speed) %>%
-  select(FTID, FOS_GROUNDFISH_SECTOR_CODE) %>%
-  distinct() %>%
-  mutate(vms_rep = 1)
-
-# check out shape of result
-nrow(sabl_vms)
-sabl_vms %>%
-  group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
-  summarise(n_distinct(FTID))
-
-# drop sector before rejoining to tickets
-sabl_vms <- sabl_vms %>% select(-FOS_GROUNDFISH_SECTOR_CODE)
-```
-
-Now left join WCGOP and VMS data onto the fish tickets, using FTID as the join key.
-
-```{r join}
-joined_df <- sabl_tickets %>%
-  # join dataframes
-  left_join(pot_wcgop, by = join_by(FTID == FTID)) %>%
-  left_join(sabl_vms, by = join_by(FTID == FTID)) %>%
-  mutate(
-    # fill 0's instead of NAs if dataset not representative
-    wcgop_rep = coalesce(wcgop_rep, 0),
-    vms_rep = coalesce(vms_rep, 0),
-    # combine Catch Shares EM and Catch Shares into Catch Shares sector
-    sector = ifelse(sector == "Catch Shares EM", "Catch Shares", sector),
-    # create a categorical coverage variable, then make it a factor
-    coverage = case_when(
-      wcgop_rep + vms_rep == 2 ~ "both",
-      wcgop_rep == 1 ~ "wcgop_only",
-      vms_rep == 1 ~ "vms_only",
-      .default = "neither"
-    ),
-    coverage_factor = factor(
-      coverage,
-      levels = c("neither", "wcgop_only", "vms_only", "both")
-    )
-  )
-```
-
-Summarize and visualize the results.
-
-```{r vis}
-vis_df <- joined_df %>%
-  group_by(sector, coverage_factor) %>%
-  summarize(n_tickets = n_distinct(FTID)) %>%
-  ungroup() %>%
-  group_by(sector) %>%
-  mutate(
-    percentage = n_tickets / sum(n_tickets),
-    label_y_pos = (cumsum(percentage)) - (percentage / 2)
-  ) %>%
-  ungroup()
-
-vis_df
-
-vis_df %>%
-  ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
-  geom_col(position = "fill")
-
-vis_df %>%
-  ggplot(aes(x = sector, y = n_tickets, fill = coverage_factor)) +
-  geom_col()
-```
-
-This seems off to me, though, because I know there are more rows in the WCGOP/EM data than the fish ticket data, which can't be right. 
-
-Read in raw fish tickets instead, rather than cleaned fish tickets. I wanted to avoid this since it's slow, but I want to use the exact filters Kayleigh suggested rather than the closest available option from VMS output, and see if I get more complete results than with the VMS step 1 cleaned version.
-
-I'm also adding some additional filters documented by Abigail, see issue [#38](https://github.com/noaa-nwfsc/VMS-pipeline/issues/38):
-
-* Fleet code: FLEET_CODE != "TI" purpose is to remove tribal catch
-* Vessel id: drvid == "MISSING" purpose is to remove tickets with missing vessel ID, currently VMS pipeline removes blanks and "UNKNOWN"
-* Council code: COUNCIL_CODE != "N" (equivalent to COUNCIL_CODE = "P" | COUNCIL_CODE = "*") purpose is to remove fish tickets landed in AK and transported to the WC
-* Participation group code: PARTICIPATION_GROUP_CODE != "A" purpose is to remove aquaculture fish tickets; may be equivalent to removing records with blank vessel IDs and including only records with VMS data joined in, since the aquaculture tickets presumably have no vessel ID or VMS data associated with them
+* Fleet code: `FLEET_CODE != "TI"` purpose is to remove tribal catch
+* Vessel id: `drvid == "MISSING"` purpose is to remove tickets with missing vessel ID, currently VMS pipeline removes blanks and "UNKNOWN"
+* Council code: `COUNCIL_CODE != "N"` (equivalent to `COUNCIL_CODE = "P" | COUNCIL_CODE = "*"`) purpose is to remove fish tickets landed in AK and transported to the WC
+* Participation group code: `PARTICIPATION_GROUP_CODE != "A"` purpose is to remove aquaculture fish tickets; may be equivalent to removing records with blank vessel IDs and including only records with VMS data joined in, since the aquaculture tickets presumably have no vessel ID or VMS data associated with them
 
 ```{r raw-tickets}
 # load data
@@ -238,15 +49,23 @@ raw_tickets <- read_rds(here(
   'all_fishtickets_1994_2023.rds'
 ))
 
+# filters for fish tickets
+sector_codes <- c(
+  "Catch Shares",
+  "Catch Shares EM",
+  "Limited Entry Sablefish",
+  "OA Fixed Gear"
+)
+
 # filter data
-sabl_raw_tickets <- raw_tickets %>%
+sabl_tickets <- raw_tickets %>%
   filter(
-    # filter for 2018
-    LANDING_YEAR == 2018,
     # filter gear type
     PACFIN_GROUP_GEAR_CODE == "POT",
     # filter species
-    SPECIES_CODE_NAME == "SABLEFISH",
+    PACFIN_SPECIES_CODE == "SABL",
+    # filter year
+    LANDING_YEAR >= 2016,
     # filter sector codes
     FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes,
     # remove missing vessel ID
@@ -259,19 +78,120 @@ sabl_raw_tickets <- raw_tickets %>%
     FLEET_CODE != "TI",
     # remove aquaculture
     PARTICIPATION_GROUP_CODE != "A"
-  )
+  ) %>%
+  mutate(FTID_AGENCY_YEAR = paste(FTID, AGENCY_CODE, LANDING_YEAR, sep = "_"))
+
+# check that FTID is a unique identifier (otherwise, I'd join on FTID_AGENCY_YEAR instead of FTID)
+n_distinct(sabl_tickets$FTID)
+n_distinct(sabl_tickets$FTID_AGENCY_YEAR)
+n_distinct(sabl_tickets$FTID) == n_distinct(sabl_tickets$FTID_AGENCY_YEAR)
 
 # check out shape of result
-nrow(sabl_raw_tickets)
-sabl_raw_tickets %>%
+nrow(sabl_tickets)
+sabl_tickets %>%
+  group_by(LANDING_YEAR) %>%
+  summarise(n_distinct(FTID))
+sabl_tickets %>%
   group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
   summarise(n_distinct(FTID))
 ```
 
-Redo the join and vis, using the raw fish ticket data instead.
+This next section reads in **WCGOP & EM data**, which I got from Kayleigh and is stored in `Confidential/raw_data/wcgop`. (WCGOP & EM = West Coast Groundfish Observer Program & Electronic Monitoring, data shared in December 2024).
+
+```{r wcgop}
+# read in WCGOP/EM data
+wcgop <- read_csv(here(
+  'Confidential',
+  'raw_data',
+  'wcgop',
+  'TRT_Sablefish_WCGOPEM_HaulData_2024-12-12.csv'
+))
+
+# filter for pot
+# split fish tickets from one haul record into separate fish ticket IDs
+pot_wcgop <- wcgop %>%
+  filter(YEAR >= 2016 & gear == 'Pot') %>%
+  select(FISH_TIX, sector, YEAR) %>%
+  mutate(FTID = str_split(FISH_TIX, ';')) %>%
+  unnest(FTID) %>%
+  select(-FISH_TIX) %>%
+  distinct() %>%
+  mutate(wcgop_rep = 1)
+
+# check out shape of result
+nrow(pot_wcgop)
+pot_wcgop %>% group_by(YEAR) %>% summarise(n_distinct(FTID))
+pot_wcgop %>% group_by(sector) %>% summarise(n_distinct(FTID))
+
+# drop sector and year before rejoining to tickets
+pot_wcgop <- pot_wcgop %>% select(-sector, -YEAR) %>% distinct()
+```
+
+Now read in the **VMS data**, and apply the same filters I usually apply when gridding and mapping. 
+
+```{r vms}
+# read in VMS data
+year_vector <- 2016:2023
+vms_df <- purrr::map(year_vector, function(y) {
+  read_rds(here(
+    'Confidential',
+    'processed_data',
+    'processed_2025-05-20',
+    'interpolated',
+    paste0('interpolated_', y, '.rds')
+  ))
+}) %>%
+  bind_rows()
+
+# filters for VMS
+target_rev <- "SABL" # revenue target
+target_lbs <- "SABL" # landings target
+min_depth <- 0 # minimum depth in meters
+max_depth <- -1500 # maximum depth in meters
+min_speed <- 0 # minimum speed in m/s
+max_speed <- 4.11556 # maximum speed in m/s (4.11556 m/s = 8 knots)
+
+# apply filters
+sabl_vms <- vms_df %>%
+  select(
+    FTID,
+    FOS_GROUNDFISH_SECTOR_CODE,
+    SABL_lbs,
+    SABL_revenue,
+    TARGET_lbs,
+    TARGET_rev,
+    avg_speed_recalc,
+    NGDC_M,
+    westcoastdate_notime
+  ) %>%
+  mutate(year = year(vms_df$westcoastdate_notime)) %>%
+  filter(FOS_GROUNDFISH_SECTOR_CODE %in% sector_codes) %>%
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
+  filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>%
+  select(FTID, FOS_GROUNDFISH_SECTOR_CODE, year) %>%
+  distinct() %>%
+  mutate(vms_rep = 1)
+
+# check out shape of result
+nrow(sabl_vms)
+sabl_vms %>%
+  group_by(year) %>%
+  summarise(n_distinct(FTID))
+sabl_vms %>%
+  group_by(FOS_GROUNDFISH_SECTOR_CODE) %>%
+  summarise(n_distinct(FTID))
+
+# drop sector and year before rejoining to tickets
+sabl_vms <- sabl_vms %>%
+  select(-FOS_GROUNDFISH_SECTOR_CODE, -year) %>%
+  distinct()
+```
+
+**Join** the WCGOP and VMS fish ticket ID's to the sablefish pot fish tickets.
 
 ```{r join-raw}
-joined_raw_df <- sabl_raw_tickets %>%
+joined_df <- sabl_tickets %>%
   # select a couple columns
   select(
     LANDING_DATE,
@@ -290,6 +210,8 @@ joined_raw_df <- sabl_raw_tickets %>%
   left_join(sabl_vms, by = join_by(FTID == FTID)) %>%
   rename(sector = "FOS_GROUNDFISH_SECTOR_CODE") %>%
   mutate(
+    # add year
+    year = year(LANDING_DATE),
     # fill 0's instead of NAs if dataset not representative
     wcgop_rep = coalesce(wcgop_rep, 0),
     vms_rep = coalesce(vms_rep, 0),
@@ -309,7 +231,7 @@ joined_raw_df <- sabl_raw_tickets %>%
   )
 
 # check # tickets, # vessels, total revenue and total landings per sector, regardless of coverage
-joined_raw_df %>%
+joined_df %>%
   group_by(sector) %>%
   summarize(
     n_tickets = n_distinct(FTID),
@@ -318,8 +240,18 @@ joined_raw_df %>%
     total_landings = sum(LANDED_WEIGHT_LBS)
   )
 
+# check # tickets, # vessels, total revenue and total landings per year, regardless of coverage
+joined_df %>%
+  group_by(year) %>%
+  summarize(
+    n_tickets = n_distinct(FTID),
+    n_vessels = n_distinct(VESSEL_NUM),
+    total_revenue = sum(EXVESSEL_REVENUE),
+    total_landings = sum(LANDED_WEIGHT_LBS)
+  )
+
 # check # tickets, # vessels, total revenue and total landings per sector, by coverage
-vis_raw_df <- joined_raw_df %>%
+vis_df <- joined_df %>%
   group_by(sector, coverage_factor) %>%
   summarize(
     n_tickets = n_distinct(FTID),
@@ -338,7 +270,7 @@ vis_raw_df <- joined_raw_df %>%
   ungroup()
 
 # save to csv
-table_raw_df <- vis_raw_df %>%
+table_df <- vis_df %>%
   select(
     sector,
     coverage_factor,
@@ -358,15 +290,16 @@ table_raw_df <- vis_raw_df %>%
     pct_landings = paste0(as.character(trunc(pct_landings * 100)), "%"),
   )
 write.csv(
-  table_raw_df,
-  here("Confidential", "sablefish_vms", "table_raw_df.csv")
+  table_df,
+  here("Confidential", "sablefish_vms", "table_df.csv"),
+  row.names = FALSE
 )
 
 # view summary table
-kable(table_raw_df)
+kable(table_df)
 
 # stacked bar chart (%)
-vis_raw_df %>%
+vis_df %>%
   pivot_longer(
     c("n_tickets", "n_vessels", "total_revenue", "total_landings"),
     names_to = "variable",
@@ -382,8 +315,9 @@ ggsave(
   width = 9.5,
   height = 7
 )
+
 # stacked bar chart (count)
-vis_raw_df %>%
+vis_df %>%
   pivot_longer(
     c("n_tickets", "n_vessels", "total_revenue", "total_landings"),
     names_to = "variable",
@@ -399,4 +333,107 @@ ggsave(
 )
 ```
 
-I'm worried about the landings and revenue being miscounted or duplicated, since `sabl_raw_tickets` has 1251 rows, but only 681 unique FTID values. I didn't dig into that yet. I'm curious if it's the same issue that led to some duplication in the VMS pipeline, when take was landed for personal vs. commercial use (issue [#19](https://github.com/noaa-nwfsc/VMS-pipeline/issues/19)).
+Repeat visualizations, but for each year separately.
+
+```{r}
+# check annually # tickets, # vessels, total revenue and total landings per sector, by coverage
+vis_annual_df <- joined_df %>%
+  group_by(year, sector, coverage_factor) %>%
+  summarize(
+    n_tickets = n_distinct(FTID),
+    n_vessels = n_distinct(VESSEL_NUM),
+    total_revenue = sum(EXVESSEL_REVENUE),
+    total_landings = sum(LANDED_WEIGHT_LBS)
+  ) %>%
+  ungroup() %>%
+  group_by(sector) %>%
+  mutate(
+    pct_tickets = n_tickets / sum(n_tickets),
+    pct_vessels = n_vessels / sum(n_vessels),
+    pct_revenue = total_revenue / sum(total_revenue),
+    pct_landings = total_landings / sum(total_landings)
+  ) %>%
+  ungroup()
+
+# save to csv
+table_annual_df <- vis_annual_df %>%
+  select(
+    year,
+    sector,
+    coverage_factor,
+    n_tickets,
+    pct_tickets,
+    n_vessels,
+    pct_vessels,
+    total_revenue,
+    pct_revenue,
+    total_landings,
+    pct_landings
+  ) %>%
+  mutate(
+    pct_tickets = paste0(as.character(trunc(pct_tickets * 100)), "%"),
+    pct_vessels = paste0(as.character(trunc(pct_vessels * 100)), "%"),
+    pct_revenue = paste0(as.character(trunc(pct_revenue * 100)), "%"),
+    pct_landings = paste0(as.character(trunc(pct_landings * 100)), "%"),
+  )
+write.csv(
+  table_annual_df,
+  here("Confidential", "sablefish_vms", "table_annual_df.csv"),
+  row.names = FALSE
+)
+
+# view summary table
+kable(table_annual_df)
+
+# annual bar charts
+for (y in year_vector) {
+  # filter for the year
+  vis_year_df <- vis_annual_df %>% filter(year == y)
+
+  # stacked bar chart (%)
+  vis_year_df %>%
+    pivot_longer(
+      c("n_tickets", "n_vessels", "total_revenue", "total_landings"),
+      names_to = "variable",
+      values_to = "count"
+    ) %>%
+    ggplot(aes(x = sector, y = count, fill = coverage_factor)) +
+    facet_wrap(~variable) +
+    scale_y_continuous(labels = scales::percent) +
+    geom_col(position = "fill") +
+    labs(y = "percent")
+  ggsave(
+    here(
+      "Confidential",
+      "sablefish_vms",
+      "yearly_barplots",
+      paste0("bar_percent_", y, ".png")
+    ),
+    width = 9.5,
+    height = 7,
+    create.dir = TRUE
+  )
+
+  # stacked bar chart (count)
+  vis_year_df %>%
+    pivot_longer(
+      c("n_tickets", "n_vessels", "total_revenue", "total_landings"),
+      names_to = "variable",
+      values_to = "count"
+    ) %>%
+    ggplot(aes(x = sector, y = count, fill = coverage_factor)) +
+    facet_wrap(~variable, scales = "free_y") +
+    geom_col()
+  ggsave(
+    here(
+      "Confidential",
+      "sablefish_vms",
+      "yearly_barplots",
+      paste0("bar_count_", y, ".png")
+    ),
+    width = 9.5,
+    height = 7,
+    create.dir = TRUE
+  )
+}
+```
