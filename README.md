@@ -11,6 +11,7 @@ Most raw data in this project are large and confidential. This repository theref
 ## Pre-requisites
 
 If it’s your first time running the pipeline (ever or after a break), you will need to:
+
 1. Pull from main branch on GitHub
 2. Adjust files and directory structure that are not tracked on GitHub
 
