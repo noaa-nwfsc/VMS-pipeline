@@ -1,0 +1,31 @@
+---
+title: "01_compare_cdfw_block_vms_data"
+author: "Jameal Samhouri"
+date: "Written beginning 2025-06-05. Last Run `r Sys.Date()`"
+output: 
+  html_document:
+      toc: true
+      toc_float: true
+geometry: margin=1in
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+This document compares the spatial distribution of CA Dungeness crab fishing activity based on self-reported CDFW block data from fish tickets and geolocations obtained from VMS data.
+
+# Join data frames for processing
+
+Fish tix (fishtix_vlengths_withFTID_yyyy.rds)
+Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds) 
+10 arc minute grid. https://github.com/noaa-nwfsc/VMS-pipeline/tree/main/spatial_data
+
+NWFSC_DSACDFW_DcrabPermitDetail2013-2023_08072023.xlsx
+TrapTierNumberKey.csv
+
+VMS point frequency distributions to be split into before and after that ping rate increase, or by year
+
