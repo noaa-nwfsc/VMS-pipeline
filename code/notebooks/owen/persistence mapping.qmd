@@ -1,20 +1,18 @@
 ---
-title: "Dungeness Crab Fishing EFfort Persistence Mapping"
+title: "Dungeness Crab Fishing Effort Persistence Mapping"
 author: "Owen R. Liu"
 date: "5 June 2025"
-format: gfm
+format: 
+  gfm:
+    toc: true
 ---
 
 # Setup and Purpose
 
-The goal of this analysis is to characterize the spatial consistency, or persistence, of spatial fishing patterns in the US West Coast Dungeness crab fishery. There are potentially many ways to conceptualize this, and we will try a few different ones:
-
-* mean and variance across the entire time series (or by, e.g. crab year or whale season)
-* total years with positive catch, and positive area (total area where effort>0)
-* hotspot mapping
+The goal of this analysis is to characterize the spatial consistency, or persistence, of spatial fishing patterns in the US West Coast Dungeness crab fishery. We want to produce useful maps of the overall patterns of effort that summarize across the time series. There are potentially many ways to conceptualize this, and we will try a few different ones.
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,fig.height = 8,fig.width=10)
 
 # import libraries
 library(tidyverse)
@@ -69,7 +67,7 @@ ggplot()+
   geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='gray30',col=NA)+
   xlim(bbox[1],bbox[3])+ylim(bbox[2],bbox[4])+
-  scale_fill_viridis(option="A")
+  scale_fill_viridis(option="turbo",direction=-1)
 
 # map with facets
 # designate the spatial zones
@@ -82,7 +80,7 @@ ggplot()+
   geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='gray30',col=NA)+
   facet_wrap(~map_zone)+
-  scale_fill_viridis(option="A")
+  scale_fill_viridis(option="turbo",direction=-1)
 
 # this doesn't quite work because we need different zooms/bounding boxes for each zone. Let's do it with cowplot instead
 bboxes <- map(levels(grid5k_final$map_zone),function(z){
@@ -96,7 +94,7 @@ pl <- map2(levels(grid5k_final$map_zone),bboxes,function(z,b){
   geom_sf(data=datsub,aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='gray30',col=NA)+
   xlim(b[1],b[3])+ylim(b[2],b[4])+
-  scale_fill_viridis(option="A")
+  scale_fill_viridis(option="turbo",direction=-1)
 })
 
 plot_grid(plotlist=pl)
@@ -124,17 +122,17 @@ ggplot()+
   geom_sf(data=grid5k_rot15,aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='gray30',col=NA)+
   xlim(bbox_rot15[1],bbox_rot15[3])+ylim(bbox_rot15[2],bbox_rot15[4])+
-  scale_fill_viridis(option="A")
+  scale_fill_viridis(option="turbo",direction=-1)
 ggplot()+
   geom_sf(data=grid5k_rot21,aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='gray30',col=NA)+
   xlim(bbox_rot21[1],bbox_rot21[3])+ylim(bbox_rot21[2],bbox_rot21[4])+
-  scale_fill_viridis(option="A")
+  scale_fill_viridis(option="turbo",direction=-1)
 ggplot()+
   geom_sf(data=grid5k_rot30,aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='gray30',col=NA)+
   xlim(bbox_rot30[1],bbox_rot30[3])+ylim(bbox_rot30[2],bbox_rot30[4])+
-  scale_fill_viridis(option="A")
+  scale_fill_viridis(option="turbo",direction=-1)
 
 # rotated 15 degrees seems like the skinniest, most zoomed in map for coastwide viz
 ```
@@ -152,28 +150,45 @@ make_map_coastwide <- function(df, column) {
     geom_sf(data=coast,fill='gray30',col=NA)+
     xlim(bbox_rot15[1],bbox_rot15[3])+
     ylim(bbox_rot15[2],bbox_rot15[4])+
-    scale_fill_viridis(option='A',na.value='white')
+    scale_fill_viridis(option='turbo',na.value='white')
 }
 make_map_coastwide(grid5k_final, centro_lat)
 make_map_coastwide(grid5k_final, WM_NGDC_m)
 
 # "facetted" by coastal zone
+# make_map_zones <- function(df, column) {
+#   
+#   # scale limits, common across subplots
+#   lims <- df %>% pull( {{column}} ) %>% range()
+#   # now we have a separate bounding box for each coast sections, and can map
+#   pl <- map2(levels(df$map_zone),bboxes,function(z,b){
+#     datsub <- df %>% filter(map_zone==z)
+#     ggplot()+
+#       geom_sf(data=datsub,aes(fill= {{column}} ),col=NA)+
+#       geom_sf(data=coast,fill='gray30',col=NA)+
+#       xlim(b[1],b[3])+ylim(b[2],b[4])+
+#       scale_fill_viridis(option="turbo",na.value='white',limits=lims)
+#   })
+# 
+#   plot_grid(plotlist=pl)
+# }
+
 make_map_zones <- function(df, column) {
   
   # scale limits, common across subplots
   lims <- df %>% pull( {{column}} ) %>% range()
   # now we have a separate bounding box for each coast sections, and can map
-  pl <- map2(levels(df$map_zone),bboxes,function(z,b){
-    datsub <- df %>% filter(map_zone==z)
+  pl <- map(bboxes,function(b){
     ggplot()+
-      geom_sf(data=datsub,aes(fill= {{column}} ),col=NA)+
+      geom_sf(data=df,aes(fill= {{column}} ),col=NA)+
       geom_sf(data=coast,fill='gray30',col=NA)+
       xlim(b[1],b[3])+ylim(b[2],b[4])+
-      scale_fill_viridis(option="A",na.value='white',limits=lims)
+      scale_fill_viridis(option="turbo",na.value='white',limits=lims)
   })
 
   plot_grid(plotlist=pl)
 }
+
 make_map_zones(grid5k_final,centro_lat)
 make_map_zones(grid5k_final,WM_NGDC_m)
 
@@ -189,7 +204,7 @@ make_map_zones_sqrt <- function(df, column) {
       geom_sf(data=datsub,aes(fill= {{column}} ),col=NA)+
       geom_sf(data=coast,fill='gray30',col=NA)+
       xlim(b[1],b[3])+ylim(b[2],b[4])+
-      scale_fill_viridis(option="A",na.value='white',limits=lims,transform='sqrt')
+      scale_fill_viridis(option="turbo",na.value='white',limits=lims,transform='sqrt')
   })
 
   plot_grid(plotlist=pl)
@@ -203,7 +218,9 @@ Now that we have some data and tools together, let's figure out some persistence
 
 # Counts, Mean, and Variance
 
-We have just two years of data here, but it is enough to start with. One of the simplest ways to map fishing grounds over time is to just count the number of months of positive effort in each grid cell.
+We have just one year of data here, but it is enough to start with. Calculate summary statistics of various kinds:
+
+*Disclaimer* : We did not expand the dataset to include zeroes for month/grid cell combinations before summarizing. This means that, for example, mean revenue per month in a given grid cell will be a mean across only those months with positive catch.
 
 ```{r}
 dat_summs <- dat %>% 
@@ -218,20 +235,22 @@ dat_summs <- dat %>%
             mean_vms_records=mean(n_vms_records),
             max_vms_records=max(n_vms_records),
             sd_vms_records=sd(n_vms_records),
-            cv_vms_records=sd_vms_records/mean_vms_records) %>% 
+            cv_vms_records=sd_vms_records/mean_vms_records,
+            mean_unique_vessels=mean(n_unique_vessels),
+            sd_unique_vessels=sd(n_unique_vessels)) %>% 
   ungroup()
 
 dat_summs_grid <- grid5k_final %>% 
   left_join(dat_summs,by="GRID5KM_ID") %>% 
   # fill in zeroes
-  mutate(across(c("nmonths","mean_lbs","max_lbs","sd_lbs","mean_rev","max_rev","sd_rev","mean_vms_records","max_vms_records","sd_vms_records"),~coalesce(.,0L)))
+  mutate(across(c("nmonths","mean_lbs","max_lbs","sd_lbs","mean_rev","max_rev","sd_rev","mean_vms_records","max_vms_records","sd_vms_records","cv_vms_records","mean_unique_vessels","sd_unique_vessels"),~coalesce(.,0L)))
 ```
 
-Now we can make a bunch of maps, using the generic map functions we wrote above
+Now we can make a bunch of maps, using the generic map functions we wrote above.
 
 ## Total Pings, Positive Area
 
-Time series of total pings across grid cells, and positive area fished (i.e., total area of cells with nonzero fishing effort)
+Time series of total pings across all grid cells, and positive area fished (i.e., total area of cells with nonzero fishing effort)
 
 ```{r}
 total_pings_ts <- dat %>% 
@@ -246,13 +265,11 @@ positive_area_ts <- dat %>%
   summarise(totarea=sum(AREA))
 positive_area_ts %>%
   ggplot(aes(year_month_date,totarea/1e6))+geom_line()+labs(x="Date",y="Total Area Fished (sq.km)")
-
 ```
-
 
 ## Months Fished
 
-Total number of months each grid cell was fished, out of the 13 possible months in this dataset. Clear already here are the "core" areas near shore and near ports that are fished most continuously.
+Total number of months each grid cell was fished, out of the 13 possible months in this dataset. Clear already here are the "core" areas near shore and near ports that are fished most continuously. (Editorial comment- even though this is one of the simplest ways to summarise effort, it also seems like one of the most clear, and least assumption-driven)
 
 ```{r}
 make_map_coastwide(dat_summs_grid,nmonths)+ggtitle("Number of Months Fished")
@@ -264,11 +281,11 @@ make_map_zones(dat_summs_grid,nmonths)
 In pounds and in revenue.
 
 ```{r}
-make_map_coastwide(dat_summs_grid,mean_lbs)+scale_fill_viridis(transform="sqrt",na.value='white',option='A')+ggtitle("Mean Monthly Landings")
+make_map_coastwide(dat_summs_grid,mean_lbs)+scale_fill_viridis(transform="sqrt",na.value='white',option='turbo')+ggtitle("Mean Monthly Landings")
 make_map_zones_sqrt(dat_summs_grid,mean_lbs)
 
 
-make_map_coastwide(dat_summs_grid,mean_rev)+scale_fill_viridis(transform="sqrt",na.value='white',option='A')+ggtitle("Mean Monthly Revenue")
+make_map_coastwide(dat_summs_grid,mean_rev)+scale_fill_viridis(transform="sqrt",na.value='white',option='turbo')+ggtitle("Mean Monthly Revenue")
 make_map_zones_sqrt(dat_summs_grid,mean_rev)
 ```
 
@@ -288,5 +305,149 @@ make_map_zones(dat_summs_grid,cv_vms_records)
 
 ```
 
+## Number of Vessels
 
+These data are screened for confidentiality, and so will be limited to cells with >=3 unique vessels in any given month. With that said, we can still look at the distribution of vessel activity, and map the mean number of unique vessels per grid cell per month.
+
+```{r}
+# distribution of n_unique_vessels in the pre-summarized data
+dat %>% 
+  ggplot(aes(n_unique_vessels))+
+  geom_density()+
+  labs(title="Number of Unique Vessels per Month\n(unsummarized data)",x="Number of Unique Vessels")
+
+# now the same in the cross-months, summarized version
+dat_summs %>% 
+  ggplot(aes(mean_unique_vessels))+
+  geom_density()+
+  labs(title="Mean Number of Unique Vessels per Month\n(summarized data)",x="Mean Number of Unique Vessels")
+```
+
+We can map this as well
+
+```{r}
+make_map_coastwide(dat_summs_grid,mean_unique_vessels)+ggtitle("Mean Monthly Unique Vessels")
+make_map_zones(dat_summs_grid,mean_unique_vessels)
+
+make_map_coastwide(dat_summs_grid,sd_unique_vessels)+ggtitle("SD Monthly Unique Vessels")
+make_map_zones(dat_summs_grid,sd_unique_vessels)
+
+#mean/variance relationship- are the places with the most effort also have the most variable effort?
+dat_summs %>% 
+  ggplot(aes(mean_unique_vessels,sd_unique_vessels^2))+
+  geom_point()+
+  geom_smooth()+
+  labs(x="Mean Unique Vessels per Month",y="Variance in Vessels")
+```
+There is a strong relationship here (not unexpected). This means that the grid cells with the highest vessel traffic also have the most variable traffic.
+
+## CPUE
+
+We can define catch per unit effort as total landings (lbs) divided by total pings (our best measure of effort). We calculate this at the grid cell/month level, then roll it up to a mean across time.
+
+```{r}
+dat_cpue <- dat %>% 
+  mutate(cpue=dcrb_lbs/n_vms_records)
+dat_cpue %>% 
+  ggplot(aes(as.factor(year_month_date),cpue))+
+  geom_boxplot()+
+  labs(x="Date",y="Landings/Pings (CPUE)",title="CPUE across grid cells")+
+  theme(axis.text.x=element_text(angle=45,vjust=0.5))
+```
+
+Now, summarize across months
+
+```{r}
+dat_cpue_summ <- dat_cpue %>% 
+  group_by(GRID5KM_ID) %>% 
+  summarise(mean_cpue=mean(cpue))
+dat_cpue_grid <- grid5k_final %>% 
+  left_join(dat_cpue_summ,by="GRID5KM_ID") %>% 
+  # fill in zeroes
+  mutate(mean_cpue=coalesce(mean_cpue,0L))
+```
+
+```{r}
+make_map_coastwide(dat_cpue_grid,mean_cpue)+ggtitle("Mean CPUE")
+make_map_zones(dat_cpue_grid,mean_cpue)
+```
+
+Something to notice here that is a little different than these other, correlated maps: You can see a signal of high cpue in some of the more offshore edges of the fished area, particularly in N. California around Cape Mendocino. I think this likely reflects the reality of the early season derby: at the beginning of the season, when crab densities are high, there may be high catch rates everywhere, but only some vessels (maybe because of size, weather, safety, power, etc.) are able to access the lucrative (i.e., high CPUE), more offshore grid cells. Later in the season, as the stock gets fished down, there is a retraction of effort towards shore. As seen in the "Months Fished" maps above, these "core" areas closer to shore get more consistent effort across the fishing season, meaning that, on average, CPUE might be lower in those places.
+
+The reason to consider these differences between effort maps and CPUE maps is because while some grid cells may be important core areas for the entirety of the crab season, certain other, offshore areas may be the most desirable (if ephemeral) opportunities for high catch rates, particularly in the early season.
+
+# Cumulative Effort
+
+Summarize total effort by summing up total pings, lbs, and revenue across time for each grid cell. Presumably, this should look quite similar to some of the other maps above.
+
+```{r}
+dat_cume <- dat %>% 
+  group_by(GRID5KM_ID) %>% 
+  summarise(tot_pings=sum(n_vms_records),
+            tot_lbs=sum(dcrb_lbs),
+            tot_rev=sum(dcrb_rev)) %>% 
+  ungroup()
+
+dat_cume_grid <- grid5k_final %>% 
+  left_join(dat_cume,by="GRID5KM_ID") %>% 
+  # fill in zeroes
+  mutate(across(contains("tot"),~coalesce(.,0L)))
+```
+
+```{r}
+make_map_coastwide(dat_cume_grid,tot_pings)+scale_fill_viridis(transform="sqrt",na.value='white',option='turbo')+ggtitle("Total Pings")
+make_map_zones_sqrt(dat_cume_grid,tot_pings)
+
+make_map_coastwide(dat_cume_grid,tot_lbs)+scale_fill_viridis(transform="sqrt",na.value='white',option='turbo')+ggtitle("Total Landed Pounds")
+make_map_zones_sqrt(dat_cume_grid,tot_lbs)
+
+
+make_map_coastwide(dat_cume_grid,tot_rev)+scale_fill_viridis(transform="sqrt",na.value='white',option='turbo')+ggtitle("Total Revenue")
+make_map_zones_sqrt(dat_cume_grid,tot_rev)
+
+```
+
+
+# Quantiles
+
+Another, relatively simple summary of these data is to look at quantiles; that is, to rank-order the average amount of fishing effort in each grid cell. This will allow us to, e.g., describe where the top XX% of effort is located (time-averaged).
+
+For now, we do calculate quantiles with total pings (mean and max), but we could do this with other attributes as well (e.g., landings, revenue).
+
+```{r}
+# add a quantile attribute to the summary
+dat_summ_quants <- dat_summs %>% 
+  mutate(quant_mean_vms_records=cume_dist(mean_vms_records),
+         quant_max_vms_records=cume_dist(max_vms_records))
+
+# are these two measures extremely tightly correlated?
+dat_summ_quants %>% 
+  ggplot(aes(quant_mean_vms_records,quant_max_vms_records))+
+  geom_point()+
+  geom_smooth(method='lm',se=F)+
+  geom_abline(slope=1,intercept=0,linetype=2,color='red')+
+  labs(x="Quantile Using Mean Pings",y="Quantile Using Max Pings")
+```
+
+```{r}
+dat_quants_grid <- grid5k_final %>% 
+  left_join(dat_summ_quants,by="GRID5KM_ID") %>% 
+  # fill in zeroes
+  mutate(across(contains("quant"),~coalesce(.,0L)))
+
+make_map_coastwide(dat_quants_grid,quant_mean_vms_records)+labs(title="Quantile (Mean Monthly Pings)",fill="")
+make_map_zones(dat_quants_grid,quant_mean_vms_records)
+
+make_map_coastwide(dat_quants_grid,quant_max_vms_records)+labs(title="Quantile (Max Monthly Pings)",fill="")
+make_map_zones(dat_quants_grid,quant_max_vms_records)
+```
+
+We could even make this binary, e.g., we could ask, "where are the top 20% of fished grid cells, based on mean pings"?
+
+```{r}
+dat_quants_grid_top20 <- dat_quants_grid %>% 
+  mutate(top20_bin=ifelse(quant_mean_vms_records>=0.8,"Top 20%","Bottom 80%"))
+
+make_map_coastwide(dat_quants_grid_top20,top20_bin)+labs(title="Top 20% Most Fished",fill="")+scale_fill_manual(values=c("lightblue","darkgreen"))
+```
 
