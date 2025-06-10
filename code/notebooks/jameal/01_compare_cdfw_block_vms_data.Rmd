@@ -9,16 +9,68 @@ output:
 geometry: margin=1in
 ---
 
+# Setup
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+# import libraries
+library(tidyverse)
+library(here)
+library(fredr)
+
+
+```
+
+```{r create-output-directories}
+# make hindcast output directory, if doesn't yet exist
+output_dir <- here('Confidential', 'hindcast_output')
+if (!dir.exists(output_dir)) dir.create(output_dir)
+
+# create hindcast output subdirectory name based on system date
+output_subdir_name <- paste0("hindcast_output_", Sys.Date())
+
+# make hindcast output subdirectory, if doesn't yet exist
+output_subdir <- here('Confidential', 'hindcast_output', output_subdir_name)
+if (!dir.exists(output_subdir)) dir.create(output_subdir)
+
+# make tables, figures, and maps subdirectories
+for (temp_name in c('tables', 'figures')) {
+  temp_subdir <- here('Confidential', 'hindcast_output', output_subdir_name, temp_name)
+  if (!dir.exists(temp_subdir)) dir.create(temp_subdir)
+}
+rm(temp_name, temp_subdir)
 ```
 
 # Introduction
 
 This document compares the spatial distribution of CA Dungeness crab fishing activity based on self-reported CDFW block data from fish tickets and geolocations obtained from VMS data.
 
-# Join data frames for processing
+Analysis with fish tix only:
+
+1) Summarize the number/% of tix and number/% of vessels by time period for which CDFW offshore blocks are reported, and examine for structural bias (vessel size, time of year, region, etc)
+
+Analysis with matched VMS and fish tix:
+
+1) Using the VMS record-by-record df, calculate distance of VMS point from centroid or edge of CDFW block reported in fish ticket; 
+- Make plot of frequency distribution showing distance of VMS point from CDFW block, with 50/75/90% labeled 
+
+2) Summarize VMS record-by-record df by trip_ID, and calculate % of VMS points within 0/1/2-degree neighboring blocks across time periods. Try this package: https://link.springer.com/article/10.1007/s10980-024-01930-z 
+- 0-degree neighbor = inside/outside of CDFW block
+- Make plot of % of VMS points (y-axis) and degree neighbor (x-axis), each point estimate representing a time period (eg, yr)
+- Facet by region, vessel size, etc
+- Consider summarizing by vessel first
+
+3) Spatial visualizations (maps)
+- Summarize VMS record-by-record df by trip_ID and CDFW block
+    - # tix per CDFW block vs # pings/day per CDFW block
+    - # unique vessels per CDFW block based on tix vs # unique vessels/day per CDFW block based on VMS
+- Follow this vignette to make a correlation map: https://statnmap.com/2018-01-27-spatial-correlation-between-rasters/ 
+
+
+
+
+
+# Load and join data frames for processing
 
 Fish tix (fishtix_vlengths_withFTID_yyyy.rds)
 Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds) 
@@ -26,6 +78,180 @@ Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds)
 
 NWFSC_DSACDFW_DcrabPermitDetail2013-2023_08072023.xlsx
 TrapTierNumberKey.csv
+
+The code below borrows heavily from Brooke Hawkins' notebook "10_blh_dungeness-crab-time-series.Rmd".
+
+## Load data
+
+1. Load the cleaned fish ticket data for specified years, which will be used to plot revenue and landings across time.
+
+Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB.
+
+```{r load-data}
+# choose years of data to load
+load_years <- 2011:2023
+
+# load fish ticket data before it was joined to VMS data, used to check VMS representativeness
+ticket_df <- purrr::map(load_years, function(ly) {
+  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'fish_tickets', paste0('fishtix_vlengths_withFTID_', ly, '.rds')))
+}) %>% bind_rows()
+```
+
+2. Load inflation adjustment factors from FRED.
+
+Adjust revenue for inflation using Personal Consumption Expenditures: Chain-Type Price Index, [PCEPI](https://fred.stlouisfed.org/series/PCEPI) from FRED. PCEPI index is chosen per Dan Holland's suggestion. The reference year is 2017 by default. This is a monthly time series that is used by multiplying the revenue by 100 / PCEPI. It is used at a monthly time scale (rather than taking an annual average).
+
+Pre-requisite: Create a FRED account and [API key](https://fred.stlouisfed.org/docs/api/api_key.html). This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis. 
+
+```{r inflation-adjustment}
+# insert your FRED API key
+fredr_set_key('ea19d3d447eb4dc773db00c5a2e61f22')
+
+# download the monthly inflation adjustments from FRED from start of min load year to end of max load year
+fred_pcepi <- fredr(
+    series_id = "PCEPI", 
+    observation_start = as.Date(paste0(min(load_years), "-01-01")),
+    observation_end = as.Date(paste0(max(load_years), "-12-31"))
+  ) %>%
+  rename(year_month = date, pcepi = value) %>% 
+  select(-c(realtime_start, realtime_end, series_id))
+
+# write inflation adjustment factors
+write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_pcepi.csv"), x = fred_pcepi, row.names = FALSE)
+
+# plot inflation adjustment factors
+fred_pcepi %>% ggplot(aes(x = year_month, y = pcepi)) + geom_line() + scale_x_date(date_breaks = "1 year", date_labels = "%b %Y")
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_pcepi.png"), create.dir = TRUE)
+```
+
+
+## Transform data
+
+Transform the joined, cleaned, interpolated VMS and fish ticket data:
+
+1. Filter for dungeness crab related records.
+2. Add temporal columns.
+3. Adjust revenue for inflation with data from FRED.
+4. add CDFW_AREA_BLOCK and permit tier info (not yet included 06-10-2025)
+
+Some commonly used acronyms for variable naming in the code include:
+
+* `dcrb` dungeness crab
+* `rev` revenue
+* `lbs` landings
+* `VMS` vessel monitoring system
+* `afi` adjusted for inflation
+
+```{r define-filters}
+# define filters
+target_rev <- "DCRB"         # revenue target
+target_lbs <- "DCRB"         # landings target
+min_depth <- 0               # minimum depth in meters
+max_depth <- -150            # maximum depth in meters
+min_speed <- 0               # minimum speed in m/s
+max_speed <- 4.11556         # maximum speed in m/s (4.11556 m/s = 8 knots)
+crab_year_start <- 11        # month defines start of crab year
+winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
+```
+
+```{r transform-ticket-data}
+# apply same filters as VMS dataframe
+dcrb_ticket_df <- ticket_df %>%
+  # add temporal columns
+  mutate(
+    year_numeric = year(date),
+    month_numeric = month(date),
+    week_numeric = week(date),
+    day_numeric = yday(date),
+    month_factor = month(date, label = TRUE, abbr = FALSE),
+    year_month_character = paste0(year(date),"_", substr(ymd(date), 6, 7)),
+    crab_year_character = ifelse(month_numeric >= crab_year_start, 
+                                 paste0(year_numeric, "_", 1+year_numeric),
+                                 paste0(year_numeric-1, "_", year_numeric)),
+    season_character = as.character(ifelse(month_factor %in% winter_months, "Winter", "Spring-Summer")),
+    year_month_date = ym(year_month_character)
+  ) %>%
+  # apply filters
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  # join inflation adjustment factor and adjust revenue
+  left_join(fred_pcepi, by = join_by(year_month_date == year_month)) %>%
+  mutate(DCRB_revenue_afi = DCRB_revenue * 100 / pcepi) %>%
+  # select columns
+  dplyr::select(
+    # identifiers
+    Rec_ID,           # fish ticket ID
+    drvid,            # vessel ID
+    pacfin_port_code, # port ID
+    port_group_code,  # port group ID
+    agency_code,      # agency code
+    # temporal fields
+    date,
+    year_month_date,
+    crab_year_character,
+    year_month_character,
+    month_factor,
+    year_numeric,
+    month_numeric,
+    week_numeric,
+    day_numeric,
+    # vessel length
+    FINAL_LENGTH,
+    # inflation adjustment index
+    pcepi,
+    # dungeness crab fields
+    DCRB_lbs,
+    DCRB_revenue,
+    DCRB_revenue_afi
+  ) %>%
+  # de-duplicate records
+  distinct()
+
+# take a peek at columns in the resulting dataframe
+colnames(dcrb_ticket_df)
+```
+
+```{r}
+# count total records, trips and years
+n_records <- nrow(dcrb_ticket_df)
+n_trips   <- n_distinct(dcrb_ticket_df$Rec_ID)
+n_years   <- n_distinct(dcrb_ticket_df$year_numeric)
+```
+
+The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` distinct trips (fish tickets), across `r n_years` years.
+
+There are more records than trips due to the vessel registration processing code including the lookback window data in step 2 of the pipeline. I looked at some examples of duplicates, and they occur for tickets within the lookback window - for example, a ticket landed on Dec. 28, 2014 is processed in the 2014 and 2015 runs of the pipeline for vessel registration. I suspect this could be fixed in the pipeline itself, but I'm leaving it be for now.
+
+This is fixed here in the plotting code by removing duplicates when one length is NA, and I didn't see any duplication within the VMS data.
+
+```{r}
+# identify which records need to be de-duplicated, by finding RecIDs with 2 records, 1 of which has NA length
+qa_df <- dcrb_ticket_df %>% 
+  group_by(Rec_ID) %>%
+  summarize(n = n(),
+            na_length = sum(is.na(FINAL_LENGTH))) %>%
+  mutate(remove_na = (na_length == 1) & (n == 2)) %>%
+  arrange(desc(n))
+
+# take a peek at columns in the resulting dataframe
+colnames(qa_df)
+
+# how many records need de-duplication (have 2 records, 1 of which has NA length)?
+qa_df %>% group_by(n, na_length, remove_na) %>% summarise(n_records = n()) %>% arrange(desc(n_records)) # 7499 records
+
+# join back to dcrb_ticket_df
+qa_dcrb_ticket_df <- dcrb_ticket_df %>%
+  left_join(qa_df, by = join_by(Rec_ID)) %>%
+  filter(!(remove_na & is.na(FINAL_LENGTH)))
+
+# count total records, trips and years
+n_qa_records <- nrow(qa_dcrb_ticket_df)
+n_qa_trips   <- n_distinct(qa_dcrb_ticket_df$Rec_ID)
+n_qa_years   <- n_distinct(qa_dcrb_ticket_df$year_numeric)
+```
+
+The QA'ed Dungeness crab fish ticket dataframe has `r n_qa_records` records (fish tickets), `r n_qa_trips` distinct trips (fish tickets), across `r n_qa_years` years. Now there are no duplicate fish tickets.
+
+# Make plots
 
 VMS point frequency distributions to be split into before and after that ping rate increase, or by year
 
