@@ -1,0 +1,701 @@
+---
+title: "Dungeness Crab Fishing Effort Summary Mapping"
+author: "Owen R. Liu"
+date: "10 June 2025"
+format: 
+  gfm:
+    toc: true
+---
+
+# Setup and Purpose
+
+The goal of this analysis is to characterize the spatial and temporal fishing patterns in the US West Coast Dungeness crab fishery. We want to produce useful maps and time series of the overall patterns in the fishery, and give a sense of the amount of variability or consistency in those patterns across years.
+
+There are potentially many ways to conceptualize this, and we will try a few different ones. We organize our mapping by "attributes", "temporal breaks", and "measures":
+
+* **Attributes** are the characteristic of the fishery we are measuring
+  + Unique vessels/month/cell
+  + VMS pings/cell
+  + Landings/cell
+  + Revenue/cell
+  + CPUE/cell, defined as landings divided by pings
+* **Temporal breaks** are the time periods over which we summarize the attributes
+  + November-July (the crab season), across all years
+  + April-November and December-March, representing seasons when humpback whales are expected to be in the region, or not, respectively
+  + Each fishing month (Nov-July) separately, across all years
+  + Before, during, and after the marine heatwave and blob, defined as the 2014-15, and 2015-16 crab seasons
+  + Before and after the RAMP regulations were instituted in California in 2019
+  + Before and after ODFW regulations were instituted
+  + Before and after WDFW regulations were instituted
+* **Measures** are the calculations performed on the attributes, such as mean or standard deviation
+  + Mean
+  + Standard deviation
+  + Quantile of the empirical CDF of the attribute across grid cells based on the mean measure
+  + Rank order of grid cells based on the mean measure
+  + Anomaly in an attribute in a given temporal period relative to a baseline
+
+In the following, we set up the data and spatial grids we will use for these summaries, and then write some general functions that will help us summarize the attributes across the different temporal breaks.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = F)
+
+# import libraries
+library(tidyverse)
+library(sf)
+library(cowplot)
+library(rnaturalearth)
+library(viridis)
+library(knitr)
+library(here)
+
+options(dplyr.summarise.inform = FALSE)
+
+# change default ggplot theme for plotting
+plot_theme <- theme_minimal()+theme(panel.border = element_rect(color='black',fill=NA),
+                                    panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+theme_set(plot_theme)
+```
+
+# Import Data
+
+## Gridded Fishing Effort
+
+This is summarized Dungeness crab fishing effort from a combination of VMS and fish tickets, projected/summarized on a 5km, coastwide grid, monthly.
+
+```{r}
+dat <- read_csv(here('dcrb_5km_monthly_nonconfidential_df.csv'))
+```
+
+## Grids
+
+Next, load the spatial layers we need for mapping.
+
+```{r}
+# 5km grid, entire coast
+grid5k <- read_sf(here('spatial_data','grids','fivekm_grid_polys_shore_lamb.shp'))
+
+# background map, from rnaturalearth
+coast <- ne_states(country='United States of America',returnclass = 'sf') %>%
+  filter(name %in% c('California','Oregon','Washington','Nevada')) %>%
+  st_transform(crs = st_crs(grid5k))
+```
+
+We can filter this large 5km grid to only encompass the cells with some crab fishing effort. Do this with a filter-buffer-crop workflow (could also use, e.g., a distance from shore or depth cutoff):
+
+```{r}
+# filter the overall grid using grid cells with DCRB effort in any month/year
+cells_we_need <- unique(dat$GRID5KM_ID)
+grid5k_filt <- grid5k %>% filter(GRID5KM_ID %in% cells_we_need)
+
+# buffer by 50km
+grid5k_filt_buff <- grid5k_filt %>% summarise() %>% st_buffer(1e4)
+
+# crop to make the final grid
+grid5k_final <- grid5k %>% st_filter(grid5k_filt_buff)
+bbox <- st_bbox(grid5k_final)
+
+# map this
+ggplot()+
+  geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bbox[1],bbox[3])+ylim(bbox[2],bbox[4])+
+  scale_fill_viridis(option="turbo",direction=-1)
+```
+
+We make a spatially rotated grid, for better visualization when mapping the whole coastline. We use custom projections for this, which B. Feist designed. Based on that work, here we provide generic code for any given amount of rotation.
+
+```{r}
+# this is the first wkt file ('well-known text') that B. Feist created, containing the info on the custom spatial projection
+rotation_wkt <- read_file(here('spatial_data','map_rotation','Rectified_Skew_Orthomorphic_center_30deg_rotation.wkt'))
+
+# working in this simple text format, we can find and replace to change the rotation of the map
+crs_rotated <- function(deg){
+  crs_out <- sub('Skew Grid\",30',paste0('Skew Grid\",',deg),rotation_wkt)
+  crs_out
+}
+
+# let's use this to make a 15 deg rotation, which seems about right for our study domain
+rot15 <- crs_rotated(15) %>% st_crs()
+
+# use this crs to reprojec the 5k grid
+grid5k_rot15 <- grid5k_final %>% st_transform(rot15)
+bbox_rot15 <- st_bbox(grid5k_rot15) +c(0,0,-20000,0)
+
+# map
+ggplot()+
+  geom_sf(data=grid5k_rot15,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bbox_rot15[1],bbox_rot15[3])+ylim(bbox_rot15[2],bbox_rot15[4])+
+  scale_fill_viridis(option="turbo",direction=-1)
+```
+
+We also need to define bounding boxes for regional subsets of the data, to "zoom in" on particular regions of interest. For now, our regional subsets will be Washington, Oregon, Northern California, and Central California.
+
+```{r}
+grid5k_final <- grid5k_final %>% mutate(map_zone=na_if(STATE,"CA")) %>% 
+  mutate(map_zone=coalesce(RAMP_area,map_zone)) %>% 
+  filter(map_zone!="Southern") %>% 
+  mutate(map_zone=ifelse(map_zone=="San Francisco","Central",map_zone)) %>% 
+  mutate(map_zone=factor(map_zone,levels=c("WA","OR","Northern","Central")))
+ggplot()+
+  geom_sf(data=grid5k_final,aes(fill=factor(map_zone)),col=NA)+
+  xlim(bbox[1],bbox[3])+ylim(bbox[2],bbox[4])+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  labs(fill="Region")
+```
+
+
+```{r,fig.width=12}
+# Define the bounding boxes for regional subsets
+bboxes <- map(levels(grid5k_final$map_zone),function(z){
+  grid5k_final %>% filter(map_zone==z) %>% st_bbox()
+})
+names(bboxes)=levels(grid5k_final$map_zone)
+
+# let's rotate the central California region 30 degrees and WA region 10 degrees
+bboxes$Central <- grid5k_final %>% st_transform(st_crs(crs_rotated(30))) %>% filter(map_zone=='Central') %>% st_bbox()
+bboxes$WA <- grid5k_final %>% st_transform(st_crs(crs_rotated(10))) %>% filter(map_zone=='WA') %>% st_bbox()
+
+# Washington
+wa_map <- ggplot()+
+  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(10))),aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$WA[1],bboxes$WA[3])+ylim(bboxes$WA[2],bboxes$WA[4])+
+  scale_fill_viridis(option="turbo",guide='none')
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# Oregon
+or_map <- ggplot()+
+  geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$OR[1],bboxes$OR[3])+ylim(bboxes$OR[2],bboxes$OR[4])+
+  scale_fill_viridis(option="turbo",guide='none')
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# N. Cal
+Northern_map <- ggplot()+
+  geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$Northern[1],bboxes$Northern[3])+ylim(bboxes$Northern[2],bboxes$Northern[4])+
+  scale_fill_viridis(option="turbo",guide='none')
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# Cen. Cal.
+Central_map <- ggplot()+
+  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(30))),aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$Central[1],bboxes$Central[3])+ylim(bboxes$Central[2],bboxes$Central[4])+
+  scale_fill_viridis(option="turbo")
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# now we can map them togetrher
+plot_grid(wa_map,or_map,Northern_map,Central_map,nrow=1)
+```
+
+
+# Time Series Summaries
+
+As a starting point we can make a few summary time series describing some of the attributes described above. We calculate total pings, landings, revenue, and positive area fished in each crab fishing season.
+
+```{r,fig.height=10,fig.width=12}
+grid_areas <- grid5k_final %>% st_set_geometry(NULL) %>% dplyr::select(GRID5KM_ID,AREA)
+dat_ts_summs <- dat %>% 
+  left_join(grid_areas,by="GRID5KM_ID") %>% 
+  group_by(crab_year_character,month_numeric) %>% 
+  summarise(totpings=sum(n_vms_records),
+            totland=sum(dcrb_lbs),
+            totrev=sum(dcrb_rev),
+            positive_area=sum(AREA)/1e6) %>% 
+  ungroup() %>% 
+  mutate(monthfct=month.name[month_numeric] %>% factor(levels=c("November","December","January","February","March","April","May","June","July","August","September","October")))
+
+totpings_ts1 <- dat_ts_summs %>% 
+  ggplot(aes(monthfct,totpings,color=crab_year_character,group=crab_year_character))+
+  geom_line()+
+  theme_minimal()+theme(panel.border = element_rect(fill=NA),axis.text.x = element_text(angle=45,hjust=1))+
+  labs(x="Month",y="Total VMS Records",color="Season")
+
+totland_ts1 <- dat_ts_summs %>% 
+  ggplot(aes(monthfct,totland/2204.62,color=crab_year_character,group=crab_year_character))+
+  geom_line()+
+  theme_minimal()+theme(panel.border = element_rect(fill=NA),axis.text.x = element_text(angle=45,hjust=1))+
+  labs(x="Month",y="Total VMS-linked Landings (MT)",color="Season")
+
+totrev_ts1 <- dat_ts_summs %>% 
+  ggplot(aes(monthfct,totrev/1e6,color=crab_year_character,group=crab_year_character))+
+  geom_line()+
+  theme_minimal()+theme(panel.border = element_rect(fill=NA),axis.text.x = element_text(angle=45,hjust=1))+
+  labs(x="Month",y="Total VMS-linked Revenue (Millions $)",color="Season")
+
+totarea_ts1 <- dat_ts_summs %>% 
+  ggplot(aes(monthfct,positive_area,color=crab_year_character,group=crab_year_character))+
+  geom_line()+
+  theme_minimal()+theme(panel.border = element_rect(fill=NA),axis.text.x = element_text(angle=45,hjust=1))+
+  labs(x="Month",y="Total Area Fished (sq. km)",color="Season")
+
+plot_grid(totpings_ts1,totland_ts1,totrev_ts1,totarea_ts1,nrow=2)
+
+```
+
+
+
+Now we move on to the summary mapping
+
+# Functions
+
+Because we'll be making a lot of maps with similar characteristics, it is efficient to write some functions to help us with consistent summarizing and mapping.
+
+## Mapping
+
+First, for a coastwide map of a continuous variable (like any of our attributes described above). This uses the 15-degree rotation map from above. This function takes as inputs a summarized dataframe on the `grid5k_final`, as well as the column name of the attribute to be mapped. The function rotates the map 15 degrees (as above), then produces the map.
+
+```{r}
+make_map_coastwide <- function(df, column) {
+  dat2 <- df %>% st_transform(rot15)
+  ggplot() + 
+    geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bbox_rot15[1],bbox_rot15[3])+
+    ylim(bbox_rot15[2],bbox_rot15[4])+
+    scale_fill_viridis(option='turbo',na.value='#abd0d6')+
+    theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+}
+
+# just plotting latitude as the fill to make sure everything is oriented correctly
+make_map_coastwide(grid5k_final, centro_lat)+labs(fill="latitude")
+```
+
+Now, we use this function to create another function that makes a multipanel map which includes the regional subsets. We need to use `cowplot` for this instead of the native facetting in ggplot in order to zoom in to each region correctly.
+
+```{r,fig.height=9,fig.width=7.5}
+make_map_zones <- function(df, column) {
+  
+  # scale limits for the color bar, to ensure they are common across subplots
+  lims <- df %>% pull( {{column}} ) %>% range()
+  # now we have a separate bounding box for each coast sections, and can map
+  
+  # coastwide map
+  p1 <- make_map_coastwide(df,{{column}})+theme(legend.position='right')
+  
+  # extract legend
+  leg <- get_legend(p1)
+  # remove legend from the plot
+  p1 <- p1 +theme(legend.position='none')
+  
+  wa_map <- ggplot()+
+    geom_sf(data=df %>% st_transform(st_crs(crs_rotated(10))),aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$WA[1],bboxes$WA[3])+ylim(bboxes$WA[2],bboxes$WA[4])+
+    labs(title="Washington")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims)+
+    theme(axis.text.x=element_blank())
+  
+  # Oregon
+  or_map <- ggplot()+
+    geom_sf(data=df,aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$OR[1],bboxes$OR[3])+ylim(bboxes$OR[2],bboxes$OR[4])+
+    labs(title="Oregon")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims)+
+    theme(axis.text.x=element_blank())
+  
+  # N. Cal
+  ncal_map <- ggplot()+
+    geom_sf(data=df,aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$Northern[1],bboxes$Northern[3])+ylim(bboxes$Northern[2],bboxes$Northern[4])+
+    labs(title="N. California")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims)+
+    theme(axis.text.x=element_blank())
+  
+  # Cen. Cal.
+  cencal_map <- ggplot()+
+    geom_sf(data=df %>% st_transform(st_crs(crs_rotated(30))),aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$Central[1],bboxes$Central[3])+ylim(bboxes$Central[2],bboxes$Central[4])+
+    labs(title="C. California")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims)+
+    theme(axis.text.x=element_blank())
+  
+  # now we can map them together
+  col2 <- plot_grid(wa_map,or_map,nrow=2)
+  col3 <- plot_grid(ncal_map,cencal_map,nrow=2)
+  
+  ggdraw(plot_grid(p1,col2,col3,leg,NULL,nrow=1,rel_widths = c(1,1,1,0.4,0.2)))
+}
+
+make_map_zones(grid5k_final %>% rename(Latitude=centro_lat),Latitude)
+```
+
+Finally, if we want to map with a square root transform in the color bar, for visualizing highly skewed variables. Like here, for bottom depth:
+
+```{r,fig.height=9,fig.width=7.5}
+# finally, if we want a map with a log10 transform (could come back to this later and make other transformations)
+make_map_zones_sqrt <- function(df, column) {
+  
+  # scale limits for the color bar, to ensure they are common across subplots
+  lims <- df %>% pull( {{column}} ) %>% range()
+  # now we have a separate bounding box for each coast sections, and can map
+  
+  # coastwide map
+  p1 <- ggplot() + 
+    geom_sf(data=df %>% st_transform(rot15),aes(fill= {{column}}),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bbox_rot15[1],bbox_rot15[3])+
+    ylim(bbox_rot15[2],bbox_rot15[4])+
+    scale_fill_viridis(option='turbo',na.value='white',limits=lims,trans='sqrt')
+  
+  # extract legend
+  leg <- get_legend(p1)
+  # remove legend from the plot
+  p1 <- p1 +theme(legend.position='none')
+  
+  wa_map <- ggplot()+
+    geom_sf(data=df %>% st_transform(st_crs(crs_rotated(10))),aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$WA[1],bboxes$WA[3])+ylim(bboxes$WA[2],bboxes$WA[4])+
+    labs(title="Washington")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims,trans='sqrt')+
+    theme(axis.text.x=element_blank())
+  
+  # Oregon
+  or_map <- ggplot()+
+    geom_sf(data=df,aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$OR[1],bboxes$OR[3])+ylim(bboxes$OR[2],bboxes$OR[4])+
+    labs(title="Oregon")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims,trans='sqrt')+
+    theme(axis.text.x=element_blank())
+  
+  # N. Cal
+  ncal_map <- ggplot()+
+    geom_sf(data=df,aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$Northern[1],bboxes$Northern[3])+ylim(bboxes$Northern[2],bboxes$Northern[4])+
+    labs(title="N. California")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims,trans='sqrt')+
+    theme(axis.text.x=element_blank())
+  
+  # Cen. Cal.
+  cencal_map <- ggplot()+
+    geom_sf(data=df %>% st_transform(st_crs(crs_rotated(30))),aes(fill= {{column}} ),col=NA)+
+    geom_sf(data=coast,fill='#dacf80',col='gray80')+
+    xlim(bboxes$Central[1],bboxes$Central[3])+ylim(bboxes$Central[2],bboxes$Central[4])+
+    labs(title="C. California")+
+    scale_fill_viridis(option="turbo",guide='none',limits=lims,trans='sqrt')+
+    theme(axis.text.x=element_blank())
+  
+  # now we can map them together
+  col2 <- plot_grid(wa_map,ncal_map,nrow=2)
+  col3 <- plot_grid(or_map,cencal_map,nrow=2)
+  
+  ggdraw(plot_grid(p1,col2,col3,leg,NULL,nrow=1,rel_widths = c(1,1,1,0.4,0.2)))
+}
+
+make_map_zones_sqrt(grid5k_final %>% mutate(depth_m=-WM_NGDC_m),depth_m)
+```
+
+## Summarizing
+
+Now that we have a good setup for visualizing the maps by region, we can write a function to help us summarize the data in different ways. These functions will be somewhat specific to this application, as they will assume:
+
+* the input dataframe is always the same, i.e. `dat` in this notebook
+* variable names as written in Brooke's dataset
+* only specific options for periods to summarize over, as described in the introduction above
+* only specific measures, as described in the introduction above.
+
+Later, if we feel that these functions need more generality, we can work on that.
+
+Possible inputs in this function for attributes, temporal breaks, and measures are listed below. For CPUE, we will have a slightly different function, since it is a derived measure based on two different inputs (landings and pings).
+
+* `att` : `"vessels"`,`"pings"`,`"landings"`, or `"revenue"`
+* `temporal_breaks` : `"all years"` (this is the entire crab season, Nov-July, across all years), `"whale seasons"`, `"month across years"`, `"mhw"`,`"ramp"`
+* `measure` : `"mean"`,`"sd"`,`"quantile"`,`"ranked"`
+
+```{r}
+summarize_dcrb_attribute <- function(att,temporal_breaks){
+  
+  # first, establish the attribute to be summarized, and select it from the dataset
+  if(att=="vessels") df <- dat %>% dplyr::select(GRID5KM_ID:month_numeric,n_unique_vessels) %>% rename(attribute=n_unique_vessels)
+  if(att=="pings") df <- dat %>% dplyr::select(GRID5KM_ID:month_numeric,n_vms_records) %>% rename(attribute=n_vms_records)
+  if(att=="landings") df <- dat %>% dplyr::select(GRID5KM_ID:month_numeric,dcrb_lbs) %>% rename(attribute=dcrb_lbs)
+  if(att=="revenue") df <- dat %>% dplyr::select(GRID5KM_ID:month_numeric,dcrb_rev) %>% rename(attribute=dcrb_rev)
+  
+  # then, group the data into the appropriate temporal breaks and summarize based on the chosen measure
+  # if the option is all years, sum across all months of the crab year
+  if(temporal_breaks=="all years") {
+    df2 <- df %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      group_by(crab_year_character,GRID5KM_ID) %>% 
+      summarise(attr_totyr=sum(attribute,na.rm=T)) %>% 
+      group_by(GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(attr_totyr,na.rm=T),
+        sd_allyrs=sd(attr_totyr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  
+  if(temporal_breaks=="whale seasons") {
+    df2 <- df %>%
+      # add an indicator of whale season (whales likely present or whales likely not present)
+      mutate(whale_season=ifelse(month_numeric %in% c(4:11),"whale season","whale offseason")) %>% 
+      group_by(whale_season,year_numeric,GRID5KM_ID) %>% 
+      summarise(attr_totyr=sum(attribute,na.rm=T)) %>% 
+      group_by(whale_season,GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(attr_totyr,na.rm=T),
+        sd_allyrs=sd(attr_totyr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  
+  if(temporal_breaks=="month across years") {
+    df2 <- df %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      group_by(month_numeric,year_numeric,GRID5KM_ID) %>% 
+      summarise(attr_totyr=sum(attribute,na.rm=T)) %>% 
+      group_by(month_numeric,GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(attr_totyr,na.rm=T),
+        sd_allyrs=sd(attr_totyr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  
+  if(temporal_breaks=="mhw") {
+    df2 <- df %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      mutate(mhw=case_when(
+        crab_year_character %in% c("2011_2012","2012_2013","2013_2014") ~ "Before MHW",
+        crab_year_character %in% c("2014_2015","2015_2016","2016_2017") ~ "During MHW",
+        TRUE ~ "After MHW"
+      )) %>% 
+      group_by(mhw,year_numeric,GRID5KM_ID) %>% 
+      summarise(attr_totyr=sum(attribute,na.rm=T)) %>% 
+      group_by(mhw,GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(attr_totyr,na.rm=T),
+        sd_allyrs=sd(attr_totyr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  if(temporal_breaks=="RAMP") {
+    df2 <- df %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      mutate(ramp=ifelse(year_month_date<as_date("2019-11-01"),"Pre-RAMP","Post-RAMP")) %>% 
+      group_by(ramp,year_numeric,GRID5KM_ID) %>% 
+      summarise(attr_totyr=sum(attribute,na.rm=T)) %>% 
+      group_by(ramp,GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(attr_totyr,na.rm=T),
+        sd_allyrs=sd(attr_totyr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  df2
+      
+}
+```
+
+Here's example of the difference between our measures of "ranked" and what we're calling "quantile". Remember that for our case, quantile means "count up this cell and all those larger than it, and see how much of the total sum we have accumulated."
+
+```{r}
+x <- summarize_dcrb_attribute(att="pings",temporal_breaks="all years")
+
+x %>% ggplot(aes(x=mean_allyrs))+
+  geom_point(aes(y=ranked))+
+  geom_point(aes(y=quant),color='red')+
+  labs(x="Mean Pings/cell",y="Rank (black) or Quantile (Red)")+
+  theme(panel.background=element_rect(fill='white'))
+```
+
+Finally, we write a similar function for CPUE. We only need one input to the function (`temporal breaks`).
+
+```{r}
+summarize_dcrb_cpue <- function(temporal_breaks){
+  
+  if(temporal_breaks=="all years") {
+    df2 <- dat %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      group_by(crab_year_character,GRID5KM_ID) %>% 
+      #calculate cpue as landings/pings
+      summarise(landings_totyr=sum(dcrb_lbs,na.rm=T),
+                pings_totyr=sum(n_vms_records,na.rm=T)) %>%
+      mutate(cpue_yr=landings_totyr/pings_totyr) %>% 
+      group_by(GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(cpue_yr,na.rm=T),
+        sd_allyrs=sd(cpue_yr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  
+  if(temporal_breaks=="whale seasons") {
+    df2 <- dat %>%
+      # add an indicator of whale season (whales likely present or whales likely not present)
+      mutate(whale_season=ifelse(month_numeric %in% c(4:11),"whale season","whale offseason")) %>% 
+      group_by(whale_season,year_numeric,GRID5KM_ID) %>%  
+      #calculate cpue as landings/pings
+      summarise(landings_totyr=sum(dcrb_lbs,na.rm=T),
+                pings_totyr=sum(n_vms_records,na.rm=T)) %>%
+      mutate(cpue_yr=landings_totyr/pings_totyr) %>% 
+      group_by(whale_season,GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(cpue_yr,na.rm=T),
+        sd_allyrs=sd(cpue_yr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  
+  if(temporal_breaks=="month across years") {
+    df2 <- dat %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      group_by(month_numeric,year_numeric,GRID5KM_ID) %>% 
+      summarise(attr_totyr=sum(attribute,na.rm=T)) %>%  
+      #calculate cpue as landings/pings
+      summarise(landings_totyr=sum(dcrb_lbs,na.rm=T),
+                pings_totyr=sum(n_vms_records,na.rm=T)) %>%
+      mutate(cpue_yr=landings_totyr/pings_totyr) %>% 
+      group_by(GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(cpue_yr,na.rm=T),
+        sd_allyrs=sd(cpue_yr,na.rm=T),
+      ) %>%  
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  
+  if(temporal_breaks=="mhw") {
+    df2 <- dat %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      mutate(mhw=case_when(
+        crab_year_character %in% c("2011_2012","2012_2013","2013_2014") ~ "Before MHW",
+        crab_year_character %in% c("2014_2015","2015_2016","2016_2017") ~ "During MHW",
+        TRUE ~ "After MHW"
+      )) %>% 
+      group_by(mhw,year_numeric,GRID5KM_ID) %>%  
+      #calculate cpue as landings/pings
+      summarise(landings_totyr=sum(dcrb_lbs,na.rm=T),
+                pings_totyr=sum(n_vms_records,na.rm=T)) %>%
+      mutate(cpue_yr=landings_totyr/pings_totyr) %>% 
+      group_by(GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(cpue_yr,na.rm=T),
+        sd_allyrs=sd(cpue_yr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  if(temporal_breaks=="RAMP") {
+    df2 <- dat %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      mutate(ramp=ifelse(year_month_date<as_date("2019-11-01"),"Pre-RAMP","Post-RAMP")) %>% 
+      group_by(ramp,year_numeric,GRID5KM_ID) %>%  
+      #calculate cpue as landings/pings
+      summarise(landings_totyr=sum(dcrb_lbs,na.rm=T),
+                pings_totyr=sum(n_vms_records,na.rm=T)) %>%
+      mutate(cpue_yr=landings_totyr/pings_totyr) %>% 
+      group_by(GRID5KM_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(cpue_yr,na.rm=T),
+        sd_allyrs=sd(cpue_yr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,20)*5) %>% 
+      dplyr::select(-cume)
+  }
+  df2
+      
+}
+```
+
+Now that we have some data and plotting tools together, we can start actually mapping the data of interest.
+
+# Maps
