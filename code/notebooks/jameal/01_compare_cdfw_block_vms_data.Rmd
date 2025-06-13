@@ -98,8 +98,25 @@ ticket_df <- purrr::map(load_years, function(ly) {
 
 # the ticket df above is missing some columns, so also load the raw fish ticket data, downloaded by Brooke Hawkins
 ticket_df2 <- purrr::map(load_years, function(ly) {
-  read.csv(here('Confidential', 'raw_data', 'fish_tickets', paste0('fish_tickets_', ly, '.csv')))
-}) %>% bind_rows() # 06-11-2025 changed from read_csv to read.csv to avoid warning messages associated with the HILLE_PERMIT column in at least the 2013 data file
+  read_csv(here('Confidential', 'raw_data', 'fish_tickets', paste0('fish_tickets_', ly, '.csv')), #) %>%
+    #dplyr::select(FISH_TICKET_ID, CDFW_AREA_BLOCK)
+  #}) %>% bind_rows()
+           col_types = list(
+             HILLE_PERMIT = "c",
+             DEALER_NUM = "c",
+             FTID = "c",
+             NUM_OF_FISH = "n",
+             EFP_CODE = "c",
+             EFP_NAME = "c",
+             GF_PERMIT_NUMBER = "c",
+             TRIP_SEQ = "i",
+             GEAR_CODE = "d"
+             )
+  )
+  }) %>% bind_rows() # works for 2013, but not for all years. 06-13-2025
+
+# 06-11-2025 changed from read_csv to read.csv to avoid warning messages associated with the HILLE_PERMIT column in at least the 2013 data file. that didnt work. so on 06-12-2025, decided to just read in columns i need. that didnt work either and brooke addressed this issue more comprehensively here: https://github.com/noaa-nwfsc/VMS-pipeline/blob/main/code/notebooks/brooke/16_blh_check-new-fish-tickets.md
+
 
 ```
 
@@ -216,7 +233,9 @@ dcrb_ticket_df <- ticket_df %>%
     DCRB_revenue_afi
   ) %>%
   # de-duplicate records
-  distinct()
+  distinct() %>%
+  # add in CDFW block info 06-13-2025. have not tried this yet!
+  left_join(ticket_df2, by = join_by(Rec_ID == FISH_TICKET_ID))
 
 # take a peek at columns in the resulting dataframe
 colnames(dcrb_ticket_df)
