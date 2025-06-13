@@ -101,37 +101,32 @@ plot_grid(plotlist=pl)
 # this will work for now
 ```
 
-We make a couple of spatially rotated grids, for better visualization when mapping the whole coastline
+We make a couple of spatially rotated grids, for better visualization when mapping the whole coastline. We use custom projections for this, which B. Feist designed. Based on that work, here we provide generic code for any given amount of rotation.
 
 ```{r}
 # grid extent, rotated (for better plotting)
-rot30 <- read_sf(here('spatial_data','map_rotation','fivekm_grid_extent_rect_30.shp')) %>% st_crs()
-rot21 <- read_sf(here('spatial_data','map_rotation','fivekm_grid_extent_rect_21.shp')) %>% st_crs()
-rot15 <- read_file(here('spatial_data','map_rotation','Rectified_Skew_Orthomorphic_center_15deg_rotation.wkt')) %>% st_crs()
+# this is the first wkt file ('well-known text') that B. Feist created.
+rotation_wkt <- read_file(here('spatial_data','map_rotation','Rectified_Skew_Orthomorphic_center_30deg_rotation.wkt'))
+# working in this simple text format, we can find and replace to change the rotation
+# this is a silly/foobar kind of function, but it should work for this purpose
 
-grid5k_rot30 <- grid5k_final %>% st_transform(rot30)
-bbox_rot30 <- st_bbox(grid5k_rot30)
-grid5k_rot21 <- grid5k_final %>% st_transform(rot21)
-bbox_rot21 <- st_bbox(grid5k_rot21)
+crs_rotated <- function(deg){
+  crs_out <- sub('Skew Grid\",30',paste0('Skew Grid\",',deg),rotation_wkt)
+  crs_out
+}
+
+# let's use this to make a 15 deg rotation, which seems about right for our study domain
+rot15 <- crs_rotated(15) %>% st_crs()
+
+# use this crs to reprojec the 5k grid
 grid5k_rot15 <- grid5k_final %>% st_transform(rot15)
 bbox_rot15 <- st_bbox(grid5k_rot15) +c(0,0,-20000,0)
 
 # map
-
 ggplot()+
   geom_sf(data=grid5k_rot15,aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='gray30',col=NA)+
   xlim(bbox_rot15[1],bbox_rot15[3])+ylim(bbox_rot15[2],bbox_rot15[4])+
-  scale_fill_viridis(option="turbo",direction=-1)
-ggplot()+
-  geom_sf(data=grid5k_rot21,aes(fill=NGDC_med_m),col=NA)+
-  geom_sf(data=coast,fill='gray30',col=NA)+
-  xlim(bbox_rot21[1],bbox_rot21[3])+ylim(bbox_rot21[2],bbox_rot21[4])+
-  scale_fill_viridis(option="turbo",direction=-1)
-ggplot()+
-  geom_sf(data=grid5k_rot30,aes(fill=NGDC_med_m),col=NA)+
-  geom_sf(data=coast,fill='gray30',col=NA)+
-  xlim(bbox_rot30[1],bbox_rot30[3])+ylim(bbox_rot30[2],bbox_rot30[4])+
   scale_fill_viridis(option="turbo",direction=-1)
 
 # rotated 15 degrees seems like the skinniest, most zoomed in map for coastwide viz
@@ -139,7 +134,7 @@ ggplot()+
 
 ## Functions
 
-Keep track of some generic functions we'll use for mapping/visualizing outputs.
+Keep track of some generic functions we'll use for mapping/visualizing outputs. First, for a coastwide map of a continuous variable (like depth, or temperature, or VMS pings). This uses the 15-degree rotation map from above.
 
 ```{r}
 # coastwide map of a continuous variable
@@ -152,30 +147,17 @@ make_map_coastwide <- function(df, column) {
     ylim(bbox_rot15[2],bbox_rot15[4])+
     scale_fill_viridis(option='turbo',na.value='white')
 }
+
+# just plotting latitude as the fill to make sure everything is oriented correctly
 make_map_coastwide(grid5k_final, centro_lat)
-make_map_coastwide(grid5k_final, WM_NGDC_m)
+```
 
-# "facetted" by coastal zone
-# make_map_zones <- function(df, column) {
-#   
-#   # scale limits, common across subplots
-#   lims <- df %>% pull( {{column}} ) %>% range()
-#   # now we have a separate bounding box for each coast sections, and can map
-#   pl <- map2(levels(df$map_zone),bboxes,function(z,b){
-#     datsub <- df %>% filter(map_zone==z)
-#     ggplot()+
-#       geom_sf(data=datsub,aes(fill= {{column}} ),col=NA)+
-#       geom_sf(data=coast,fill='gray30',col=NA)+
-#       xlim(b[1],b[3])+ylim(b[2],b[4])+
-#       scale_fill_viridis(option="turbo",na.value='white',limits=lims)
-#   })
-# 
-#   plot_grid(plotlist=pl)
-# }
+We can also split the coast by sections. 
 
+```{r}
 make_map_zones <- function(df, column) {
   
-  # scale limits, common across subplots
+  # scale limits for the color bar, to ensure they are common across subplots
   lims <- df %>% pull( {{column}} ) %>% range()
   # now we have a separate bounding box for each coast sections, and can map
   pl <- map(bboxes,function(b){
@@ -188,20 +170,21 @@ make_map_zones <- function(df, column) {
 
   plot_grid(plotlist=pl)
 }
-
 make_map_zones(grid5k_final,centro_lat)
-make_map_zones(grid5k_final,WM_NGDC_m)
+```
 
+Finally, if we want to map with a log10 transform in the color bar, for visualizing highly skewed variables. Like here, for bottom depth:
+
+```{r}
 # finally, if we want a map with a log10 transform (could come back to this later and make other transformations)
 make_map_zones_sqrt <- function(df, column) {
   
   # scale limits, common across subplots
   lims <- df %>% pull( {{column}} ) %>% range()
   # now we have a separate bounding box for each coast sections, and can map
-  pl <- map2(levels(df$map_zone),bboxes,function(z,b){
-    datsub <- df %>% filter(map_zone==z)
+  pl <- map(bboxes,function(b){
     ggplot()+
-      geom_sf(data=datsub,aes(fill= {{column}} ),col=NA)+
+      geom_sf(data=df,aes(fill= {{column}} ),col=NA)+
       geom_sf(data=coast,fill='gray30',col=NA)+
       xlim(b[1],b[3])+ylim(b[2],b[4])+
       scale_fill_viridis(option="turbo",na.value='white',limits=lims,transform='sqrt')
