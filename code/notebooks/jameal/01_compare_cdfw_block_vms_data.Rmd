@@ -97,6 +97,7 @@ ticket_df <- purrr::map(load_years, function(ly) {
 }) %>% bind_rows()
 
 # the ticket df above is missing some columns, so also load the raw fish ticket data, downloaded by Brooke Hawkins
+# 06-11-2025 changed from read_csv to read.csv to avoid warning messages associated with the HILLE_PERMIT column in at least the 2013 data file. that didnt work. so on 06-12-2025, decided to just read in columns i need. that didnt work either and brooke addressed this issue more comprehensively here: https://github.com/noaa-nwfsc/VMS-pipeline/blob/main/code/notebooks/brooke/16_blh_check-new-fish-tickets.md
 ticket_df2 <- purrr::map(load_years, function(ly) {
   read_csv(here('Confidential', 'raw_data', 'fish_tickets', paste0('fish_tickets_', ly, '.csv')), #) %>%
     #dplyr::select(FISH_TICKET_ID, CDFW_AREA_BLOCK)
@@ -110,13 +111,29 @@ ticket_df2 <- purrr::map(load_years, function(ly) {
              EFP_NAME = "c",
              GF_PERMIT_NUMBER = "c",
              TRIP_SEQ = "i",
-             GEAR_CODE = "d"
+             GEAR_CODE = "d",
+             HSFCA_PERMIT = "c" # JS added this specification in addition to those BH recommended
              )
   )
-  }) %>% bind_rows() # works for 2013, but not for all years. 06-13-2025
+  }) %>% bind_rows() 
 
-# 06-11-2025 changed from read_csv to read.csv to avoid warning messages associated with the HILLE_PERMIT column in at least the 2013 data file. that didnt work. so on 06-12-2025, decided to just read in columns i need. that didnt work either and brooke addressed this issue more comprehensively here: https://github.com/noaa-nwfsc/VMS-pipeline/blob/main/code/notebooks/brooke/16_blh_check-new-fish-tickets.md
+# check to see how many fish tickets are in each df. they don't match. this remains a problem. 06-16-2025
 
+nrow(ticket_df %>% 
+       filter(year > 2010)
+     ) - nrow(
+       ticket_df2 %>% 
+         filter(VESSEL_NUM != "UNKNOWN") %>%
+         filter(VESSEL_NUM != "")
+       )
+
+ticket_df %>% group_by(year) %>% summarise(n_trips = n_distinct(Rec_ID))
+
+ticket_df2 %>% 
+  filter(VESSEL_NUM != "UNKNOWN") %>%
+  filter(VESSEL_NUM != "") %>%
+  group_by(LANDING_YEAR) %>% 
+  summarise(n_trips = n_distinct(FISH_TICKET_ID))
 
 ```
 
@@ -234,8 +251,11 @@ dcrb_ticket_df <- ticket_df %>%
   ) %>%
   # de-duplicate records
   distinct() %>%
-  # add in CDFW block info 06-13-2025. have not tried this yet!
-  left_join(ticket_df2, by = join_by(Rec_ID == FISH_TICKET_ID))
+  # add in CDFW block info 'CDFW_AREA_BLOCK' 06-16-2025. tried this -- many to many problem! leads to ~2,0000 extra rows. tried joining on Rec_ID == FISH_TICKET_ID, date == LANDING_YEAR, problem remains: Error in `left_join()`: ! Can't join `x$date` with `y$LANDING_YEAR` due to incompatible types. ℹ `x$date` is a <date>. ℹ `y$LANDING_YEAR` is a <double>. Backtrace:
+  left_join(
+    ticket_df2 %>% filter(VESSEL_NUM != "UNKNOWN") %>% filter(VESSEL_NUM != "") %>% distinct() %>% dplyr::select(FISH_TICKET_ID, LANDING_YEAR, CDFW_AREA_BLOCK), 
+    by = join_by(Rec_ID == FISH_TICKET_ID, date == LANDING_YEAR)
+    )
 
 # take a peek at columns in the resulting dataframe
 colnames(dcrb_ticket_df)
