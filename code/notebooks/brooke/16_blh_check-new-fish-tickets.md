@@ -1,5 +1,13 @@
 # Check new download of fish tickets
 
+
+- [Check 1 - How to load all fish tickets at
+  once?](#check-1---how-to-load-all-fish-tickets-at-once)
+- [Check 2 - How does new pull of fish ticket data compare to old
+  pull?](#check-2---how-does-new-pull-of-fish-ticket-data-compare-to-old-pull)
+
+## Check 1 - How to load all fish tickets at once?
+
 Write functions to compare dataframe columns. This might be overkill,
 but I didn’t know a good function that already exists in R to do this.
 
@@ -120,25 +128,16 @@ for (y in 2011:2023) {
     [1] "same # columns? TRUE"
     [1] "same column names? TRUE"
     [1] "same column types? FALSE"
-    # A tibble: 5 × 4
-      col_name     coltypes1 coltypes2 same 
-      <chr>        <chr>     <chr>     <lgl>
-    1 FTID         character integer   FALSE
-    2 NUM_OF_FISH  numeric   integer   FALSE
-    3 HILLE_PERMIT character logical   FALSE
-    4 EFP_CODE     logical   character FALSE
-    5 EFP_NAME     logical   character FALSE
+    # A tibble: 2 × 4
+      col_name coltypes1 coltypes2 same 
+      <chr>    <chr>     <chr>     <lgl>
+    1 EFP_CODE logical   character FALSE
+    2 EFP_NAME logical   character FALSE
     [1] "---"
     [1] "comparing year 2017 to 2018"
     [1] "same # columns? TRUE"
     [1] "same column names? TRUE"
-    [1] "same column types? FALSE"
-    # A tibble: 3 × 4
-      col_name     coltypes1 coltypes2 same 
-      <chr>        <chr>     <chr>     <lgl>
-    1 FTID         integer   character FALSE
-    2 NUM_OF_FISH  integer   numeric   FALSE
-    3 HILLE_PERMIT logical   character FALSE
+    [1] "same column types? TRUE"
     [1] "---"
     [1] "comparing year 2018 to 2019"
     [1] "same # columns? TRUE"
@@ -254,5 +253,181 @@ for (y in 2011:2024) {
 ticket_df <- bind_rows(mget(paste0("df_", 2011:2024)))
 ```
 
-Still need to check whether old vs. new pull have similar \# tickets,
+It looks like `df_2022` leads to some issues when parsing, unclear to me
+why. I ran problems`(df_2022) %>% View()` and the issue was always with
+column 105, which is `HSFCA_PERMIT`. It only impacts ~700 records out of
+379k records that year, so it’s probably ok to not worry about it. None
+of the other years threw warnings.
+
+I still need to check whether old vs. new pull have similar \# tickets,
 vessels, landings and revenue across years.
+
+## Check 2 - How does new pull of fish ticket data compare to old pull?
+
+I want to see if the \# tickets, vessels, landings and revnue are pretty
+similar between the old and new data.
+
+This is rough but I’m hoping numbers will look pretty similar between
+pulls.
+
+``` r
+# calculate # tickets, vessels, landings and revenue per year
+new_pull_counts <- ticket_df |>
+  # apply a few filters
+  filter(
+    # remove missing vessel ID
+    VESSEL_NUM != "MISSING",
+    VESSEL_NUM != "UNKNOWN",
+    VESSEL_NUM != "",
+    # remove tickets landed in AK and transported to WC
+    COUNCIL_CODE != "N",
+    # remove tribal fishing
+    FLEET_CODE != "TI",
+    # remove aquaculture
+    PARTICIPATION_GROUP_CODE != "A"
+  ) |>
+  # select a few columns
+  select(
+    LANDING_YEAR,
+    VESSEL_NUM,
+    FTID,
+    PACFIN_SPECIES_CODE,
+    LANDED_WEIGHT_LBS,
+    EXVESSEL_REVENUE
+  ) |>
+  # de-duplicate
+  distinct() |>
+  # calculate a few summary statistics per year
+  group_by(LANDING_YEAR) |>
+  summarise(
+    n_vessels = n_distinct(VESSEL_NUM),
+    n_tickets = n_distinct(FTID),
+    sum_landings = sum(LANDED_WEIGHT_LBS, na.rm = TRUE),
+    sum_revenue = sum(EXVESSEL_REVENUE, na.rm = TRUE)
+  )
+
+# load old data
+old_ticket_df <- read_rds(here(
+  'Confidential',
+  'raw_data',
+  'fish_tickets',
+  'all_fishtickets_1994_2023.rds'
+))
+
+# calculate # tickets, vessels, landings and revenue per year
+old_pull_counts <- old_ticket_df |>
+  # apply a few filters
+  filter(
+    # remove missing vessel ID
+    VESSEL_NUM != "MISSING",
+    VESSEL_NUM != "UNKNOWN",
+    VESSEL_NUM != "",
+    # remove tickets landed in AK and transported to WC
+    COUNCIL_CODE != "N",
+    # remove tribal fishing
+    FLEET_CODE != "TI",
+    # remove aquaculture
+    PARTICIPATION_GROUP_CODE != "A"
+  ) |>
+  # select a few columns
+  select(
+    LANDING_YEAR,
+    VESSEL_NUM,
+    FTID,
+    PACFIN_SPECIES_CODE,
+    LANDED_WEIGHT_LBS,
+    EXVESSEL_REVENUE
+  ) |>
+  # de-duplicate
+  distinct() |>
+  # calculate a few summary statistics per year
+  group_by(LANDING_YEAR) |>
+  summarise(
+    n_vessels = n_distinct(VESSEL_NUM),
+    n_tickets = n_distinct(FTID),
+    sum_landings = sum(LANDED_WEIGHT_LBS, na.rm = TRUE),
+    sum_revenue = sum(EXVESSEL_REVENUE, na.rm = TRUE)
+  )
+
+# set a column indicating which pull the data is from
+old_pull_counts$pull = "old"
+new_pull_counts$pull = "new"
+
+# calculate difference between old and new pull in similarly shaped dataframe
+diff_counts <- old_pull_counts |>
+  left_join(new_pull_counts, by = "LANDING_YEAR", suffix = c("_old", "_new")) |>
+  mutate(
+    n_vessels = n_vessels_new - n_vessels_old,
+    n_tickets = n_tickets_new - n_tickets_old,
+    sum_landings = sum_landings_new - sum_landings_old,
+    sum_revenue = sum_revenue_new - sum_revenue_old,
+    pull = "diff",
+    pct_vessels = n_vessels / n_vessels_old * 100,
+    pct_tickets = n_tickets / n_tickets_old * 100,
+    pct_landings = sum_landings / sum_landings_old * 100,
+    pct_revenue = sum_revenue / sum_revenue_old * 100
+  ) |>
+  select(
+    LANDING_YEAR,
+    n_vessels,
+    n_tickets,
+    sum_landings,
+    sum_revenue,
+    pull,
+    pct_vessels,
+    pct_tickets,
+    pct_landings,
+    pct_revenue
+  )
+
+# view differences
+diff_counts
+```
+
+    # A tibble: 30 × 10
+       LANDING_YEAR n_vessels n_tickets sum_landings sum_revenue pull  pct_vessels
+              <dbl>     <int>     <int>        <dbl>       <dbl> <chr>       <dbl>
+     1         1994        NA        NA           NA          NA diff           NA
+     2         1995        NA        NA           NA          NA diff           NA
+     3         1996        NA        NA           NA          NA diff           NA
+     4         1997        NA        NA           NA          NA diff           NA
+     5         1998        NA        NA           NA          NA diff           NA
+     6         1999        NA        NA           NA          NA diff           NA
+     7         2000        NA        NA           NA          NA diff           NA
+     8         2001        NA        NA           NA          NA diff           NA
+     9         2002        NA        NA           NA          NA diff           NA
+    10         2003        NA        NA           NA          NA diff           NA
+    # ℹ 20 more rows
+    # ℹ 3 more variables: pct_tickets <dbl>, pct_landings <dbl>, pct_revenue <dbl>
+
+``` r
+write.csv(
+  diff_counts,
+  here('Confidential', 'sablefish_vms', 'diff_pull_counts.csv'),
+  row.names = FALSE
+)
+```
+
+``` r
+vis_df <- diff_counts |>
+  select(LANDING_YEAR, n_vessels, n_tickets, sum_landings, sum_revenue, pull) |>
+  rbind(old_pull_counts, new_pull_counts) |>
+  pivot_longer(
+    cols = c("n_vessels", "n_tickets", "sum_landings", "sum_revenue"),
+    names_to = "variable"
+  )
+vis_df |>
+  ggplot(aes(x = LANDING_YEAR, y = value, col = pull)) +
+  geom_line() +
+  facet_grid(variable ~ pull, scales = "free_y")
+```
+
+    Warning: Removed 17 rows containing missing values or values outside the scale range
+    (`geom_line()`).
+
+![](16_blh_check-new-fish-tickets_files/figure-commonmark/unnamed-chunk-6-1.png)
+
+I saw a huge gap in 2017, ~10x fewer records than there should have
+been. I redownloaded the data and reran to see if the new results look
+better, which they do. The differences now are \<1% for the distinct
+count of vessels and tickets, and the sum of landings and revenue.
