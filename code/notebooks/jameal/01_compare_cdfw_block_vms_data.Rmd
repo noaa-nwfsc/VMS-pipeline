@@ -98,42 +98,58 @@ ticket_df <- purrr::map(load_years, function(ly) {
 
 # the ticket df above is missing some columns, so also load the raw fish ticket data, downloaded by Brooke Hawkins
 # 06-11-2025 changed from read_csv to read.csv to avoid warning messages associated with the HILLE_PERMIT column in at least the 2013 data file. that didnt work. so on 06-12-2025, decided to just read in columns i need. that didnt work either and brooke addressed this issue more comprehensively here: https://github.com/noaa-nwfsc/VMS-pipeline/blob/main/code/notebooks/brooke/16_blh_check-new-fish-tickets.md
-ticket_df2 <- purrr::map(load_years, function(ly) {
-  read_csv(here('Confidential', 'raw_data', 'fish_tickets', paste0('fish_tickets_', ly, '.csv')), #) %>%
-    #dplyr::select(FISH_TICKET_ID, CDFW_AREA_BLOCK)
-  #}) %>% bind_rows()
-           col_types = list(
-             HILLE_PERMIT = "c",
-             DEALER_NUM = "c",
-             FTID = "c",
-             NUM_OF_FISH = "n",
-             EFP_CODE = "c",
-             EFP_NAME = "c",
-             GF_PERMIT_NUMBER = "c",
-             TRIP_SEQ = "i",
-             GEAR_CODE = "d",
-             HSFCA_PERMIT = "c" # JS added this specification in addition to those BH recommended
-             )
-  )
-  }) %>% bind_rows() 
+
+# 06-17-2025. made rds so that we can read the df in faster
+# ticket_df2 <- purrr::map(load_years, function(ly) {
+#   read_csv(here('Confidential', 'raw_data', 'fish_tickets', paste0('fish_tickets_', ly, '.csv')), #) %>%
+#     #dplyr::select(FISH_TICKET_ID, CDFW_AREA_BLOCK)
+#   #}) %>% bind_rows()
+#            col_types = list(
+#              HILLE_PERMIT = "c",
+#              DEALER_NUM = "c",
+#              FTID = "c",
+#              NUM_OF_FISH = "n",
+#              EFP_CODE = "c",
+#              EFP_NAME = "c",
+#              GF_PERMIT_NUMBER = "c",
+#              TRIP_SEQ = "i",
+#              GEAR_CODE = "d",
+#              HSFCA_PERMIT = "c" # JS added this specification in addition to those BH recommended
+#              )
+#   )
+#   }) %>% bind_rows() 
+# 
+# write_rds(ticket_df2, here('Confidential', 'processed_data', 'fish_tickets',
+#                            paste0('fish tickets_',
+#                                   paste0(load_years[1],'-',load_years[length(load_years)]),
+#                                   '.rds')
+#                            )
+# )
+
+# read in tickets as rds
+ticket_df2 <- read_rds(here('Confidential', 'processed_data', 'fish_tickets',
+                            paste0('fish tickets_',
+                                   paste0(load_years[1],'-',load_years[length(load_years)]),
+                                   '.rds')
+)
+)
 
 # check to see how many fish tickets are in each df. they don't match. this remains a problem. 06-16-2025
+# BH made this and things look ok between and old and new fish ticket pull. https://github.com/noaa-nwfsc/VMS-pipeline/blob/main/code/notebooks/brooke/16_blh_check-new-fish-tickets.qmd
 
-nrow(ticket_df %>% 
-       filter(year > 2010)
-     ) - nrow(
-       ticket_df2 %>% 
-         filter(VESSEL_NUM != "UNKNOWN") %>%
-         filter(VESSEL_NUM != "")
-       )
-
-ticket_df %>% group_by(year) %>% summarise(n_trips = n_distinct(Rec_ID))
-
-ticket_df2 %>% 
-  filter(VESSEL_NUM != "UNKNOWN") %>%
-  filter(VESSEL_NUM != "") %>%
-  group_by(LANDING_YEAR) %>% 
-  summarise(n_trips = n_distinct(FISH_TICKET_ID))
+# ticket_df2 %>% 
+#   # remove missing vessel ID
+#   filter(VESSEL_NUM != "UNKNOWN") %>%
+#   filter(VESSEL_NUM != "") %>%
+#   filter(vessel_id != "MISSING") %>%
+#   # remove tickets landed in AK and transported to WC
+#   filter(COUNCIL_CODE != "N") %>%
+#   # remove tribal fishing
+#   filter(FLEET_CODE != "TI") %>%
+#   # remove aquaculture
+#   filter(PARTICIPATION_GROUP_CODE != "A") %>%
+#   group_by(LANDING_YEAR) %>% 
+#   summarise(n_trips = n_distinct(FISH_TICKET_ID))
 
 ```
 
@@ -188,7 +204,7 @@ Some commonly used acronyms for variable naming in the code include:
 * `VMS` vessel monitoring system
 * `afi` adjusted for inflation
 
-```{r define-filters}
+```{r define-filters-ticket_df}
 # define filters
 target_rev <- "DCRB"         # revenue target
 target_lbs <- "DCRB"         # landings target
@@ -203,6 +219,7 @@ winter_months <- c("November", "December", "January", "February", "March") # det
 ```{r transform-ticket-data}
 # apply same filters as VMS dataframe
 dcrb_ticket_df <- ticket_df %>%
+  filter(year == 2022) %>%
   # add temporal columns
   mutate(
     year_numeric = year(date),
@@ -226,6 +243,7 @@ dcrb_ticket_df <- ticket_df %>%
   dplyr::select(
     # identifiers
     Rec_ID,           # fish ticket ID
+    FTID,
     drvid,            # vessel ID
     pacfin_port_code, # port ID
     port_group_code,  # port group ID
@@ -253,8 +271,22 @@ dcrb_ticket_df <- ticket_df %>%
   distinct() %>%
   # add in CDFW block info 'CDFW_AREA_BLOCK' 06-16-2025. tried this -- many to many problem! leads to ~2,0000 extra rows. tried joining on Rec_ID == FISH_TICKET_ID, date == LANDING_YEAR, problem remains: Error in `left_join()`: ! Can't join `x$date` with `y$LANDING_YEAR` due to incompatible types. ℹ `x$date` is a <date>. ℹ `y$LANDING_YEAR` is a <double>. Backtrace:
   left_join(
-    ticket_df2 %>% filter(VESSEL_NUM != "UNKNOWN") %>% filter(VESSEL_NUM != "") %>% distinct() %>% dplyr::select(FISH_TICKET_ID, LANDING_YEAR, CDFW_AREA_BLOCK), 
-    by = join_by(Rec_ID == FISH_TICKET_ID, date == LANDING_YEAR)
+    ticket_df2 %>% 
+      filter(LANDING_YEAR == 2022) %>%
+      # remove missing vessel ID
+      filter(VESSEL_NUM != "UNKNOWN") %>%
+      filter(VESSEL_NUM != "") %>%
+      filter(VESSEL_NUM != "MISSING") %>%
+      # remove tickets landed in AK and transported to WC
+      filter(COUNCIL_CODE != "N") %>%
+      # remove tribal fishing
+      filter(FLEET_CODE != "TI") %>%
+      # remove aquaculture
+      filter(PARTICIPATION_GROUP_CODE != "A") %>% 
+      distinct() %>% 
+      mutate(date=as.Date(LANDING_DATE,"%d-%b-%y")) %>%
+      dplyr::select(FISH_TICKET_ID, FTID, date, VESSEL_NUM, AGENCY_CODE, CDFW_AREA_BLOCK), 
+    by = join_by(Rec_ID == FISH_TICKET_ID, FTID == FTID, date == date, drvid == VESSEL_NUM, agency_code == AGENCY_CODE) # even after adding all of these additional specifications, still get a warning on many to many relationship in 2011 (row 3 of x, row 1223140 of y). but 2021-2022 are fine.
     )
 
 # take a peek at columns in the resulting dataframe
