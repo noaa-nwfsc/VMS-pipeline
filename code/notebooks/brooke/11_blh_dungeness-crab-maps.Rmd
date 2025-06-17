@@ -82,18 +82,18 @@ vms_df <- purrr::map(year_vector, function(y) {
 }) %>% bind_rows()
 
 # load 5km grid shape file
-grid_5km <- read_sf(here('spatial_data', 'fivekm_grid_polys_shore_lamb.shp'))
+grid_5km <- read_sf(here('spatial_data', 'grids', 'fivekm_grid_polys_shore_lamb.shp'))
 
 # load inflation adjustment
 fred_pcepi <- read.csv(file = here(output_dir, "tables", "inflation_pcepi.csv")) %>%
   mutate(year_month = date(year_month))
 
 # load 30 and 40 fathoms
-fathoms_sf <- read_sf(here('spatial_data', 'fathom_30to40_lines_lamb.shp'))
+fathoms_sf <- read_sf(here('spatial_data', 'bathymetry',  'fathom_30to40_lines_lamb.shp'))
 
 # load 21 and 30 degree rotated coordinate reference systems
-crs_21 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_21.shp')) %>% st_crs()
-crs_30 <- read_sf(here('spatial_data', 'fivekm_grid_extent_rect_30.shp')) %>% st_crs()
+crs_21 <- read_sf(here('spatial_data', 'map_rotation',  'fivekm_grid_extent_rect_21.shp')) %>% st_crs()
+crs_30 <- read_sf(here('spatial_data', 'map_rotation',  'fivekm_grid_extent_rect_30.shp')) %>% st_crs()
 ```
 
 Assign coordinate reference systems for the different maps. The elements are named after the regions that are options for `region_vector` at the top of the script.

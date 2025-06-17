@@ -8,7 +8,7 @@ library(desc)
 library(DescTools)
 
 # load master 1994 - 2023 fish tickets file
-fishtickets <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/raw/fish tickets/all_fishtickets_1994_2023.rds")
+fishtickets <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/raw_data/fish_tickets/all_fishtickets_1994_2023.rds")
 
 # take a look at the attribute structure
 glimpse(fishtickets)
@@ -19,6 +19,19 @@ Dungeness <- fishtickets %>%
 
 # take a look at the Dungeness crab attribute structure
 glimpse(Dungeness)
+
+# filter for 2011 - 2023 tickets only
+Dungeness_2011to23 <- Dungeness %>%
+  filter(LANDING_YEAR > 2010)
+
+# filter for CA only tickets only
+Dungeness_CA <- Dungeness_2011to23 %>%
+  filter(COUNTY_STATE == "CA")
+
+# create a table with the sum of lbs landed for each CDFW BLOCK10 ID
+CDFW_AREA_BLOCK_sum <- tapply(Dungeness_CA$LANDED_WEIGHT_LBS, Dungeness_CA$CDFW_AREA_BLOCK, sum)
+head(CDFW_AREA_BLOCK_sum[order(-CDFW_AREA_BLOCK_sum)], 100)
+
 
 # tally the number of tickets by PacFIN gear code to figure out which gear types to use
 DCRB_gear <- table(Dungeness$GEAR_NAME)
