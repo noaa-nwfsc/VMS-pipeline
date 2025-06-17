@@ -259,13 +259,10 @@ column 105, which is `HSFCA_PERMIT`. It only impacts ~700 records out of
 379k records that year, so it’s probably ok to not worry about it. None
 of the other years threw warnings.
 
-I still need to check whether old vs. new pull have similar \# tickets,
-vessels, landings and revenue across years.
-
 ## Check 2 - How does new pull of fish ticket data compare to old pull?
 
-I want to see if the \# tickets, vessels, landings and revnue are pretty
-similar between the old and new data.
+I want to see if the \# tickets, vessels, landings and revenue are
+pretty similar between the old and new data.
 
 This is rough but I’m hoping numbers will look pretty similar between
 pulls.
@@ -381,26 +378,44 @@ diff_counts <- old_pull_counts |>
   )
 
 # view differences
-diff_counts
+kable(diff_counts)
 ```
 
-    # A tibble: 30 × 10
-       LANDING_YEAR n_vessels n_tickets sum_landings sum_revenue pull  pct_vessels
-              <dbl>     <int>     <int>        <dbl>       <dbl> <chr>       <dbl>
-     1         1994        NA        NA           NA          NA diff           NA
-     2         1995        NA        NA           NA          NA diff           NA
-     3         1996        NA        NA           NA          NA diff           NA
-     4         1997        NA        NA           NA          NA diff           NA
-     5         1998        NA        NA           NA          NA diff           NA
-     6         1999        NA        NA           NA          NA diff           NA
-     7         2000        NA        NA           NA          NA diff           NA
-     8         2001        NA        NA           NA          NA diff           NA
-     9         2002        NA        NA           NA          NA diff           NA
-    10         2003        NA        NA           NA          NA diff           NA
-    # ℹ 20 more rows
-    # ℹ 3 more variables: pct_tickets <dbl>, pct_landings <dbl>, pct_revenue <dbl>
+| LANDING_YEAR | n_vessels | n_tickets | sum_landings | sum_revenue | pull | pct_vessels | pct_tickets | pct_landings | pct_revenue |
+|---:|---:|---:|---:|---:|:---|---:|---:|---:|---:|
+| 1994 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 1995 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 1996 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 1997 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 1998 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 1999 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2000 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2001 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2002 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2003 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2004 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2005 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2006 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2007 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2008 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2009 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2010 | NA | NA | NA | NA | diff | NA | NA | NA | NA |
+| 2011 | 0 | 7 | 12666.400 | 52127.92 | diff | 0.0000000 | 0.0061901 | 0.0015347 | 0.0111779 |
+| 2012 | 1 | 23 | 38298.510 | -11821.76 | diff | 0.0268528 | 0.0206654 | 0.0046104 | -0.0025776 |
+| 2013 | 2 | 164 | 195366.652 | 176466.78 | diff | 0.0532907 | 0.1392699 | 0.0215206 | 0.0315664 |
+| 2014 | -2 | 26 | -99061.688 | 13521.40 | diff | -0.0528821 | 0.0231905 | -0.0123828 | 0.0026529 |
+| 2015 | -2 | 26 | 8740.968 | -152556.80 | diff | -0.0547645 | 0.0273402 | 0.0017460 | -0.0436188 |
+| 2016 | -1 | 22 | 25810.663 | 143321.19 | diff | -0.0284900 | 0.0246772 | 0.0049074 | 0.0313227 |
+| 2017 | -1 | 34 | -424089.034 | 127922.56 | diff | -0.0297442 | 0.0382289 | -0.0624004 | 0.0278564 |
+| 2018 | -2 | -3 | -844467.482 | 76447.88 | diff | -0.0587027 | -0.0034883 | -0.1312424 | 0.0166537 |
+| 2019 | -13 | -48 | -764527.185 | 242019.59 | diff | -0.3893381 | -0.0587429 | -0.1300267 | 0.0592160 |
+| 2020 | -12 | -300 | -2531295.465 | -839254.22 | diff | -0.3869719 | -0.3983376 | -0.4331041 | -0.2260534 |
+| 2021 | -24 | -54 | 158156.642 | 629642.80 | diff | -0.7978723 | -0.0708160 | 0.0256454 | 0.1173567 |
+| 2022 | -23 | -318 | -439319.381 | -990426.92 | diff | -0.7610854 | -0.4234918 | -0.0739050 | -0.2161052 |
+| 2023 | -11 | 258 | 865757.892 | 2026266.53 | diff | -0.4041146 | 0.3739943 | 0.1645432 | 0.4650286 |
 
 ``` r
+# write csv
 write.csv(
   diff_counts,
   here('Confidential', 'sablefish_vms', 'diff_pull_counts.csv'),
@@ -409,6 +424,7 @@ write.csv(
 ```
 
 ``` r
+# combine and reshape counts
 vis_df <- diff_counts |>
   select(LANDING_YEAR, n_vessels, n_tickets, sum_landings, sum_revenue, pull) |>
   rbind(old_pull_counts, new_pull_counts) |>
@@ -416,16 +432,32 @@ vis_df <- diff_counts |>
     cols = c("n_vessels", "n_tickets", "sum_landings", "sum_revenue"),
     names_to = "variable"
   )
-vis_df |>
-  ggplot(aes(x = LANDING_YEAR, y = value, col = pull)) +
+# visualize differences
+ggplot(vis_df, aes(x = LANDING_YEAR, y = value, col = pull)) +
   geom_line() +
-  facet_grid(variable ~ pull, scales = "free_y")
+  facet_grid(
+    variable ~ factor(pull, c("old", "new", "diff")),
+    scales = "free_y"
+  )
 ```
 
     Warning: Removed 17 rows containing missing values or values outside the scale range
     (`geom_line()`).
 
 ![](16_blh_check-new-fish-tickets_files/figure-commonmark/unnamed-chunk-6-1.png)
+
+``` r
+# save output
+ggsave(
+  here('Confidential', 'sablefish_vms', 'diff_pull_counts.png'),
+  width = 8,
+  height = 5,
+  unit = "in"
+)
+```
+
+    Warning: Removed 17 rows containing missing values or values outside the scale range
+    (`geom_line()`).
 
 I saw a huge gap in 2017, ~10x fewer records than there should have
 been. I redownloaded the data and reran to see if the new results look

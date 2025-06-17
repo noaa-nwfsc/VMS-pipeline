@@ -11,6 +11,7 @@ format:
 ```{r, include=FALSE}
 library(here)
 library(tidyverse)
+library(knitr)
 ```
 
 Write functions to compare dataframe columns. This might be overkill, but I didn't know a good function that already exists in R to do this.
@@ -268,7 +269,7 @@ diff_counts <- old_pull_counts |>
   )
 
 # view differences
-diff_counts
+kable(diff_counts)
 
 # write csv
 write.csv(
@@ -279,6 +280,7 @@ write.csv(
 ```
 
 ```{r}
+# combine and reshape counts
 vis_df <- diff_counts |>
   select(LANDING_YEAR, n_vessels, n_tickets, sum_landings, sum_revenue, pull) |>
   rbind(old_pull_counts, new_pull_counts) |>
@@ -286,13 +288,14 @@ vis_df <- diff_counts |>
     cols = c("n_vessels", "n_tickets", "sum_landings", "sum_revenue"),
     names_to = "variable"
   )
-vis_df |>
-  ggplot(aes(x = LANDING_YEAR, y = value, col = pull)) +
+# visualize differences
+ggplot(vis_df, aes(x = LANDING_YEAR, y = value, col = pull)) +
   geom_line() +
   facet_grid(
     variable ~ factor(pull, c("old", "new", "diff")),
     scales = "free_y"
   )
+# save output
 ggsave(
   here('Confidential', 'sablefish_vms', 'diff_pull_counts.png'),
   width = 8,
