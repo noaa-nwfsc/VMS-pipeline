@@ -1090,7 +1090,7 @@ vessels_allyrs_quantbin_maps$`all years`
 Whale seasons
 
 ```{r}
-vessels_whale_seasons_mean_maps <- make_map_zones(vessels_whale_seasons,mean_allyrs)
+vessels_whale_seasons_mean_maps <- make_map_zones_sqrt(vessels_whale_seasons,mean_allyrs)
 vessels_whale_seasons_sd_maps <- make_map_zones(vessels_whale_seasons,sd_allyrs)
 vessels_whale_seasons_ranked_maps <- make_map_zones(vessels_whale_seasons,ranked)
 vessels_whale_seasons_quant_maps <- make_map_zones(vessels_whale_seasons,quant,scl_ord = -1)
@@ -1128,3 +1128,10 @@ vessels_mhw_maps
 ```
 
 Mean unique vessels, RAMP eras
+
+```{r,fig.height=9,fig.width=7.5}
+vessels_ramp_maps <- make_map_zones_sqrt(vessels_ramp,mean_allyrs)
+
+# before/after RAMP
+vessels_ramp_maps
+```
