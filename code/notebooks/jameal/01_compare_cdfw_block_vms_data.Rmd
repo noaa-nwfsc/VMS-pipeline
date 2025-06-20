@@ -180,6 +180,59 @@ fred_pcepi %>% ggplot(aes(x = year_month, y = pcepi)) + geom_line() + scale_x_da
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_pcepi.png"), create.dir = TRUE)
 ```
 
+3. Clean up fish ticket data, and double check joined, cleaned, interpolated VMS + fish ticket data is clean
+
+```{r cleaning}
+
+ticket_df_clean <- ticket_df %>% 
+  #filter(year == 2011) %>% # this line was used for troubleshooting many-to-many join
+  # remove missing vessel ID
+  filter(drvid != "UNKNOWN") %>%
+  filter(drvid != "") %>%
+  filter(drvid != "MISSING") %>%
+  # remove tickets landed in AK and transported to WC
+  #filter(COUNCIL_CODE != "N") %>%
+  # remove tribal fishing
+  #filter(FLEET_CODE != "TI") %>%
+  # remove aquaculture
+  #filter(PARTICIPATION_GROUP_CODE != "A") %>% 
+  #filter(is.na(FINAL_LENGTH)) %>% # most records do NOT have a vessel length! also true after filtering to DCRB trips only in transform chunk below. so rather tha using this is.na() step, remove duplicated rows for columns not derived from vessel reg database
+  distinct(
+     Rec_ID, FTID, pacfin_port_code, port_group_code, dealerID, drvid, agency_code, gear_code_all, date, month, year, year_mo, jdate, year_jdate, Week, year_Wk, TARGET_lbs, all_species_lbs, DCRB_lbs, DCRB_lbs_no_revenue, TARGET_rev, all_species_rev, DCRB_revenue, species_code_all,
+     .keep_all = TRUE
+  )
+
+ticket_df2_clean <- ticket_df2 %>% 
+  #filter(year == 2011) %>% # this line was used for troubleshooting many-to-many join
+  # remove missing vessel ID
+  filter(VESSEL_NUM != "UNKNOWN") %>%
+  filter(VESSEL_NUM != "") %>%
+  filter(VESSEL_NUM != "MISSING") %>%
+  # remove tickets landed in AK and transported to WC
+  filter(COUNCIL_CODE != "N") %>%
+  # remove tribal fishing
+  filter(FLEET_CODE != "TI") %>%
+  # remove aquaculture
+  filter(PARTICIPATION_GROUP_CODE != "A") %>%
+  mutate(date=as.Date(LANDING_DATE,"%d-%b-%y")) %>%
+  dplyr::select(FISH_TICKET_ID, FTID, date, VESSEL_NUM, AGENCY_CODE, CDFW_AREA_BLOCK) %>%
+  distinct()
+
+dim(ticket_df_clean)
+dim(ticket_df2_clean)
+
+# the code below was used for troubleshooting many-to-many join
+# which(ticket_df2_clean$FTID == ticket_df_clean[3,]$FTID)
+# View(ticket_df2_clean[which(ticket_df2_clean$FTID == ticket_df_clean[3,]$FTID),])
+
+# ticket_df_clean[which(ticket_df_clean$Rec_ID == ticket_df2_clean[123140,]$FISH_TICKET_ID),]
+# length(is.na(ticket_df_clean$FINAL_LENGTH))
+# View(ticket_df_clean[which(is.na(ticket_df_clean$FINAL_LENGTH))[1:50],])
+
+# dim(ticket_df %>% filter(year == 2015) %>% distinct(Rec_ID, FTID, date, drvid, agency_code))
+# dim(ticket_df2 %>% filter(LANDING_YEAR == 2015) %>% distinct(FISH_TICKET_ID, FTID, LANDING_DATE, VESSEL_NUM, AGENCY_CODE))
+
+```
 
 ## Transform data
 
@@ -218,8 +271,7 @@ winter_months <- c("November", "December", "January", "February", "March") # det
 
 ```{r transform-ticket-data}
 # apply same filters as VMS dataframe
-dcrb_ticket_df <- ticket_df %>%
-  filter(year == 2022) %>%
+dcrb_ticket_df <- ticket_df_clean %>%
   # add temporal columns
   mutate(
     year_numeric = year(date),
@@ -267,30 +319,29 @@ dcrb_ticket_df <- ticket_df %>%
     DCRB_revenue,
     DCRB_revenue_afi
   ) %>%
-  # de-duplicate records
-  distinct() %>%
-  # add in CDFW block info 'CDFW_AREA_BLOCK' 06-16-2025. tried this -- many to many problem! leads to ~2,0000 extra rows. tried joining on Rec_ID == FISH_TICKET_ID, date == LANDING_YEAR, problem remains: Error in `left_join()`: ! Can't join `x$date` with `y$LANDING_YEAR` due to incompatible types. ℹ `x$date` is a <date>. ℹ `y$LANDING_YEAR` is a <double>. Backtrace:
+  # # de-duplicate records
+  # distinct() %>%
+  # add in CDFW block info 'CDFW_AREA_BLOCK' 
   left_join(
-    ticket_df2 %>% 
-      filter(LANDING_YEAR == 2022) %>%
-      # remove missing vessel ID
-      filter(VESSEL_NUM != "UNKNOWN") %>%
-      filter(VESSEL_NUM != "") %>%
-      filter(VESSEL_NUM != "MISSING") %>%
-      # remove tickets landed in AK and transported to WC
-      filter(COUNCIL_CODE != "N") %>%
-      # remove tribal fishing
-      filter(FLEET_CODE != "TI") %>%
-      # remove aquaculture
-      filter(PARTICIPATION_GROUP_CODE != "A") %>% 
-      distinct() %>% 
-      mutate(date=as.Date(LANDING_DATE,"%d-%b-%y")) %>%
-      dplyr::select(FISH_TICKET_ID, FTID, date, VESSEL_NUM, AGENCY_CODE, CDFW_AREA_BLOCK), 
-    by = join_by(Rec_ID == FISH_TICKET_ID, FTID == FTID, date == date, drvid == VESSEL_NUM, agency_code == AGENCY_CODE) # even after adding all of these additional specifications, still get a warning on many to many relationship in 2011 (row 3 of x, row 1223140 of y). but 2021-2022 are fine.
+    ticket_df2_clean, 
+    by = join_by(Rec_ID == FISH_TICKET_ID, FTID == FTID, date == date, drvid == VESSEL_NUM, agency_code == AGENCY_CODE) 
     )
+
+# jameal had to troubleshoot the CDFW_AREA_BLOCK join for a bit because of many to many relationship problems during the join. error messages and some troubleshooting comments below
+ # add in CDFW block info 'CDFW_AREA_BLOCK' 06-16-2025. tried this -- many to many problem! leads to ~2,0000 extra rows. tried joining on Rec_ID == FISH_TICKET_ID, date == LANDING_YEAR, problem remains: Error in `left_join()`: ! Can't join `x$date` with `y$LANDING_YEAR` due to incompatible types. ℹ `x$date` is a <date>. ℹ `y$LANDING_YEAR` is a <double>. Backtrace:
+# even after adding all of these additional specifications, still get a warning on many to many relationship in 2011 (row 3 of x, row 1223140 of y); similar problems for 2012-2014. but 2021-2022 are fine.
 
 # take a peek at columns in the resulting dataframe
 colnames(dcrb_ticket_df)
+
+# write rds
+write_rds(dcrb_ticket_df, here('Confidential', 'processed_data', 'fish_tickets',
+                           paste0('fish tickets_DCRB_',
+                                  paste0(load_years[1],'-',load_years[length(load_years)]),
+                                  '.rds')
+                           )
+)
+
 ```
 
 ```{r}
