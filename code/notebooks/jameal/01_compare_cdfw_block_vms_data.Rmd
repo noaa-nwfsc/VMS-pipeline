@@ -87,6 +87,8 @@ The code below borrows heavily from Brooke Hawkins' notebook "10_blh_dungeness-c
 
 Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB.
 
+*** Note you can skip to the chunk load_dcrb_tix and avoid running shunks 3-8 
+
 ```{r load-data}
 # choose years of data to load
 load_years <- 2011:2023
@@ -324,7 +326,7 @@ dcrb_ticket_df <- ticket_df_clean %>%
   # add in CDFW block info 'CDFW_AREA_BLOCK' 
   left_join(
     ticket_df2_clean, 
-    by = join_by(Rec_ID == FISH_TICKET_ID, FTID == FTID, date == date, drvid == VESSEL_NUM, agency_code == AGENCY_CODE) 
+    by = join_by(FTID == FTID, date == date, drvid == VESSEL_NUM, agency_code == AGENCY_CODE) # cannot join on Rec_ID == FISH_TICKET_ID if we wish to match to CDFW_AREA_BLOCK. one challenge is that there are 7 instances (out of 303183 crab trips) of duplicated FTID. JS ignoring for now
     )
 
 # jameal had to troubleshoot the CDFW_AREA_BLOCK join for a bit because of many to many relationship problems during the join. error messages and some troubleshooting comments below
@@ -351,6 +353,23 @@ n_trips   <- n_distinct(dcrb_ticket_df$Rec_ID)
 n_years   <- n_distinct(dcrb_ticket_df$year_numeric)
 ```
 
+If we want to skip the pre-processing above, we can simply read in the rds from the chunk above
+
+```{r load_dcrb_tix}
+# choose years of data to load
+load_years <- 2011:2023
+
+dcrb_ticket_df <- read_rds(
+  here('Confidential', 'processed_data', 'fish_tickets',
+       paste0('fish tickets_DCRB_',
+              paste0(load_years[1],'-',load_years[length(load_years)]),
+              '.rds')
+       )
+)
+
+
+```
+
 The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` distinct trips (fish tickets), across `r n_years` years.
 
 There are more records than trips due to the vessel registration processing code including the lookback window data in step 2 of the pipeline. I looked at some examples of duplicates, and they occur for tickets within the lookback window - for example, a ticket landed on Dec. 28, 2014 is processed in the 2014 and 2015 runs of the pipeline for vessel registration. I suspect this could be fixed in the pipeline itself, but I'm leaving it be for now.
@@ -370,7 +389,7 @@ qa_df <- dcrb_ticket_df %>%
 colnames(qa_df)
 
 # how many records need de-duplication (have 2 records, 1 of which has NA length)?
-qa_df %>% group_by(n, na_length, remove_na) %>% summarise(n_records = n()) %>% arrange(desc(n_records)) # 7499 records
+qa_df %>% group_by(n, na_length, remove_na) %>% summarise(n_records = n()) %>% arrange(desc(n_records)) # 1229 records
 
 # join back to dcrb_ticket_df
 qa_dcrb_ticket_df <- dcrb_ticket_df %>%
