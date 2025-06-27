@@ -17,7 +17,11 @@ geometry: margin=1in
 library(tidyverse)
 library(here)
 library(fredr)
-
+library(magrittr)
+library(sf)
+library(knitr)
+library(lubridate)
+library(glue)
 
 ```
 
@@ -67,27 +71,31 @@ Analysis with matched VMS and fish tix:
 - Follow this vignette to make a correlation map: https://statnmap.com/2018-01-27-spatial-correlation-between-rasters/ 
 
 
-
+Reminder that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year
 
 
 # Load and join data frames for processing
 
 Fish tix (fishtix_vlengths_withFTID_yyyy.rds)
 Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds) 
-10 arc minute grid. https://github.com/noaa-nwfsc/VMS-pipeline/tree/main/spatial_data
 
 NWFSC_DSACDFW_DcrabPermitDetail2013-2023_08072023.xlsx
 TrapTierNumberKey.csv
 
-The code below borrows heavily from Brooke Hawkins' notebook "10_blh_dungeness-crab-time-series.Rmd".
-
 ## Load data
+
+### Fish tix, no VMS records
 
 1. Load the cleaned fish ticket data for specified years, which will be used to plot revenue and landings across time.
 
-Pre-requisite: Run the pipeline steps 1-6 (including interpolation) for calendar years 2011-2023 for DCRB.
+Pre-requisite: Run the pipeline steps 1-2 for calendar years 2011-2023 for DCRB.
 
-*** Note you can skip to the chunk load_dcrb_tix and avoid running shunks 3-8 
+*** Note you can skip to the chunk load_dcrb_tix and avoid running chunks 3-8 
+
+These data can be used to summarize the number/% of tix and number/% of vessels by time period for which CDFW offshore blocks are reported, and examine for structural bias (vessel size, time of year, region, etc)
+
+The code below borrows heavily from Brooke Hawkins' notebook "10_blh_dungeness-crab-time-series.Rmd".
+
 
 ```{r load-data}
 # choose years of data to load
@@ -236,7 +244,7 @@ dim(ticket_df2_clean)
 
 ```
 
-## Transform data
+#### Transform data
 
 Transform the joined, cleaned, interpolated VMS and fish ticket data:
 
@@ -263,6 +271,7 @@ Some commonly used acronyms for variable naming in the code include:
 # define filters
 target_rev <- "DCRB"         # revenue target
 target_lbs <- "DCRB"         # landings target
+state_agency_code <- "C"     # landings brought to California ports
 min_depth <- 0               # minimum depth in meters
 max_depth <- -150            # maximum depth in meters
 min_speed <- 0               # minimum speed in m/s
@@ -404,7 +413,361 @@ n_qa_years   <- n_distinct(qa_dcrb_ticket_df$year_numeric)
 
 The QA'ed Dungeness crab fish ticket dataframe has `r n_qa_records` records (fish tickets), `r n_qa_trips` distinct trips (fish tickets), across `r n_qa_years` years. Now there are no duplicate fish tickets.
 
-# Make plots
+### Fish tix matched to VMS data
 
-VMS point frequency distributions to be split into before and after that ping rate increase, or by year
 
+
+1. Load Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds) 
+
+Pre-requisite: Run the pipeline steps 1-5 for calendar years 2011-2023.
+
+The code below borrows heavily from Brooke Hawkins' notebook: 03_blh_hindcasts-of-california-dungeness-crab-fishing-activity.Rmd
+
+*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 11-16 
+
+```{r load vms_tix}
+
+# choose years of data to load
+load_years <- 2011:2023
+
+# load fish ticket data joined to vessel length data, but before it was joined to VMS data
+vms_df <- purrr::map(load_years, function(ly) {
+  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'filtered', paste0('matched_filtered_withFTID_length_', ly, '.rds')))
+}) %>% bind_rows()
+
+glimpse(vms_df)
+
+
+```
+
+2. Load grid
+
+```{r load_10arcminute_grid}
+
+# 10-arcminute grid shapefile
+grd <- read_sf(here('spatial_data', 'grids', 'ten_arcminute_grid_shore_lamb.shp'))
+names(grd)
+
+```
+
+
+3. Join VMS and fish ticket data to grid
+
+identifies the CDFW block in which each VMS record falls
+
+This chunk is inspired by overlay_points_on_grid.Rmd from the grid_overlay_edits branch
+
+```{r match_points}
+
+pt <- proc.time()
+
+# convert vms to spatial object (longitude/latitude) and join to grid
+vms_sf <- vms_df %>%
+  st_as_sf(coords=c('LON','LAT'),crs=4326) %>% 
+  # then, convert to planar projection to match the grid
+  st_transform(st_crs(grd)) %>%
+  st_join(grd) 
+
+vms_grid10_df <- vms_sf %>%
+  st_set_geometry(NULL)
+
+proc.time()-pt
+
+# 55s for 2022 data
+# 764 s for 2011-2023 data
+
+```
+
+
+4. Load inflation adjustment factors from FRED. Use annual instead of monthly
+
+Adjust revenue for inflation using Fred GDP data, adapted from R code by Erin Steiner. This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.
+
+Pre-requisite: Create a FRED account and API key. See https://fred.stlouisfed.org/docs/api/api_key.html.
+
+```{r inflation-adjustment}
+# insert your FRED API key
+fredr_set_key('ea19d3d447eb4dc773db00c5a2e61f22') 
+
+# download the quarterly inflation adjustments from Fred from 1985 to present
+fred_gdpdefl <- fredr(
+    series_id = "GDPDEF", 
+    observation_start = as.Date(paste0(min(load_years), "-01-01"))
+  )
+
+# generate the mean annual deflators based on the quarterly values
+gdp_defl <- mutate(fred_gdpdefl, year = year(date)) %>%
+  group_by(year) %>%
+  summarize(defl = mean(value), .groups = 'drop') %>%
+  mutate(inflation_adjustment_factor = defl / defl[year == max(year)]) %>%
+  select(year, inflation_adjustment_factor)
+
+# write inflation adjustment factors
+write.csv(file = here("Confidential", "hindcast_output", "tables", "annual_inflation_adjustment.csv"), x = gdp_defl)
+
+# plot inflation adjustment factors
+gdp_defl %>% ggplot(aes(x = as.factor(year), y = inflation_adjustment_factor)) + geom_point()
+ggsave(here("Confidential", "hindcast_output", "figures", "annual_inflation_adjustment.png"))
+
+# clean up
+rm(fred_gdpdefl)
+```
+
+#### Transform data
+
+Filters derived from define-filters-ticket_df chunk above
+
+```{r transform_vms_data}
+
+# transform VMS and fish ticket data
+dcrb_df <- vms_grid10_df %>%
+  # use distinct to avoid duplicates caused by vessel length matching step (do not keep rows that are the same except for "FINAL_LENGTH")
+  distinct(
+    VMS_RECNO, Rec_ID, FTID, pacfin_port_code, port_group_code, dealerID, drvid, agency_code, date, TARGET_lbs, all_species_lbs, DCRB_lbs, DCRB_lbs_no_revenue, TARGET_rev, all_species_rev, DCRB_revenue, species_code_all, NGDC_M, X_COORD, Y_COORD,  westcoastdate_notime, avg_speed_recalc, BLOCK10_ID, feature_id, EEZ, State, Salish_Sea, Area_m2, BLOCK10_n,
+     .keep_all = TRUE
+  ) %>%
+  # add temporal columns
+  mutate(
+    year = lubridate::year(westcoastdate_notime),
+    month = lubridate::month(westcoastdate_notime, label=TRUE, abbr=FALSE),
+    month_numeric = month(westcoastdate_notime),
+    year_month = paste0(lubridate::year(westcoastdate_notime),"_", substr(lubridate::ymd(westcoastdate_notime), 6, 7)),
+    crab_year = ifelse(month_numeric >= crab_year_start, paste0(year, "_", 1+year), paste0(year-1, "_", year)),
+    season = as.character(ifelse(month %in% winter_months, "Winter", "Spring-Summer")),
+    week_of_year = week(westcoastdate_notime),
+    day_of_year = yday(westcoastdate_notime),
+    # year_month_character = paste0(year(date),"_", substr(ymd(date), 6, 7)),
+    year_month_date = floor_date(ymd(westcoastdate_notime), 'month')
+  ) %>%
+  # apply filters
+  filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
+  filter(agency_code == state_agency_code) %>%
+  filter(NGDC_M <= min_depth & NGDC_M >= max_depth) %>%
+  filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
+  # join inflation adjustment factor and adjust revenue
+  left_join(gdp_defl, by = join_by(year == year)) %>%
+  mutate(DCRB_revenue_afi = DCRB_revenue * 100 / inflation_adjustment_factor) %>%
+  # select columns
+  # drop "gear_code_all", "end", "prev_ticket_dttm", "lookback_dttm", "begin", "trip_dur", "UTCDATETIME", "VESSEL_NAME", "AVG_SPEED", "AVG_COURSE", "DECLARATION_CODE", "westcoastdate",  "has_vms", "multispecies", "segment_dur",      "in_port", "Shoreline", "row_index", "col_index" 
+  dplyr::select(
+    # identifiers
+    Rec_ID,           # fish ticket ID
+    FTID,
+    VMS_RECNO,        # VMS ping ID
+    drvid,            # vessel ID
+    agency_code,
+    pacfin_port_code, # port ID
+    port_group_code,  # port group ID
+    BLOCK10_ID,       # grid cell ID
+    BLOCK10_n,
+    Offshrblok,
+    Area_m2,
+    # temporal fields
+    westcoastdate,
+    westcoastdate_notime,
+    crab_year, 
+    season,
+    year,
+    year_month,
+    month, 
+    month_numeric,
+    week_of_year,
+    day_of_year,
+    # vessel length
+    FINAL_LENGTH,
+    # dungeness crab fields
+    DCRB_lbs,
+    DCRB_revenue_afi
+  ) %>%
+   left_join(
+    ticket_df2_clean, 
+    by = join_by(FTID == FTID)
+   )
+
+glimpse(dcrb_df)
+
+#length(which(is.na(dcrb_df$CDFW_AREA_BLOCK))) # 
+
+# PROBLEM 06-26-2025. with 2011-2023 data, Warning: Detected an unexpected many-to-many relationship between `x` and `y`. but there was no such problem with 2022 data only. argh! 
+
+```
+
+
+
+```{r write dcrb_vms_grd}
+
+# write rds for non-spatial version
+write_rds(dcrb_df, here('Confidential', 
+                              'processed_data', 
+                              'vms_fish_tickets',
+                              paste0(
+                               'dcrb_vms_w_grd_10_arcmin_',
+                               paste0(load_years[1],'-',load_years[length(load_years)]),
+                               '.rds'
+                              )
+)
+)
+
+
+
+```
+
+# Determine correspondence between reported and tracked fishing locations and make plots
+
+## shortcut load
+
+```{r load_dcrb_vms}
+
+load_years <- 2011:2023
+
+dcrb_df <- read_rds(here(
+  'Confidential', 
+  'processed_data', 
+  'vms_fish_tickets',
+  paste0(
+    'dcrb_vms_w_grd_10_arcmin_',
+    paste0(load_years[1],'-',load_years[length(load_years)]),
+    '.rds'
+    )
+  )
+)
+
+
+
+```
+
+## Determine correspondence between reported and tracked fishing locations
+
+Quantify % of pings that match reported block, and % of tix where at least one ping matches reported block
+
+For now, I am not accounting for individual vessel level effects, but instead looking across all trips and all vessels all at once
+
+```{r match_ping_reported}
+
+offshore_blk_IDs <- 1032:1042
+
+dcrb_df_match_long <- dcrb_df %>%
+  mutate(
+    match_ping_report = case_when(
+      BLOCK10_ID == CDFW_AREA_BLOCK ~ 1,
+      BLOCK10_ID != CDFW_AREA_BLOCK ~ 0#,
+      #.default = 9999 # 4225/1078180 NAs. ignore for now
+      ),
+    offshore_reported = case_when(
+      CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
+      !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
+      #.default = 9999
+    )
+  )
+
+# length(which(dcrb_df_match$offshore_reported == 1))
+# length(which(dcrb_df_match$offshore_reported == 0))
+
+dcrb_df_match_all_fishtix <- dcrb_df_match_long %>%
+  # summarise by each fish ticket
+  group_by( 
+    crab_year, Rec_ID, FTID, drvid, agency_code, pacfin_port_code, port_group_code, FINAL_LENGTH #, DCRB_lbs, DCRB_revenue_afi. commented out DCRB_revenue_afi for now because for tix with vms records that span multiple months we end up with >1 row for each unique ticket. fix later
+  ) %>%
+  summarise(
+    total_match_ping_report = sum(match_ping_report, na.rm=TRUE),
+    num_vms_records = n(),
+    match_ping_report_YN = ifelse(total_match_ping_report >=1, 1, 0),
+    prop_match_ping_report = total_match_ping_report / num_vms_records
+  ) %>%
+  ungroup()
+
+dcrb_df_match_all_crabyrs <- dcrb_df_match_all_fishtix %>%
+  # summarise across all fish tix
+  group_by(
+    crab_year
+  ) %>%
+  summarise(
+    prop_match_ping_report_YN = sum(match_ping_report_YN)/n(),
+    mean_prop_match_ping_report = mean(prop_match_ping_report, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    year_numeric = substr(crab_year,6,9)
+  ) %>%
+  filter(year_numeric != 2024)
+
+dcrb_df_match_block10_fishtix <- dcrb_df_match_long %>%
+  filter(offshore_reported == 0) %>%
+  # summarise by each fish ticket
+  group_by( 
+    crab_year, Rec_ID, FTID, drvid, agency_code, pacfin_port_code, port_group_code, FINAL_LENGTH #, DCRB_lbs, DCRB_revenue_afi. commented out DCRB_revenue_afi for now because for tix with vms records that span multiple months we end up with >1 row for each unique ticket. fix later
+  ) %>%
+  summarise(
+    total_match_ping_report = sum(match_ping_report, na.rm=TRUE),
+    num_vms_records = n(),
+    match_ping_report_YN = ifelse(total_match_ping_report >=1, 1, 0),
+    prop_match_ping_report = total_match_ping_report / num_vms_records
+  ) %>%
+  ungroup()
+
+dcrb_df_match_block10_crabyrs <- dcrb_df_match_block10_fishtix %>%
+  # summarise across all fish tix
+  group_by(
+    crab_year
+  ) %>%
+  summarise(
+    prop_match_ping_report_YN = sum(match_ping_report_YN)/n(),
+    mean_prop_match_ping_report = mean(prop_match_ping_report, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    year_numeric = substr(crab_year,6,9)
+  ) %>%
+  filter(year_numeric != 2024)
+
+```
+
+## Make plots
+
+Plot % of tickets with at least one match between reported and tracked blocks - include both reported offshore blocks and reported block10s
+
+```{r low_bar_plot_all}
+
+dcrb_df_match_all_crabyrs %>%
+  ggplot(
+    aes(
+        x = year_numeric, y = prop_match_ping_report_YN, group = 1
+        )
+  ) +
+  geom_point() +
+  geom_line() +
+  ylim(0,1) +
+  labs(
+    subtitle = 'includes both reported offshore blocks and reported block10s',
+    y = 'Proportion of trips with >=1 VMS record\nmatching reported CDFW 10-arc minute block',
+    x = 'Crab year'
+       ) +
+  theme_classic()
+
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_prop_dcrb_tix_match_ping_report_all.png"), width = 8, height = 6)
+
+```
+
+Plot % of tickets with at least one match between reported and tracked blocks - include reported block10s only
+
+```{r low_bar_plot_block10}
+
+dcrb_df_match_block10_crabyrs %>%
+  ggplot(
+    aes(
+        x = year_numeric, y = prop_match_ping_report_YN, group = 1
+        )
+  ) +
+  geom_point() +
+  geom_line() +
+  ylim(0,1) +
+  labs(
+    subtitle = 'includes only reported block10s',
+    y = 'Proportion of trips with >=1 VMS record\nmatching reported CDFW 10-arc minute block',
+    x = 'Crab year'
+       ) +
+  theme_classic()
+
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_prop_dcrb_tix_match_ping_report_block10.png"), width = 8, height = 6)
+
+```
