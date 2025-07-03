@@ -476,6 +476,9 @@ proc.time()-pt
 # 55s for 2022 data
 # 764 s for 2011-2023 data
 
+rm(vms_df)
+rm(vms_sf)
+
 ```
 
 
@@ -515,7 +518,18 @@ rm(fred_gdpdefl)
 
 #### Transform data
 
-Filters derived from define-filters-ticket_df chunk above
+```{r define-filters-vms_df}
+# define filters
+target_rev <- "DCRB"         # revenue target
+target_lbs <- "DCRB"         # landings target
+state_agency_code <- "C"     # landings brought to California ports
+min_depth <- 0               # minimum depth in meters
+max_depth <- -150            # maximum depth in meters
+min_speed <- 0               # minimum speed in m/s
+max_speed <- 4.11556         # maximum speed in m/s (4.11556 m/s = 8 knots)
+crab_year_start <- 11        # month defines start of crab year
+winter_months <- c("November", "December", "January", "February", "March") # determine Winter or Spring-Summer season
+```
 
 ```{r transform_vms_data}
 
@@ -523,7 +537,7 @@ Filters derived from define-filters-ticket_df chunk above
 dcrb_df <- vms_grid10_df %>%
   # use distinct to avoid duplicates caused by vessel length matching step (do not keep rows that are the same except for "FINAL_LENGTH")
   distinct(
-    VMS_RECNO, Rec_ID, FTID, pacfin_port_code, port_group_code, dealerID, drvid, agency_code, date, TARGET_lbs, all_species_lbs, DCRB_lbs, DCRB_lbs_no_revenue, TARGET_rev, all_species_rev, DCRB_revenue, species_code_all, NGDC_M, X_COORD, Y_COORD,  westcoastdate_notime, avg_speed_recalc, BLOCK10_ID, feature_id, EEZ, State, Salish_Sea, Area_m2, BLOCK10_n,
+    VMS_RECNO, Rec_ID, FTID, pacfin_port_code, port_group_code, dealerID, drvid, agency_code, date, TARGET_lbs, all_species_lbs, DCRB_lbs, DCRB_lbs_no_revenue, TARGET_rev, all_species_rev, DCRB_revenue, species_code_all, WM_NGDC_m, X_COORD, Y_COORD,  westcoastdate_notime, avg_speed_recalc, BLOCK10_ID, feature_id, EEZ, State, Salish_Sea, Area_m2, BLOCK10_n, Adj_cell_1, Adj_cell_2, Adj_cell_3, Adj_Cell_4, Adj_Cell_5, Adj_Cell_6, Adj_Cell_7, Adj_Cell_8,
      .keep_all = TRUE
   ) %>%
   # add temporal columns
@@ -561,7 +575,16 @@ dcrb_df <- vms_grid10_df %>%
     BLOCK10_ID,       # grid cell ID
     BLOCK10_n,
     Offshrblok,
+    Adj_cell_1, 
+    Adj_cell_2, 
+    Adj_cell_3, 
+    Adj_Cell_4, 
+    Adj_Cell_5, 
+    Adj_Cell_6, 
+    Adj_Cell_7, 
+    Adj_Cell_8,
     Area_m2,
+    WM_NGDC_m,
     # temporal fields
     westcoastdate,
     westcoastdate_notime,
@@ -589,6 +612,7 @@ glimpse(dcrb_df)
 #length(which(is.na(dcrb_df$CDFW_AREA_BLOCK))) # 
 
 # PROBLEM 06-26-2025. with 2011-2023 data, Warning: Detected an unexpected many-to-many relationship between `x` and `y`. but there was no such problem with 2022 data only. argh! 
+# to evaluate extent of problem make a df called tmp using lines above except 604-608 (the join to ticket_df2_clean). then dim(tmp) vs dim(dcrb_df)
 
 ```
 
@@ -643,6 +667,26 @@ Quantify % of pings that match reported block, and % of tix where at least one p
 For now, I am not accounting for individual vessel level effects, but instead looking across all trips and all vessels all at once
 
 ```{r match_ping_reported}
+
+# # give every ticket a reported an offshore block ID, either because it was reported as 1032:1042 in CDFW_AREA_BLOCK or by using the lookup provided by Blake in Offshrblok
+# 
+# 
+# dcrb_df_match_long <- dcrb_df %>%
+#   mutate(
+#     match_ping_report = case_when(
+#       BLOCK10_ID == CDFW_AREA_BLOCK ~ 1,
+#       BLOCK10_ID != CDFW_AREA_BLOCK ~ 0#,
+#       #.default = 9999 # 4225/1078180 NAs. ignore for now
+#       ),
+#     offshore_reported = case_when(
+#       CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
+#       !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
+#       #.default = 9999
+#     ),
+#    offshore_block = case_when(
+#       offshore_reported == 1 ~ offshore_reported,
+#       offshore_reported == 0 ~ grd$Offshrblok[which(grd$BLOCK10_ID == CDFW_AREA_BLOCK)]
+#   ) 
 
 offshore_blk_IDs <- 1032:1042
 
