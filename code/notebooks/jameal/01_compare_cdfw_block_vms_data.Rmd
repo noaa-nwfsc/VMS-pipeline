@@ -22,6 +22,17 @@ library(sf)
 library(knitr)
 library(lubridate)
 library(glue)
+library(cowplot)
+library(rnaturalearth)
+library(viridis)
+library(knitr)
+
+options(dplyr.summarise.inform = FALSE)
+
+# change default ggplot theme for plotting
+plot_theme <- theme_minimal()+theme(panel.border = element_rect(color='black',fill=NA),
+                                    panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+theme_set(plot_theme)
 
 ```
 
@@ -423,7 +434,7 @@ Pre-requisite: Run the pipeline steps 1-5 for calendar years 2011-2023.
 
 The code below borrows heavily from Brooke Hawkins' notebook: 03_blh_hindcasts-of-california-dungeness-crab-fishing-activity.Rmd
 
-*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 11-16 
+*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 11-16, but you still need the chunk load_10arcminute_grid
 
 ```{r load vms_tix}
 
@@ -447,6 +458,11 @@ glimpse(vms_df)
 # 10-arcminute grid shapefile
 grd <- read_sf(here('spatial_data', 'grids', 'ten_arcminute_grid_shore_lamb.shp'))
 names(grd)
+
+# background map, from rnaturalearth
+coast <- ne_states(country='United States of America',returnclass = 'sf') %>%
+  filter(name %in% c('California','Oregon','Washington','Nevada')) %>%
+  st_transform(crs = st_crs(grd))
 
 ```
 
@@ -636,7 +652,7 @@ write_rds(dcrb_df, here('Confidential',
 
 ```
 
-# Determine correspondence between reported and tracked fishing locations and make plots
+# Analyze matched VMS and fish tix
 
 ## shortcut load
 
@@ -766,7 +782,7 @@ dcrb_df_match_block10_crabyrs <- dcrb_df_match_block10_fishtix %>%
 
 ```
 
-## Make plots
+## Make % match plots
 
 Plot % of tickets with at least one match between reported and tracked blocks - include both reported offshore blocks and reported block10s
 
@@ -815,3 +831,220 @@ dcrb_df_match_block10_crabyrs %>%
 ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_prop_dcrb_tix_match_ping_report_block10.png"), width = 8, height = 6)
 
 ```
+
+## Summarize data frame for mapping
+
+Focus on fish tix with self-reported 10-arc minute blocks and associated VMS data
+
+Use Owen's code as a basis. https://github.com/noaa-nwfsc/VMS-pipeline/blob/7fac4c72968f6235ad1f73975128821cf3ddd933/code/notebooks/owen/summary%20mapping%20dcrb.qmd 
+
+```{r sum_for_maps}
+
+# filter to CDFW small block tix only
+# group_by by crab_year and BLOCK10_ID
+# sum num Rec_ID reporting each block, num VMS_RECNO in each block
+# repeat faceted by pacfin_port_code, season if desired
+
+#offshore_blk_IDs <- 1032:1042
+
+dcrb_df_block10 <- dcrb_df %>%
+  mutate(
+    offshore_reported = case_when(
+      CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
+      !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
+      #.default = 9999
+    )
+  ) %>%
+  # filter(offshore_reported == 0) %>%
+  filter(BLOCK10_ID < 1000)
+
+# function to aggregate. 07-10-2025 need to update lines 847-868 to focus on block10 and count up total tix/vms records per block10. make sure not to compare post 2020 high ping rate to pre 2020
+summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
+  
+  # first, establish the attribute to be summarized, and select it from the dataset
+  if(att=="trips") df <- dcrb_df_block10 %>%
+      rename(attribute=Rec_ID)
+  if(att=="pings") df <- dcrb_df_block10 %>%
+      rename(attribute=VMS_RECNO)
+  
+  # then, group the data into the appropriate temporal breaks and summarize based on the chosen measure
+  # if the option is all years, sum across all months of the crab year, separating pre Sep 2020 from post due to an increase in ping rate from 60-mn intervals to 15-min intervals
+  if(temporal_breaks=="all years") {
+    df2 <- df %>% 
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
+      mutate(temporal_break=ifelse(westcoastdate_notime < '2020-09-01',"60-minute ping intervals","15-minute ping intervals")) %>% 
+      group_by(temporal_break,crab_year,BLOCK10_ID) %>% 
+      summarise(attr_totyr=sum(attribute,na.rm=T)) %>% 
+      group_by(temporal_break,BLOCK10_ID) %>% 
+      # calculate mean and sd
+      summarise(
+        mean_allyrs=mean(attr_totyr,na.rm=T),
+        sd_allyrs=sd(attr_totyr,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,10)*10) %>%
+      mutate(quantbinned=ordered(quantbinned)) %>% 
+      dplyr::select(-cume)
+  }
+  
+  #df_out <- df2
+  
+  # finally, join the spatial data
+  df_out <- df2 %>%
+    left_join(grd,by="BLOCK10_ID") %>% st_as_sf()
+  
+  df_out
+}
+
+```
+
+
+## Compare metrics
+
+### Example correlations between fish tix and VMS records
+
+These are very ugly.
+
+```{r vms_rec_map}
+
+x <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs)
+y <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs)
+
+x %>% st_join(y) %>%
+  ggplot()+
+  geom_point(aes(x=quant_trips, y=quant_pings))+
+  theme(panel.background=element_rect(fill='white'))
+
+x %>% st_join(y) %>%
+  ggplot()+
+  geom_point(aes(x=mean_allyrs_trips, y=mean_allyrs_pings))+
+  theme(panel.background=element_rect(fill='white'))
+
+```
+
+### Maps
+
+Get set up.
+
+We can filter this large 5km grid to only encompass the cells with some crab fishing effort. Do this with a filter-buffer-crop workflow (could also use, e.g., a distance from shore or depth cutoff):
+
+```{r}
+# filter the overall grid using grid cells with DCRB effort in any month/year
+cells_we_need <- unique(dcrb_df$BLOCK10_ID)
+grid10_filt <- grd %>% filter(BLOCK10_ID %in% cells_we_need)
+
+# buffer by 50km
+grid10_filt_buff <- grid10_filt %>% summarise() %>% st_buffer(1e4)
+
+# crop to make the final grid
+grid10_final <- grd %>% st_filter(grid10_filt_buff)
+bbox <- st_bbox(grid10_final)
+
+# map this
+ggplot()+
+  geom_sf(data=grid10_final,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bbox[1],bbox[3])+ylim(bbox[2],bbox[4])+
+  scale_fill_viridis(option="turbo",direction=-1)
+```
+
+We make a spatially rotated grid, for better visualization when mapping the whole coastline. We use custom projections for this, which B. Feist designed. Based on that work, here we provide generic code for any given amount of rotation.
+
+```{r}
+# this is the first wkt file ('well-known text') that B. Feist created, containing the info on the custom spatial projection
+rotation_wkt <- read_file(here('spatial_data','map_rotation','Rectified_Skew_Orthomorphic_center_30deg_rotation.wkt'))
+
+# working in this simple text format, we can find and replace to change the rotation of the map
+crs_rotated <- function(deg){
+  crs_out <- sub('Skew Grid\",30',paste0('Skew Grid\",',deg),rotation_wkt)
+  crs_out
+}
+
+# let's use this to make a 15 deg rotation, which seems about right for our study domain
+rot15 <- crs_rotated(15) %>% st_crs()
+
+# use this crs to reprojec the 5k grid
+grid5k_rot15 <- grid5k_final %>% st_transform(rot15)
+bbox_rot15 <- st_bbox(grid5k_rot15) +c(0,0,-20000,0)
+
+# map
+ggplot()+
+  geom_sf(data=grid5k_rot15,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bbox_rot15[1],bbox_rot15[3])+ylim(bbox_rot15[2],bbox_rot15[4])+
+  scale_fill_viridis(option="turbo",direction=-1)
+```
+
+We also need to define bounding boxes for regional subsets of the data, to "zoom in" on particular regions of interest. For now, our regional subsets will be Washington, Oregon, Northern California, and Central California.
+
+```{r}
+grid5k_final <- grid5k_final %>% 
+  mutate(map_zone=na_if(STATE,"CA")) %>% 
+  mutate(map_zone=coalesce(RAMP_area,map_zone)) %>% 
+  filter(map_zone!="Southern") %>% 
+  mutate(map_zone=ifelse(map_zone=="San Francisco","Central",map_zone)) %>% 
+  mutate(map_zone=factor(map_zone,levels=c("WA","OR","Northern","Central"))) %>% 
+  # remove columns we don't need from the grid df
+  dplyr::select(GRID5KM_ID,AREA,WM_NGDC_m,NGDC_med_m,STATE,RAMP_area,map_zone,centro_lat,centro_lon)
+  
+ggplot()+
+  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(15))),aes(fill=factor(map_zone)),col=NA)+
+  xlim(bbox_rot15[1],bbox_rot15[3])+ylim(bbox_rot15[2],bbox_rot15[4])+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  labs(fill="Region")
+```
+
+```{r,fig.width=12}
+# Define the bounding boxes for regional subsets
+bboxes <- map(levels(grid5k_final$map_zone),function(z){
+  grid5k_final %>% filter(map_zone==z) %>% st_bbox()
+})
+names(bboxes)=levels(grid5k_final$map_zone)
+
+# let's rotate the central California region 30 degrees and WA region 10 degrees
+bboxes$Central <- grid5k_final %>% st_transform(st_crs(crs_rotated(30))) %>% filter(map_zone=='Central') %>% st_bbox()
+bboxes$WA <- grid5k_final %>% st_transform(st_crs(crs_rotated(10))) %>% filter(map_zone=='WA') %>% st_bbox()
+
+# Washington
+wa_map <- ggplot()+
+  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(10))),aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$WA[1],bboxes$WA[3])+ylim(bboxes$WA[2],bboxes$WA[4])+
+  scale_fill_viridis(option="turbo",guide='none')
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# Oregon
+or_map <- ggplot()+
+  geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$OR[1],bboxes$OR[3])+ylim(bboxes$OR[2],bboxes$OR[4])+
+  scale_fill_viridis(option="turbo",guide='none')
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# N. Cal
+Northern_map <- ggplot()+
+  geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$Northern[1],bboxes$Northern[3])+ylim(bboxes$Northern[2],bboxes$Northern[4])+
+  scale_fill_viridis(option="turbo",guide='none')
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# Cen. Cal.
+Central_map <- ggplot()+
+  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(30))),aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=coast,fill='#dacf80',col='gray80')+
+  xlim(bboxes$Central[1],bboxes$Central[3])+ylim(bboxes$Central[2],bboxes$Central[4])+
+  scale_fill_viridis(option="turbo")
+  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+
+# now we can map them togetrher
+plot_grid(wa_map,or_map,Northern_map,Central_map,nrow=1)
+```
+
+07-11-2025. now start adding mapping code, see line 808 of Owen's make_map_coastwide()
