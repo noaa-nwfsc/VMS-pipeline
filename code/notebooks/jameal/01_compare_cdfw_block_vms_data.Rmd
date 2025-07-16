@@ -60,12 +60,6 @@ rm(temp_name, temp_subdir)
 
 This document compares the spatial distribution of CA Dungeness crab fishing activity based on self-reported CDFW block data from fish tickets and geolocations obtained from VMS data.
 
-Analysis with fish tix only:
-
-1) Summarize the number/% of tix and number/% of vessels by time period for which CDFW offshore blocks are reported, and examine for structural bias (vessel size, time of year, region, etc)
-
-Analysis with matched VMS and fish tix:
-
 1) Using the VMS record-by-record df, calculate distance of VMS point from centroid or edge of CDFW block reported in fish ticket; 
 - Make plot of frequency distribution showing distance of VMS point from CDFW block, with 50/75/90% labeled 
 
@@ -87,8 +81,8 @@ Reminder that VMS point frequency distributions need to be split into before and
 
 # Load and join data frames for processing
 
-Fish tix (fishtix_vlengths_withFTID_yyyy.rds)
-Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds) 
+I have not yet integrated DCRB permit information.
+eg,
 
 NWFSC_DSACDFW_DcrabPermitDetail2013-2023_08072023.xlsx
 TrapTierNumberKey.csv
@@ -97,9 +91,7 @@ TrapTierNumberKey.csv
 
 ### Fish tix, no VMS records
 
-1. Load the cleaned fish ticket data for specified years, which will be used to plot revenue and landings across time.
-
-Pre-requisite: Run the pipeline steps 1-2 for calendar years 2011-2023 for DCRB.
+1. Load the fish ticket data for specified years, which will be used to grab self-reported fishing locations.
 
 *** Note you can skip to the chunk load_dcrb_tix and avoid running chunks 3-8 
 
@@ -112,12 +104,8 @@ The code below borrows heavily from Brooke Hawkins' notebook "10_blh_dungeness-c
 # choose years of data to load
 load_years <- 2011:2023
 
-# load fish ticket data joined to vessel length data, but before it was joined to VMS data
-ticket_df <- purrr::map(load_years, function(ly) {
-  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'fish_tickets', paste0('fishtix_vlengths_withFTID_', ly, '.rds')))
-}) %>% bind_rows()
-
-# the ticket df above is missing some columns, so also load the raw fish ticket data, downloaded by Brooke Hawkins
+# the ticket df from the vms pipeline is missing some columns, so load the raw fish ticket data, downloaded by Brooke Hawkins
+# From Brooke: Many columns are dropped in step 1 when the fish tickets are cleaned, and that drop propagates through the rest of the pipeline. The fastest workaround is to join the raw fish tickets with the fish ticket ID and get it from there.
 # 06-11-2025 changed from read_csv to read.csv to avoid warning messages associated with the HILLE_PERMIT column in at least the 2013 data file. that didnt work. so on 06-12-2025, decided to just read in columns i need. that didnt work either and brooke addressed this issue more comprehensively here: https://github.com/noaa-nwfsc/VMS-pipeline/blob/main/code/notebooks/brooke/16_blh_check-new-fish-tickets.md
 
 # 06-17-2025. made rds so that we can read the df in faster
@@ -174,54 +162,36 @@ ticket_df2 <- read_rds(here('Confidential', 'processed_data', 'fish_tickets',
 
 ```
 
-2. Load inflation adjustment factors from FRED.
+<!-- 2. Load inflation adjustment factors from FRED. -->
 
-Adjust revenue for inflation using Personal Consumption Expenditures: Chain-Type Price Index, [PCEPI](https://fred.stlouisfed.org/series/PCEPI) from FRED. PCEPI index is chosen per Dan Holland's suggestion. The reference year is 2017 by default. This is a monthly time series that is used by multiplying the revenue by 100 / PCEPI. It is used at a monthly time scale (rather than taking an annual average).
+<!-- Adjust revenue for inflation using Personal Consumption Expenditures: Chain-Type Price Index, [PCEPI](https://fred.stlouisfed.org/series/PCEPI) from FRED. PCEPI index is chosen per Dan Holland's suggestion. The reference year is 2017 by default. This is a monthly time series that is used by multiplying the revenue by 100 / PCEPI. It is used at a monthly time scale (rather than taking an annual average). -->
 
-Pre-requisite: Create a FRED account and [API key](https://fred.stlouisfed.org/docs/api/api_key.html). This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis. 
+<!-- Pre-requisite: Create a FRED account and [API key](https://fred.stlouisfed.org/docs/api/api_key.html). This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.  -->
 
-```{r inflation-adjustment}
-# insert your FRED API key
-fredr_set_key('ea19d3d447eb4dc773db00c5a2e61f22')
+<!-- ```{r inflation-adjustment} -->
+<!-- # insert your FRED API key -->
+<!-- fredr_set_key('ea19d3d447eb4dc773db00c5a2e61f22') -->
 
-# download the monthly inflation adjustments from FRED from start of min load year to end of max load year
-fred_pcepi <- fredr(
-    series_id = "PCEPI", 
-    observation_start = as.Date(paste0(min(load_years), "-01-01")),
-    observation_end = as.Date(paste0(max(load_years), "-12-31"))
-  ) %>%
-  rename(year_month = date, pcepi = value) %>% 
-  select(-c(realtime_start, realtime_end, series_id))
+<!-- # download the monthly inflation adjustments from FRED from start of min load year to end of max load year -->
+<!-- fred_pcepi <- fredr( -->
+<!--     series_id = "PCEPI",  -->
+<!--     observation_start = as.Date(paste0(min(load_years), "-01-01")), -->
+<!--     observation_end = as.Date(paste0(max(load_years), "-12-31")) -->
+<!--   ) %>% -->
+<!--   rename(year_month = date, pcepi = value) %>%  -->
+<!--   select(-c(realtime_start, realtime_end, series_id)) -->
 
-# write inflation adjustment factors
-write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_pcepi.csv"), x = fred_pcepi, row.names = FALSE)
+<!-- # write inflation adjustment factors -->
+<!-- write.csv(file = here("Confidential", "hindcast_output", output_subdir_name, "tables", "inflation_pcepi.csv"), x = fred_pcepi, row.names = FALSE) -->
 
-# plot inflation adjustment factors
-fred_pcepi %>% ggplot(aes(x = year_month, y = pcepi)) + geom_line() + scale_x_date(date_breaks = "1 year", date_labels = "%b %Y")
-ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_pcepi.png"), create.dir = TRUE)
-```
+<!-- # plot inflation adjustment factors -->
+<!-- fred_pcepi %>% ggplot(aes(x = year_month, y = pcepi)) + geom_line() + scale_x_date(date_breaks = "1 year", date_labels = "%b %Y") -->
+<!-- ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "inflation_pcepi.png"), create.dir = TRUE) -->
+<!-- ``` -->
 
-3. Clean up fish ticket data, and double check joined, cleaned, interpolated VMS + fish ticket data is clean
+3. Clean up fish ticket data
 
 ```{r cleaning}
-
-ticket_df_clean <- ticket_df %>% 
-  #filter(year == 2011) %>% # this line was used for troubleshooting many-to-many join
-  # remove missing vessel ID
-  filter(drvid != "UNKNOWN") %>%
-  filter(drvid != "") %>%
-  filter(drvid != "MISSING") %>%
-  # remove tickets landed in AK and transported to WC
-  #filter(COUNCIL_CODE != "N") %>%
-  # remove tribal fishing
-  #filter(FLEET_CODE != "TI") %>%
-  # remove aquaculture
-  #filter(PARTICIPATION_GROUP_CODE != "A") %>% 
-  #filter(is.na(FINAL_LENGTH)) %>% # most records do NOT have a vessel length! also true after filtering to DCRB trips only in transform chunk below. so rather tha using this is.na() step, remove duplicated rows for columns not derived from vessel reg database
-  distinct(
-     Rec_ID, FTID, pacfin_port_code, port_group_code, dealerID, drvid, agency_code, gear_code_all, date, month, year, year_mo, jdate, year_jdate, Week, year_Wk, TARGET_lbs, all_species_lbs, DCRB_lbs, DCRB_lbs_no_revenue, TARGET_rev, all_species_rev, DCRB_revenue, species_code_all,
-     .keep_all = TRUE
-  )
 
 ticket_df2_clean <- ticket_df2 %>% 
   #filter(year == 2011) %>% # this line was used for troubleshooting many-to-many join
@@ -235,11 +205,62 @@ ticket_df2_clean <- ticket_df2 %>%
   filter(FLEET_CODE != "TI") %>%
   # remove aquaculture
   filter(PARTICIPATION_GROUP_CODE != "A") %>%
-  mutate(date=as.Date(LANDING_DATE,"%d-%b-%y")) %>%
-  dplyr::select(FISH_TICKET_ID, FTID, date, VESSEL_NUM, AGENCY_CODE, CDFW_AREA_BLOCK) %>%
-  distinct()
+  dplyr::select(
+    FISH_TICKET_ID,
+    FTID,
+    PACFIN_PORT_CODE,
+    PACFIN_GROUP_PORT_CODE,
+    DEALER_ID,
+    VESSEL_NUM,
+    AGENCY_CODE,
+    CDFW_AREA_BLOCK,
+    GEAR_CODE,
+    GEAR_NAME,
+    PACFIN_GROUP_GEAR_CODE,
+    REMOVAL_TYPE_CODE,
+    REMOVAL_TYPE_NAME,
+    LANDING_DATE,
+    LANDING_MONTH,
+    LANDING_YEAR,
+    NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,
+    LANDED_WEIGHT_LBS,
+    EXVESSEL_REVENUE
+  ) %>%
+  # change some column names
+  set_colnames(c(
+    "Rec_ID",
+    "FTID",
+    "pacfin_port_code",
+    "port_group_code",
+    "dealerID",
+    "drvid",
+    "agency_code",
+    "CDFW_AREA_BLOCK",
+    "gear_code",
+    "gear_name",
+    "gear_group",
+    "removal_type_code",
+    "removal_type_name",
+    "date",
+    "month",
+    "year",
+    "NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE",
+    "LANDED_WEIGHT_LBS",
+    "EXVESSEL_REVENUE"
+  )) %>%
+  # Adjust gear group codes for some uncategorized gears
+  mutate(gear_group=case_when(
+    gear_group=='MSC' & gear_name %in% c('SPEAR','DIVING - ABALONE IRON','DIVING - RAKE/HOOKS SEA URCHINS','DIVING', 'SHELLFISH DIVER') ~ 'DVG',
+    gear_group=='MSC' & gear_name %in% c('UNKNOWN','UNKNOWN OR UNSPECIFIED GEAR') ~ 'USP',
+    gear_group=='MSC' & gear_name %in% c('AQUACULTURE FARM','OYSTER FARM','CLAM FARM') ~ 'FRM',
+      TRUE ~ gear_group
+  )) 
+  
+  # mutate(date=as.Date(LANDING_DATE,"%d-%b-%y")) %>%
+  
+  # dplyr::select(FISH_TICKET_ID, FTID, date, VESSEL_NUM, AGENCY_CODE, CDFW_AREA_BLOCK) %>%
+  # distinct()
 
-dim(ticket_df_clean)
 dim(ticket_df2_clean)
 
 # the code below was used for troubleshooting many-to-many join
@@ -255,20 +276,400 @@ dim(ticket_df2_clean)
 
 ```
 
-#### Transform data
+#### Process fish tickets
 
-Transform the joined, cleaned, interpolated VMS and fish ticket data:
+##### Concatenate gear / catch information
+
+Concatenate all species information for the fish ticket.
+
+```{r concatenate_species}
+# all.species <- ticket_df2_clean %>%
+#   group_by(Rec_ID, removal_type_name) %>%
+#   summarise(species_code_all = ifelse(length(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)) > 1, paste(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE), collapse="/"), as.character(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE))))
+all.species <- ticket_df2_clean %>%
+  group_by(Rec_ID) %>%
+  summarise(
+    species_code_all = ifelse(
+      length(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)) > 1,
+      paste(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE), collapse = "/"),
+      as.character(unique(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE))
+    )
+  ) %>%
+  ungroup()
+```
+
+Concatenate the gear information for the fish ticket
+
+```{r concatenate_gear}
+# gear.info <- ticket_df2_clean %>%
+#   group_by(Rec_ID, removal_type_name) %>%
+#   summarise(gear_name_all = ifelse(length(unique(gear_name)) > 1, paste(unique(gear_name), collapse="/"), as.character(unique(gear_name))),
+#             gear_code_all = ifelse(length(unique(gear_name)) > 1, paste(unique(gear_code), collapse="/"), as.character(unique(gear_code))))
+
+gear.info <- ticket_df2_clean %>%
+  group_by(Rec_ID) %>%
+  summarise(
+    gear_name_all = ifelse(
+      length(unique(gear_name)) > 1,
+      paste(unique(gear_name), collapse = "/"),
+      as.character(unique(gear_name))
+    ),
+    gear_code_all = ifelse(
+      length(unique(gear_name)) > 1,
+      paste(unique(gear_code), collapse = "/"),
+      as.character(unique(gear_code))
+    )
+  ) %>%
+  ungroup()
+```
+
+##### Find Target Species
+
+We need to define the target species for each landed ticket. We will do this by finding the species with the greatest landed revenue for each trip.
+
+Right now, each row of the data is a landing amount for a particular gear/ticket/species combo. We want to collapse these tickets in order to just have one row for each ticket, with an associated amount of landings for the TARGET species.
+
+```{r plot_recordsperticket}
+ticket_df2_clean %>%
+  count(Rec_ID) %>%
+  ggplot(aes(n, after_stat(count))) +
+  geom_histogram(fill = "seagreen", bins = 30) +
+  labs(x = "Number of records per ticket", "kernel density")
+```
+
+Calculate landed pounds and revenue by species for each fish ticket. Then use these data to define proportions of pounds and revenue by species/ticket, in order to designate a "target" species for each fishing trip. We denote the target species for both revenue and pounds landed. If a ticket does not have a definitive target (classified as a proportion of landed pounds or revenue that is >10 percent more than the second-place species), denote "NONE" for the target.
+
+```{r calc_targets}
+
+# global options set in main_process , so it only gets read in if you are running the whole pipeline. You'll see the other variables that we carry through from main process  in the keepers vector at line 49. These are all inherited from the first chunks of main process , before ~L140 https://github.com/noaa-nwfsc/VMS-pipeline/blob/main/code/pipeline_steps/main_process.Rmd
+
+# how much "more important" does your target need to be than the species with the second greatest catch? Expressed as a ratio.
+target_cutoff <- 1.1
+pacfin_weight_metric <- sym("LANDED_WEIGHT_LBS") #sym(pacfin_weight_metric)
+pacfin_revenue_metric <- sym("EXVESSEL_REVENUE") # sym(pacfin_revenue_metric)
+
+rawdat.w.targets <- ticket_df2_clean %>%
+  distinct() %>%
+
+  # NEW SEP 2024: REMOVE DEPENDENCY ON REMOVAL TYPE, i.e. JUST GROUP BY TICKET AND SPECIES
+  group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% 
+
+  # OLD: Group by ticket, removal type, and species
+  # group_by(Rec_ID,removal_type_code,removal_type_name,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
+
+  # calculate landed pounds and revenue by species
+  # NEW 09/2024- also calculate landed pounds with zero revenue (indicating personal or other use)
+  summarise(spp_lbs=sum({{pacfin_weight_metric}}),
+            spp_lbs_no_revenue=sum({{pacfin_weight_metric}}[{{pacfin_revenue_metric}}==0]),
+            spp_revenue=sum({{pacfin_revenue_metric}})) %>% 
+
+  # now, calculate total pounds per species across the entire ticket
+  # group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
+  # mutate(tot_lbs_spp=sum(spp_lbs),
+  #        tot_revenue_spp=sum(spp_revenue)) %>%
+  # ungroup() %>%
+
+  # using these species totals, calculate proportions of total catch belonging to each species
+  # by lbs landed and revenue
+  group_by(Rec_ID) %>%
+  mutate(prop_lbs_spp=spp_lbs/sum(spp_lbs),
+         prop_revenue_spp=spp_revenue/sum(spp_revenue)) %>% 
+
+  # mutate(prop_lbs_spp=tot_lbs_spp/sum(tot_lbs_spp),
+  #        prop_revenue_spp=tot_revenue_spp/sum(tot_revenue_spp)) %>%
+  #
+  # finally, assign a TARGET to the trip, defined as the species with the
+  # LARGEST proportion of revenue for that trip
+  # If a species landed is not >10% more than the second species, target is NONE
+  mutate(first_rev=dplyr::first(prop_revenue_spp,order_by = desc(prop_revenue_spp)),
+         second_rev=dplyr::nth(prop_revenue_spp,n=2,order_by = desc(prop_revenue_spp)),
+         first_rev_spp=dplyr::first(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,order_by= desc(prop_revenue_spp)),
+         second_rev_spp=dplyr::nth(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,n=2,order_by= desc(prop_revenue_spp)),
+         first_lbs=dplyr::first(prop_lbs_spp,order_by = desc(prop_lbs_spp)),
+         second_lbs=dplyr::nth(prop_lbs_spp,2,order_by = desc(prop_lbs_spp)),
+         first_lbs_spp=dplyr::first(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,order_by=desc(prop_lbs_spp)),
+         second_lbs_spp=dplyr::nth(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,n=2,order_by= desc(prop_lbs_spp))) %>% 
+
+  # check if first is >10% more than second, for revenue and landed lbs
+  # or, if first and second species are the same (i.e. for a ticket with both commercial and personal use catch)
+  # if so, assign that species as TARGET
+
+  mutate(TARGET_rev=ifelse(is.na(first_rev/second_rev)|(first_rev/second_rev)>=target_cutoff|first_rev_spp==second_rev_spp,first_rev_spp,"NONE"),
+         TARGET_lbs=ifelse(is.na(first_lbs/second_lbs)|(first_lbs/second_lbs)>=target_cutoff|first_lbs_spp==second_lbs_spp,first_lbs_spp,"NONE")) %>% 
+  ungroup() %>%
+  select(-(first_rev:second_lbs_spp))
+
+# Add back in dates, vessel IDs, etc.##Added FTID in this list
+# Tested a few different ways of doing this...
+# 1. select all columns of interest and match by c(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)
+#   recID_attributes <- ticket_df2_clean %>%
+#     select(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+# 2. select all columns and match by c(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE)
+#   recID_attributes2 <- ticket_df2_clean %>%
+#     distinct(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+# 3. select just the first set of attributes for each fish ticket/species combo
+#   recID_attributes3 <- ticket_df2_clean %>%
+#     group_by(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
+#     slice(1) %>%
+#     ungroup()%>%
+#     select(Rec_ID,FTID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,pacfin_port_code,port_group_code,dealerID,gear_code,gear_name,gear_group,drvid,agency_code,date,month,year)
+# As of 09/2024, we are moving forward with this last option
+recID_attributes <- ticket_df2_clean %>%
+  group_by(Rec_ID, NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>%
+  slice(1) %>%
+  ungroup() %>%
+  select(
+    Rec_ID,
+    FTID,
+    NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,
+    pacfin_port_code,
+    port_group_code,
+    dealerID,
+    CDFW_AREA_BLOCK,
+    gear_code,
+    gear_name,
+    gear_group,
+    drvid,
+    agency_code,
+    date,
+    month,
+    year
+  )
+
+# Test the join and count
+# rawdat.w.targets.test1 <- rawdat.w.targets %>%
+#   left_join(recID_attributes,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
+# rawdat.w.targets.test1 %>% count(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
+# for 2017 data- range is 1:40.
+
+# rawdat.w.targets.test2 <- rawdat.w.targets %>%
+#   left_join(recID_attributes2,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
+# rawdat.w.targets.test2 %>% count(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
+# for 2017 data- range is 1:2.
+
+# rawdat.w.targets.test3 <- rawdat.w.targets %>%
+#   left_join(recID_attributes3,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
+# rawdat.w.targets.test3 %>% count(Rec_ID,NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE) %>% pull(n) %>% range()
+# for 2017 data- all combinations are unique (i.e., only 1 row per fish ticket/spp combo)
+# As of 09/2024, we are moving forward with this last option
+rawdat.w.targets %<>%
+  left_join(recID_attributes,by=c("Rec_ID","NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE"))
+# for 2017 data- all combinations are unique (i.e., only 1 row per fish ticket/spp combo)
+
+
+# add all species and gear types for each ticket
+rawdat.w.targets %<>%
+  left_join(all.species,by = join_by(Rec_ID)) %>% 
+  left_join(gear.info,by = join_by(Rec_ID))
+
+## CAUTION: this subsection will subset all fish tix just to groundfish bottom trawl. Comment out for all other pipeline runs!!!
+# rawdat.w.targets %<>% # <- rawdat.targets %>%
+#   filter(gear_group == "TWL",
+#                 !gear_name %in% c("MIDWATER TRAWL", "BEAM TRAWL"),
+#                 !TARGET_lbs %in% c("CHLB", "PHLB", "UHLB", "BSRM", "PSHP", "OSRM", "USRM", "RPRW", "SPRW", "GPRW", "LOBS", "OCRB", "RCRB", "OMSK", "OURC", "USCU", "RURC", "SHAD", "SHPD",  "WBAS", "WCRK"),
+#                   !TARGET_rev %in% c("CHLB", "PHLB", "UHLB", "BSRM", "PSHP", "OSRM", "USRM", "RPRW", "SPRW", "GPRW", "LOBS", "OCRB", "RCRB", "OMSK", "OURC", "USCU", "RURC", "SHAD", "SHPD",  "WBAS", "WCRK"))
+```
+
+##### Calculate "Other" Category
+
+For each fish ticket, sum up an "Other" category based on the choice made in the beginning of the script (`gear_codes`)
+
+```{r calc other}
+gear_codes <- c("SHELLFISH POT (CRAB)","CRAB OR LOBSTER POT","CRAB POT","CRAB RING") # Dungeness crab
+
+dat_targets_other <- rawdat.w.targets %>%
+  group_by(Rec_ID) %>%
+  # denote whether a record is in the Other category
+  mutate(is_other = gear_name %in% gear_codes) %>%
+
+  # sum the other category for each ticket
+  mutate(
+    all_species_rev = sum(spp_revenue[is_other]),
+    all_species_lbs = sum(spp_lbs[is_other])
+  ) %>%
+  ungroup()
+```
+
+##### Add Species-Specific Columns
+
+Here we add some species-specific columns based on the choice made in the beginning of the script (`species_cols`).
+
+```{r}
+# Use pivoting to define pounds and revenue for each species of interest
+
+spp_codes <- c("DCRB") # Dungeness crab
+
+RecID_spp_cols <- dat_targets_other %>%
+  select(
+    Rec_ID,
+    NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE,
+    spp_lbs,
+    spp_lbs_no_revenue,
+    spp_revenue
+  ) %>%
+  filter(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE %in% spp_codes) %>%
+  distinct() %>%
+  pivot_longer(spp_lbs:spp_revenue) %>%
+  mutate(
+    type = case_when(
+      name == "spp_lbs" ~ 'lbs',
+      name == "spp_lbs_no_revenue" ~ 'lbs_no_revenue',
+      name == "spp_revenue" ~ 'revenue'
+    )
+  ) %>%
+  # mutate(type=ifelse(str_detect(name,'lbs'),'lbs','revenue')) %>%
+  select(-name) %>%
+  group_by(Rec_ID) %>%
+  # spread to create the columns
+  pivot_wider(
+    names_from = c(NOMINAL_TO_ACTUAL_PACFIN_SPECIES_CODE, type),
+    values_from = value,
+    values_fill = list(value = 0)
+  ) %>%
+  ungroup()
+
+# add back to main data
+dat_targets_other %<>%
+  left_join(RecID_spp_cols)
+```
+
+##### Format Dates
+
+Change existing date columns to date objects and format.
+
+```{r dates}
+dat_targets_other %<>%
+  mutate(date = as.Date(date, "%d-%b-%y")) %>%
+  mutate(
+    month = lubridate::month(date),
+    month = month.name[month],
+    year_mo = paste(year, lubridate::month(date), sep = "_"),
+    jdate = yday(date),
+    year_jdate = paste(year, jdate, sep = "_"),
+    Week = week(date),
+    year_Wk = ifelse(
+      Week < 10,
+      paste0(year, "_0", Week),
+      paste0(year, "_", Week)
+    )
+  )
+```
+
+##### Duplicated Dates
+
+We add two columns that denote how many tickets were submitted by a vessel in a given day. `n_tix` denotes the total number of tickets.
+
+```{r}
+dat_out <- dat_targets_other %>%
+
+  # boolean indicating whether a record is for personal use
+  # REMOVED 09/2024
+  # mutate(is_personal=removal_type_name=="PERSONAL USE") %>%
+
+  # for each vessel and date
+  group_by(drvid,date) %>% 
+
+  # calculate quantities of interest
+  # mutate(n_tix=n_distinct(Rec_ID),
+  #        n_pers=n_distinct(Rec_ID[is_personal]),
+  #        n_nonpers_tix=n_tix-n_pers) %>%
+  # select(-n_pers,-is_personal) %>%
+  # ungroup()
+  mutate(n_tix=n_distinct(Rec_ID)) %>% 
+  # select(-n_pers,-is_personal) %>%
+  ungroup()
+```
+
+##### Reorder Output
+
+Clean up the output by reording the columns of interest
+
+```{r reorder_dataframe}
+#Added FTID to select list
+dat_out %<>%
+  select(-(spp_lbs:prop_revenue_spp), -is_other) %>%
+  select(
+    Rec_ID,
+    FTID,
+    pacfin_port_code,
+    port_group_code,
+    dealerID,
+    drvid,
+    agency_code,
+    CDFW_AREA_BLOCK,
+    gear_code_all,
+    date,
+    month,
+    year,
+    year_mo,
+    jdate,
+    year_jdate,
+    Week,
+    year_Wk,
+    contains("_lbs"),
+    contains("_rev"),
+    species_code_all,
+    all_species_lbs,
+    all_species_rev
+  ) %>%
+  # the last distinct() removes records for which we no longer care about individual sub-trip species catches (we only care about catches of the focal species, plus total catch and TARGETs)
+  distinct()
+```
+
+
+##### Save
+
+Save the data!
+
+
+```{r save}
+
+
+write_rds(dat_out, here('Confidential', 'processed_data',
+                        'fish_tickets',
+                        paste0(
+                          'fishtix_withFTID_DCRB_',
+                          paste0(load_years[1],'-',load_years[length(load_years)]),
+                          
+                          '_',Sys.Date(),'.rds')
+                           )
+)
+
+
+# create output subdirectory, if doesn't yet exist
+# output_subdir <- here(
+#   'Confidential',
+#   'processed_data',
+#   'fish_tickets'
+# )
+# if (!dir.exists(output_subdir)) dir.create(output_subdir)
+# 
+# # write output
+# dat_out %>%
+#   write_rds(here::here(
+#     'Confidential',
+#     'processed_data',
+#     'fish_tickets',
+#     paste0("fishtix_withFTID_", process_year, ".rds", collapse = "")
+#   ))
+
+# for(y in unique(rawdat$LANDING_YEAR)){
+#   year.final.processdat <- filter(final.processdat, year == y )
+#   write_csv(file = paste0(processdir, "fish_tickets ", y, " processed_multispecies03.csv"), x = year.final.processdat, row.names = FALSE)
+#   cat("wrote out file for ", y, "\n")
+# }
+```
+
+# 07-16-2025 PICK UP HERE
+
+#### Transform fish ticket data
+
+Transform the fish ticket data:
 
 1. Filter for dungeness crab related records.
 2. Add temporal columns.
 3. Adjust revenue for inflation with data from FRED.
-4. add CDFW_AREA_BLOCK and permit tier info (not yet included 06-10-2025)
-
-From Brooke: find the field in the raw fish tickets and join there instead
-
-Longer version - Interesting, yeah that's silly I wasn't thinking about that when you asked for feedback on the joins, but that's probably correct. Many columns are dropped in step 1 when the fish tickets are cleaned, and that drop propagates through the rest of the pipeline. The fastest workaround is to join the raw fish tickets with the fish ticket ID and get it from there.
-I'd faced the same issue with the sablefish VMS pipeline and had incorporated the FOS_GROUNDFISH_SECTOR_CODE (which identifies CS/LE/OA) to be kept in all the steps in the pipeline, but it was more work and not that helpful, I ended up going back to the raw fish tickets anyway. It would be faster to not re-run the pipeline and just do an additional join in your analysis.
-
+4. add CDFW_AREA_BLOCK and permit tier info
 
 Some commonly used acronyms for variable naming in the code include:
 
@@ -293,7 +694,7 @@ winter_months <- c("November", "December", "January", "February", "March") # det
 
 ```{r transform-ticket-data}
 # apply same filters as VMS dataframe
-dcrb_ticket_df <- ticket_df_clean %>%
+dcrb_ticket_df <- ticket_df2_clean %>%
   # add temporal columns
   mutate(
     year_numeric = year(date),
@@ -434,7 +835,7 @@ Pre-requisite: Run the pipeline steps 1-5 for calendar years 2011-2023.
 
 The code below borrows heavily from Brooke Hawkins' notebook: 03_blh_hindcasts-of-california-dungeness-crab-fishing-activity.Rmd
 
-*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 11-16, but you still need the chunk load_10arcminute_grid
+*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 11, 13-17, but you still need chunk 12, load_10arcminute_grid
 
 ```{r load vms_tix}
 
@@ -848,13 +1249,13 @@ Use Owen's code as a basis. https://github.com/noaa-nwfsc/VMS-pipeline/blob/7fac
 #offshore_blk_IDs <- 1032:1042
 
 dcrb_df_block10 <- dcrb_df %>%
-  mutate(
-    offshore_reported = case_when(
-      CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
-      !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
-      #.default = 9999
-    )
-  ) %>%
+  # mutate(
+  #   offshore_reported = case_when(
+  #     CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
+  #     !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
+  #     #.default = 9999
+  #   )
+  # ) %>%
   # filter(offshore_reported == 0) %>%
   filter(BLOCK10_ID < 1000)
 
@@ -913,15 +1314,15 @@ These are very ugly.
 
 ```{r vms_rec_map}
 
-x <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs)
-y <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs)
+trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs)
+pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs)
 
-x %>% st_join(y) %>%
+trips_allyrs %>% st_join(y) %>%
   ggplot()+
   geom_point(aes(x=quant_trips, y=quant_pings))+
   theme(panel.background=element_rect(fill='white'))
 
-x %>% st_join(y) %>%
+pings_allyrs %>% st_join(y) %>%
   ggplot()+
   geom_point(aes(x=mean_allyrs_trips, y=mean_allyrs_pings))+
   theme(panel.background=element_rect(fill='white'))
@@ -930,11 +1331,11 @@ x %>% st_join(y) %>%
 
 ### Maps
 
-Get set up.
+#### Get set up to make maps.
 
-We can filter this large 5km grid to only encompass the cells with some crab fishing effort. Do this with a filter-buffer-crop workflow (could also use, e.g., a distance from shore or depth cutoff):
+We can filter the large 10-arc minute grid to only encompass the cells with some crab fishing effort. Do this with a filter-buffer-crop workflow (could also use, e.g., a distance from shore or depth cutoff):
 
-```{r}
+```{r dcrb_cells}
 # filter the overall grid using grid cells with DCRB effort in any month/year
 cells_we_need <- unique(dcrb_df$BLOCK10_ID)
 grid10_filt <- grd %>% filter(BLOCK10_ID %in% cells_we_need)
@@ -956,7 +1357,7 @@ ggplot()+
 
 We make a spatially rotated grid, for better visualization when mapping the whole coastline. We use custom projections for this, which B. Feist designed. Based on that work, here we provide generic code for any given amount of rotation.
 
-```{r}
+```{r rotate_map}
 # this is the first wkt file ('well-known text') that B. Feist created, containing the info on the custom spatial projection
 rotation_wkt <- read_file(here('spatial_data','map_rotation','Rectified_Skew_Orthomorphic_center_30deg_rotation.wkt'))
 
@@ -970,81 +1371,131 @@ crs_rotated <- function(deg){
 rot15 <- crs_rotated(15) %>% st_crs()
 
 # use this crs to reprojec the 5k grid
-grid5k_rot15 <- grid5k_final %>% st_transform(rot15)
-bbox_rot15 <- st_bbox(grid5k_rot15) +c(0,0,-20000,0)
+grid10_rot15 <- grid10_final %>% st_transform(rot15)
+bbox_rot15 <- st_bbox(grid10_rot15) +c(0,0,-20000,0)
+
+# reproject for ca only
+grid10_rot15_ca <- grid10_final %>% filter(State == 'CA') %>% st_transform(rot15)
+bbox_rot15_ca <- st_bbox(grid10_rot15 %>% filter(State == 'CA')) +c(0,0,-20000,0)
 
 # map
 ggplot()+
-  geom_sf(data=grid5k_rot15,aes(fill=NGDC_med_m),col=NA)+
+  geom_sf(data=grid10_rot15, aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='#dacf80',col='gray80')+
   xlim(bbox_rot15[1],bbox_rot15[3])+ylim(bbox_rot15[2],bbox_rot15[4])+
   scale_fill_viridis(option="turbo",direction=-1)
-```
 
-We also need to define bounding boxes for regional subsets of the data, to "zoom in" on particular regions of interest. For now, our regional subsets will be Washington, Oregon, Northern California, and Central California.
-
-```{r}
-grid5k_final <- grid5k_final %>% 
-  mutate(map_zone=na_if(STATE,"CA")) %>% 
-  mutate(map_zone=coalesce(RAMP_area,map_zone)) %>% 
-  filter(map_zone!="Southern") %>% 
-  mutate(map_zone=ifelse(map_zone=="San Francisco","Central",map_zone)) %>% 
-  mutate(map_zone=factor(map_zone,levels=c("WA","OR","Northern","Central"))) %>% 
-  # remove columns we don't need from the grid df
-  dplyr::select(GRID5KM_ID,AREA,WM_NGDC_m,NGDC_med_m,STATE,RAMP_area,map_zone,centro_lat,centro_lon)
-  
+# map ca only
 ggplot()+
-  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(15))),aes(fill=factor(map_zone)),col=NA)+
-  xlim(bbox_rot15[1],bbox_rot15[3])+ylim(bbox_rot15[2],bbox_rot15[4])+
+  geom_sf(data=grid10_rot15_ca, aes(fill=NGDC_med_m),col=NA)+
   geom_sf(data=coast,fill='#dacf80',col='gray80')+
-  labs(fill="Region")
+  xlim(bbox_rot15_ca[1],bbox_rot15_ca[3])+ylim(bbox_rot15_ca[2],bbox_rot15_ca[4])+
+  scale_fill_viridis(option="turbo",direction=-1)
+
 ```
 
-```{r,fig.width=12}
-# Define the bounding boxes for regional subsets
-bboxes <- map(levels(grid5k_final$map_zone),function(z){
-  grid5k_final %>% filter(map_zone==z) %>% st_bbox()
-})
-names(bboxes)=levels(grid5k_final$map_zone)
+start adding mapping code, see line 808 of Owen's make_map_coastwide()
 
-# let's rotate the central California region 30 degrees and WA region 10 degrees
-bboxes$Central <- grid5k_final %>% st_transform(st_crs(crs_rotated(30))) %>% filter(map_zone=='Central') %>% st_bbox()
-bboxes$WA <- grid5k_final %>% st_transform(st_crs(crs_rotated(10))) %>% filter(map_zone=='WA') %>% st_bbox()
+```{r make_map_function}
 
-# Washington
-wa_map <- ggplot()+
-  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(10))),aes(fill=NGDC_med_m),col=NA)+
-  geom_sf(data=coast,fill='#dacf80',col='gray80')+
-  xlim(bboxes$WA[1],bboxes$WA[3])+ylim(bboxes$WA[2],bboxes$WA[4])+
-  scale_fill_viridis(option="turbo",guide='none')
-  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+make_map_coastwide <- function(df, column,scl_ord=1,...) {
+  
+  dat2 <- df %>% st_transform(rot15)
+  
+  #is the value a factor (i.e., categorical?)
+  is_factor <- df %>% pull( {{column}} ) %>% is.factor()
+  
+  # coastwide map
+  if(is_factor){
+    ggplot() + 
+      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
+      geom_sf(data=coast,fill='#dacf80',col='gray80')+
+      xlim(bbox_rot15[1],bbox_rot15[3])+
+      ylim(bbox_rot15[2],bbox_rot15[4])+
+      scale_fill_viridis_d(na.value='#abd0d6',option='turbo',direction=scl_ord,...)+
+      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+  } else{
+    ggplot() + 
+      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
+      geom_sf(data=coast,fill='#dacf80',col='gray80')+
+      xlim(bbox_rot15[1],bbox_rot15[3])+
+      ylim(bbox_rot15[2],bbox_rot15[4])+
+      scale_fill_viridis(option='turbo',na.value='#abd0d6',direction=scl_ord,...)+
+      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+  }
+  
+}
 
-# Oregon
-or_map <- ggplot()+
-  geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
-  geom_sf(data=coast,fill='#dacf80',col='gray80')+
-  xlim(bboxes$OR[1],bboxes$OR[3])+ylim(bboxes$OR[2],bboxes$OR[4])+
-  scale_fill_viridis(option="turbo",guide='none')
-  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+make_map_ca <- function(df, column,scl_ord=1,...) {
+  
+  dat2 <- df %>% filter(State == 'CA') %>% st_transform(rot15)
+  
+  #is the value a factor (i.e., categorical?)
+  is_factor <- df %>% pull( {{column}} ) %>% is.factor()
+  
+  # ca map
+  if(is_factor){
+    ggplot() + 
+      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
+      geom_sf(data=coast,fill='#dacf80',col='gray80')+
+      xlim(bbox_rot15_ca[1],bbox_rot15_ca[3])+
+      ylim(bbox_rot15_ca[2],bbox_rot15_ca[4])+
+      scale_fill_viridis_d(na.value='#abd0d6',option='turbo',direction=scl_ord,...)+
+      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+  } else{
+    ggplot() + 
+      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
+      geom_sf(data=coast,fill='#dacf80',col='gray80')+
+      xlim(bbox_rot15_ca[1],bbox_rot15_ca[3])+
+      ylim(bbox_rot15_ca[2],bbox_rot15_ca[4])+
+      scale_fill_viridis(option='turbo',na.value='#abd0d6',direction=scl_ord,...)+
+      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+  }
+  
+}
 
-# N. Cal
-Northern_map <- ggplot()+
-  geom_sf(data=grid5k_final,aes(fill=NGDC_med_m),col=NA)+
-  geom_sf(data=coast,fill='#dacf80',col='gray80')+
-  xlim(bboxes$Northern[1],bboxes$Northern[3])+ylim(bboxes$Northern[2],bboxes$Northern[4])+
-  scale_fill_viridis(option="turbo",guide='none')
-  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
+# just plotting NGDC_med_m (depth) as the fill to make sure everything is oriented correctly
+make_map_coastwide(grid10_final, NGDC_med_m)+labs(fill="dept")
+make_map_ca(grid10_final, NGDC_med_m)+labs(fill="dept")
+# make_map_coastwide(grid5k_final, centro_lat,scl_ord = -1)+labs(fill="latitude")
 
-# Cen. Cal.
-Central_map <- ggplot()+
-  geom_sf(data=grid5k_final %>% st_transform(st_crs(crs_rotated(30))),aes(fill=NGDC_med_m),col=NA)+
-  geom_sf(data=coast,fill='#dacf80',col='gray80')+
-  xlim(bboxes$Central[1],bboxes$Central[3])+ylim(bboxes$Central[2],bboxes$Central[4])+
-  scale_fill_viridis(option="turbo")
-  # theme(plot.margin = unit(c(0.3, 0, 0, 0), "cm"))
-
-# now we can map them togetrher
-plot_grid(wa_map,or_map,Northern_map,Central_map,nrow=1)
 ```
 
-07-11-2025. now start adding mapping code, see line 808 of Owen's make_map_coastwide()
+#### Now make maps
+
+Subset to CA only
+
+```{r ca-only}
+
+trips_allyrs_ca <- trips_allyrs %>%
+  filter(State == 'CA')
+
+pings_allyrs_ca <- pings_allyrs %>%
+  filter(State == 'CA')
+
+```
+
+1. 60-minute ping interval years
+
+```{r 60_min_maps}
+
+make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_trips)+labs(fill="mean number of trips", title = 'CDFW small block-reported fishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+ggsave(here("Confidential", "hindcast_output", "figures", "60-minute ping intervals reported fishing locations.png"))
+
+
+make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_pings)+labs(fill="mean number of pings", title = 'VMS-recorded fishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+ggsave(here("Confidential", "hindcast_output", "figures", "60-minute ping intervals vms-recorded fishing locations.png"))
+
+```
+
+2. 15-minute ping interval years
+
+```{r 15_min_maps}
+
+make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_trips)+labs(fill="mean number of trips", title = 'CDFW small block-reported fishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
+ggsave(here("Confidential", "hindcast_output", "figures", "15-minute ping intervals reported fishing locations.png"))
+
+make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_pings)+labs(fill="mean number of pings", title = 'VMS-recorded fishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
+ggsave(here("Confidential", "hindcast_output", "figures", "15-minute ping intervals vms-recorded fishing locations.png"))
+
+```
