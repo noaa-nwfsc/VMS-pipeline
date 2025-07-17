@@ -93,11 +93,11 @@ TrapTierNumberKey.csv
 
 1. Load the fish ticket data for specified years, which will be used to grab self-reported fishing locations.
 
-*** Note you can skip to the chunk load_dcrb_tix and avoid running chunks 3-8 
+*** Note you can skip to the chunk load_dcrb_tix and avoid running chunks 3-18 
 
-These data can be used to summarize the number/% of tix and number/% of vessels by time period for which CDFW offshore blocks are reported, and examine for structural bias (vessel size, time of year, region, etc)
+These data can be joined to VMS data
 
-The code below borrows heavily from Brooke Hawkins' notebook "10_blh_dungeness-crab-time-series.Rmd".
+The code below borrows heavily from Brooke Hawkins' notebook "10_blh_dungeness-crab-time-series.Rmd" and the 01_process_fish_tickets.Rmd
 
 
 ```{r load-data}
@@ -660,7 +660,26 @@ write_rds(dat_out, here('Confidential', 'processed_data',
 # }
 ```
 
-# 07-16-2025 PICK UP HERE
+## shortcut load fish tix
+
+```{r load_alltix}
+
+load_years <- 2011:2023
+
+dat_out <- read_rds(here(
+  'Confidential', 
+  'processed_data', 
+  'fish_tickets',
+  paste0(
+    'fishtix_withFTID_DCRB_',
+    paste0(load_years[1],'-',load_years[length(load_years)]),
+    '_2025-07-16.rds')
+  )
+)
+
+
+
+```
 
 #### Transform fish ticket data
 
@@ -694,7 +713,7 @@ winter_months <- c("November", "December", "January", "February", "March") # det
 
 ```{r transform-ticket-data}
 # apply same filters as VMS dataframe
-dcrb_ticket_df <- ticket_df2_clean %>%
+dcrb_ticket_df <- dat_out %>%
   # add temporal columns
   mutate(
     year_numeric = year(date),
@@ -712,8 +731,8 @@ dcrb_ticket_df <- ticket_df2_clean %>%
   # apply filters
   filter(TARGET_rev == target_rev | TARGET_lbs == target_lbs) %>%
   # join inflation adjustment factor and adjust revenue
-  left_join(fred_pcepi, by = join_by(year_month_date == year_month)) %>%
-  mutate(DCRB_revenue_afi = DCRB_revenue * 100 / pcepi) %>%
+  # left_join(fred_pcepi, by = join_by(year_month_date == year_month)) %>%
+  # mutate(DCRB_revenue_afi = DCRB_revenue * 100 / pcepi) %>%
   # select columns
   dplyr::select(
     # identifiers
@@ -723,6 +742,7 @@ dcrb_ticket_df <- ticket_df2_clean %>%
     pacfin_port_code, # port ID
     port_group_code,  # port group ID
     agency_code,      # agency code
+    CDFW_AREA_BLOCK,
     # temporal fields
     date,
     year_month_date,
@@ -733,22 +753,15 @@ dcrb_ticket_df <- ticket_df2_clean %>%
     month_numeric,
     week_numeric,
     day_numeric,
-    # vessel length
-    FINAL_LENGTH,
-    # inflation adjustment index
-    pcepi,
+    # # vessel length
+    # FINAL_LENGTH,
+    # # inflation adjustment index
+    # pcepi,
     # dungeness crab fields
     DCRB_lbs,
-    DCRB_revenue,
-    DCRB_revenue_afi
-  ) %>%
-  # # de-duplicate records
-  # distinct() %>%
-  # add in CDFW block info 'CDFW_AREA_BLOCK' 
-  left_join(
-    ticket_df2_clean, 
-    by = join_by(FTID == FTID, date == date, drvid == VESSEL_NUM, agency_code == AGENCY_CODE) # cannot join on Rec_ID == FISH_TICKET_ID if we wish to match to CDFW_AREA_BLOCK. one challenge is that there are 7 instances (out of 303183 crab trips) of duplicated FTID. JS ignoring for now
-    )
+    DCRB_revenue#,
+    #DCRB_revenue_afi
+  ) 
 
 # jameal had to troubleshoot the CDFW_AREA_BLOCK join for a bit because of many to many relationship problems during the join. error messages and some troubleshooting comments below
  # add in CDFW block info 'CDFW_AREA_BLOCK' 06-16-2025. tried this -- many to many problem! leads to ~2,0000 extra rows. tried joining on Rec_ID == FISH_TICKET_ID, date == LANDING_YEAR, problem remains: Error in `left_join()`: ! Can't join `x$date` with `y$LANDING_YEAR` due to incompatible types. ℹ `x$date` is a <date>. ℹ `y$LANDING_YEAR` is a <double>. Backtrace:
@@ -761,13 +774,13 @@ colnames(dcrb_ticket_df)
 write_rds(dcrb_ticket_df, here('Confidential', 'processed_data', 'fish_tickets',
                            paste0('fish tickets_DCRB_',
                                   paste0(load_years[1],'-',load_years[length(load_years)]),
-                                  '.rds')
+                                  '_',Sys.Date(),'.rds')
                            )
 )
 
 ```
 
-```{r}
+```{r count_trips}
 # count total records, trips and years
 n_records <- nrow(dcrb_ticket_df)
 n_trips   <- n_distinct(dcrb_ticket_df$Rec_ID)
@@ -784,7 +797,7 @@ dcrb_ticket_df <- read_rds(
   here('Confidential', 'processed_data', 'fish_tickets',
        paste0('fish tickets_DCRB_',
               paste0(load_years[1],'-',load_years[length(load_years)]),
-              '.rds')
+              '_2025-07-17.rds')
        )
 )
 
@@ -793,37 +806,37 @@ dcrb_ticket_df <- read_rds(
 
 The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` distinct trips (fish tickets), across `r n_years` years.
 
-There are more records than trips due to the vessel registration processing code including the lookback window data in step 2 of the pipeline. I looked at some examples of duplicates, and they occur for tickets within the lookback window - for example, a ticket landed on Dec. 28, 2014 is processed in the 2014 and 2015 runs of the pipeline for vessel registration. I suspect this could be fixed in the pipeline itself, but I'm leaving it be for now.
+<!-- There are more records than trips due to the vessel registration processing code including the lookback window data in step 2 of the pipeline. I looked at some examples of duplicates, and they occur for tickets within the lookback window - for example, a ticket landed on Dec. 28, 2014 is processed in the 2014 and 2015 runs of the pipeline for vessel registration. I suspect this could be fixed in the pipeline itself, but I'm leaving it be for now. -->
 
-This is fixed here in the plotting code by removing duplicates when one length is NA, and I didn't see any duplication within the VMS data.
+<!-- This is fixed here in the plotting code by removing duplicates when one length is NA, and I didn't see any duplication within the VMS data. -->
 
-```{r}
-# identify which records need to be de-duplicated, by finding RecIDs with 2 records, 1 of which has NA length
-qa_df <- dcrb_ticket_df %>% 
-  group_by(Rec_ID) %>%
-  summarize(n = n(),
-            na_length = sum(is.na(FINAL_LENGTH))) %>%
-  mutate(remove_na = (na_length == 1) & (n == 2)) %>%
-  arrange(desc(n))
+<!-- ```{r} -->
+<!-- # identify which records need to be de-duplicated, by finding RecIDs with 2 records, 1 of which has NA length -->
+<!-- qa_df <- dcrb_ticket_df %>%  -->
+<!--   group_by(Rec_ID) %>% -->
+<!--   summarize(n = n(), -->
+<!--             na_length = sum(is.na(FINAL_LENGTH))) %>% -->
+<!--   mutate(remove_na = (na_length == 1) & (n == 2)) %>% -->
+<!--   arrange(desc(n)) -->
 
-# take a peek at columns in the resulting dataframe
-colnames(qa_df)
+<!-- # take a peek at columns in the resulting dataframe -->
+<!-- colnames(qa_df) -->
 
-# how many records need de-duplication (have 2 records, 1 of which has NA length)?
-qa_df %>% group_by(n, na_length, remove_na) %>% summarise(n_records = n()) %>% arrange(desc(n_records)) # 1229 records
+<!-- # how many records need de-duplication (have 2 records, 1 of which has NA length)? -->
+<!-- qa_df %>% group_by(n, na_length, remove_na) %>% summarise(n_records = n()) %>% arrange(desc(n_records)) # 1229 records -->
 
-# join back to dcrb_ticket_df
-qa_dcrb_ticket_df <- dcrb_ticket_df %>%
-  left_join(qa_df, by = join_by(Rec_ID)) %>%
-  filter(!(remove_na & is.na(FINAL_LENGTH)))
+<!-- # join back to dcrb_ticket_df -->
+<!-- qa_dcrb_ticket_df <- dcrb_ticket_df %>% -->
+<!--   left_join(qa_df, by = join_by(Rec_ID)) %>% -->
+<!--   filter(!(remove_na & is.na(FINAL_LENGTH))) -->
 
-# count total records, trips and years
-n_qa_records <- nrow(qa_dcrb_ticket_df)
-n_qa_trips   <- n_distinct(qa_dcrb_ticket_df$Rec_ID)
-n_qa_years   <- n_distinct(qa_dcrb_ticket_df$year_numeric)
-```
+<!-- # count total records, trips and years -->
+<!-- n_qa_records <- nrow(qa_dcrb_ticket_df) -->
+<!-- n_qa_trips   <- n_distinct(qa_dcrb_ticket_df$Rec_ID) -->
+<!-- n_qa_years   <- n_distinct(qa_dcrb_ticket_df$year_numeric) -->
+<!-- ``` -->
 
-The QA'ed Dungeness crab fish ticket dataframe has `r n_qa_records` records (fish tickets), `r n_qa_trips` distinct trips (fish tickets), across `r n_qa_years` years. Now there are no duplicate fish tickets.
+<!-- The QA'ed Dungeness crab fish ticket dataframe has `r n_qa_records` records (fish tickets), `r n_qa_trips` distinct trips (fish tickets), across `r n_qa_years` years. Now there are no duplicate fish tickets. -->
 
 ### Fish tix matched to VMS data
 
@@ -835,7 +848,7 @@ Pre-requisite: Run the pipeline steps 1-5 for calendar years 2011-2023.
 
 The code below borrows heavily from Brooke Hawkins' notebook: 03_blh_hindcasts-of-california-dungeness-crab-fishing-activity.Rmd
 
-*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 11, 13-17, but you still need chunk 12, load_10arcminute_grid
+*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 20, 22-26, but you still need chunk 21, load_10arcminute_grid
 
 ```{r load vms_tix}
 
@@ -912,7 +925,7 @@ fredr_set_key('ea19d3d447eb4dc773db00c5a2e61f22')
 # download the quarterly inflation adjustments from Fred from 1985 to present
 fred_gdpdefl <- fredr(
     series_id = "GDPDEF", 
-    observation_start = as.Date(paste0(min(load_years), "-01-01"))
+    observation_start = as.Date(paste0(min(load_years)-1, "-01-01"))
   )
 
 # generate the mean annual deflators based on the quarterly values
@@ -1020,16 +1033,16 @@ dcrb_df <- vms_grid10_df %>%
     DCRB_revenue_afi
   ) %>%
    left_join(
-    ticket_df2_clean, 
-    by = join_by(FTID == FTID)
-   )
+    dcrb_ticket_df %>% dplyr::select(FTID, CDFW_AREA_BLOCK)
+    )
 
 glimpse(dcrb_df)
 
+dim(distinct(dcrb_df))
+
 #length(which(is.na(dcrb_df$CDFW_AREA_BLOCK))) # 
 
-# PROBLEM 06-26-2025. with 2011-2023 data, Warning: Detected an unexpected many-to-many relationship between `x` and `y`. but there was no such problem with 2022 data only. argh! 
-# to evaluate extent of problem make a df called tmp using lines above except 604-608 (the join to ticket_df2_clean). then dim(tmp) vs dim(dcrb_df)
+# PROBLEM 07-17-2025. with 2011-2023 data, Warning: Detected an unexpected many-to-many relationship between `x` and `y`. but there was no such problem with 2012 or 2018 data only. argh! 
 
 ```
 
@@ -1038,14 +1051,15 @@ glimpse(dcrb_df)
 ```{r write dcrb_vms_grd}
 
 # write rds for non-spatial version
-write_rds(dcrb_df, here('Confidential', 
-                              'processed_data', 
-                              'vms_fish_tickets',
-                              paste0(
-                               'dcrb_vms_w_grd_10_arcmin_',
-                               paste0(load_years[1],'-',load_years[length(load_years)]),
-                               '.rds'
-                              )
+write_rds(dcrb_df, here(
+  'Confidential', 
+  'processed_data', 
+  'vms_fish_tickets',
+  paste0(
+    'dcrb_vms_w_grd_10_arcmin_',
+    paste0(load_years[1],'-',load_years[length(load_years)]),
+    '_',Sys.Date(),'.rds'
+    )
 )
 )
 
@@ -1068,7 +1082,7 @@ dcrb_df <- read_rds(here(
   paste0(
     'dcrb_vms_w_grd_10_arcmin_',
     paste0(load_years[1],'-',load_years[length(load_years)]),
-    '.rds'
+    '_2025-07-17.rds'
     )
   )
 )
@@ -1259,7 +1273,7 @@ dcrb_df_block10 <- dcrb_df %>%
   # filter(offshore_reported == 0) %>%
   filter(BLOCK10_ID < 1000)
 
-# function to aggregate. 07-10-2025 need to update lines 847-868 to focus on block10 and count up total tix/vms records per block10. make sure not to compare post 2020 high ping rate to pre 2020
+# function to aggregate. make sure not to compare post 2020 high ping rate to pre 2020
 summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
   
   # first, establish the attribute to be summarized, and select it from the dataset
@@ -1317,12 +1331,12 @@ These are very ugly.
 trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs)
 pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs)
 
-trips_allyrs %>% st_join(y) %>%
+trips_allyrs %>% st_join(pings_allyrs) %>%
   ggplot()+
   geom_point(aes(x=quant_trips, y=quant_pings))+
   theme(panel.background=element_rect(fill='white'))
 
-pings_allyrs %>% st_join(y) %>%
+pings_allyrs %>% st_join(trips_allyrs) %>%
   ggplot()+
   geom_point(aes(x=mean_allyrs_trips, y=mean_allyrs_pings))+
   theme(panel.background=element_rect(fill='white'))
