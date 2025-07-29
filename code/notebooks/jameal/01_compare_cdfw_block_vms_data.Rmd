@@ -660,7 +660,7 @@ write_rds(dat_out, here('Confidential', 'processed_data',
 # }
 ```
 
-## shortcut load fish tix
+### Shortcut load fish tix
 
 ```{r load_alltix}
 
@@ -967,7 +967,7 @@ winter_months <- c("November", "December", "January", "February", "March") # det
 dcrb_df <- vms_grid10_df %>%
   # use distinct to avoid duplicates caused by vessel length matching step (do not keep rows that are the same except for "FINAL_LENGTH")
   distinct(
-    VMS_RECNO, Rec_ID, FTID, pacfin_port_code, port_group_code, dealerID, drvid, agency_code, date, TARGET_lbs, all_species_lbs, DCRB_lbs, DCRB_lbs_no_revenue, TARGET_rev, all_species_rev, DCRB_revenue, species_code_all, WM_NGDC_m, X_COORD, Y_COORD,  westcoastdate_notime, avg_speed_recalc, BLOCK10_ID, feature_id, EEZ, State, Salish_Sea, Area_m2, BLOCK10_n, Adj_cell_1, Adj_cell_2, Adj_cell_3, Adj_Cell_4, Adj_Cell_5, Adj_Cell_6, Adj_Cell_7, Adj_Cell_8,
+    VMS_RECNO, Rec_ID, FTID, pacfin_port_code, port_group_code, dealerID, drvid, agency_code, date, TARGET_lbs, all_species_lbs, DCRB_lbs, DCRB_lbs_no_revenue, TARGET_rev, all_species_rev, DCRB_revenue, species_code_all, X_COORD, Y_COORD,  westcoastdate_notime, avg_speed_recalc, BLOCK10_ID,
      .keep_all = TRUE
   ) %>%
   # add temporal columns
@@ -990,7 +990,7 @@ dcrb_df <- vms_grid10_df %>%
   filter(avg_speed_recalc <= max_speed & avg_speed_recalc >= min_speed) %>% 
   # join inflation adjustment factor and adjust revenue
   left_join(gdp_defl, by = join_by(year == year)) %>%
-  mutate(DCRB_revenue_afi = DCRB_revenue * 100 / inflation_adjustment_factor) %>%
+  mutate(DCRB_revenue_afi = DCRB_revenue * 100 / inflation_adjustment_factor) %>% #at this point, 14,418,569 rows have been reduced to 1,077,651 rows
   # select columns
   # drop "gear_code_all", "end", "prev_ticket_dttm", "lookback_dttm", "begin", "trip_dur", "UTCDATETIME", "VESSEL_NAME", "AVG_SPEED", "AVG_COURSE", "DECLARATION_CODE", "westcoastdate",  "has_vms", "multispecies", "segment_dur",      "in_port", "Shoreline", "row_index", "col_index" 
   dplyr::select(
@@ -1033,7 +1033,7 @@ dcrb_df <- vms_grid10_df %>%
     DCRB_revenue_afi
   ) %>%
    left_join(
-    dcrb_ticket_df %>% dplyr::select(FTID, CDFW_AREA_BLOCK)
+    dcrb_ticket_df %>% dplyr::select(year=year_numeric, FTID, CDFW_AREA_BLOCK)
     )
 
 glimpse(dcrb_df)
@@ -1042,7 +1042,6 @@ dim(distinct(dcrb_df))
 
 #length(which(is.na(dcrb_df$CDFW_AREA_BLOCK))) # 
 
-# PROBLEM 07-17-2025. with 2011-2023 data, Warning: Detected an unexpected many-to-many relationship between `x` and `y`. but there was no such problem with 2012 or 2018 data only. argh! 
 
 ```
 
@@ -1082,7 +1081,7 @@ dcrb_df <- read_rds(here(
   paste0(
     'dcrb_vms_w_grd_10_arcmin_',
     paste0(load_years[1],'-',load_years[length(load_years)]),
-    '_2025-07-17.rds'
+    '_2025-07-29.rds'
     )
   )
 )
@@ -1120,6 +1119,7 @@ For now, I am not accounting for individual vessel level effects, but instead lo
 #   ) 
 
 offshore_blk_IDs <- 1032:1042
+medium_blk_IDs <- c(138:139, 240:241, 280:281, 484:487, 545:546, 568, 649:650, 697, 776:777, 895:897)
 
 dcrb_df_match_long <- dcrb_df %>%
   mutate(
@@ -1131,6 +1131,11 @@ dcrb_df_match_long <- dcrb_df %>%
     offshore_reported = case_when(
       CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
       !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
+      #.default = 9999
+    ),
+    medium_reported = case_when(
+      CDFW_AREA_BLOCK %in% medium_blk_IDs ~ 1,
+      !CDFW_AREA_BLOCK %in% medium_blk_IDs ~ 0#,
       #.default = 9999
     )
   )
@@ -1168,6 +1173,7 @@ dcrb_df_match_all_crabyrs <- dcrb_df_match_all_fishtix %>%
 
 dcrb_df_match_block10_fishtix <- dcrb_df_match_long %>%
   filter(offshore_reported == 0) %>%
+  filter(medium_reported == 0) %>%
   # summarise by each fish ticket
   group_by( 
     crab_year, Rec_ID, FTID, drvid, agency_code, pacfin_port_code, port_group_code, FINAL_LENGTH #, DCRB_lbs, DCRB_revenue_afi. commented out DCRB_revenue_afi for now because for tix with vms records that span multiple months we end up with >1 row for each unique ticket. fix later
@@ -1261,6 +1267,7 @@ Use Owen's code as a basis. https://github.com/noaa-nwfsc/VMS-pipeline/blob/7fac
 # repeat faceted by pacfin_port_code, season if desired
 
 #offshore_blk_IDs <- 1032:1042
+medium_blk_IDs <- c(138:139, 240:241, 280:281, 484:487, 545:546, 568, 649:650, 697, 776:777, 895:897)
 
 dcrb_df_block10 <- dcrb_df %>%
   # mutate(
@@ -1271,7 +1278,8 @@ dcrb_df_block10 <- dcrb_df %>%
   #   )
   # ) %>%
   # filter(offshore_reported == 0) %>%
-  filter(BLOCK10_ID < 1000)
+  filter(BLOCK10_ID < 1000) %>%
+  filter(!BLOCK10_ID %in% medium_blk_IDs)
 
 # function to aggregate. make sure not to compare post 2020 high ping rate to pre 2020
 summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
@@ -1289,12 +1297,12 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
       filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
       mutate(temporal_break=ifelse(westcoastdate_notime < '2020-09-01',"60-minute ping intervals","15-minute ping intervals")) %>% 
       group_by(temporal_break,crab_year,BLOCK10_ID) %>% 
-      summarise(attr_totyr=sum(attribute,na.rm=T)) %>% 
+      summarise(attr_n=n_distinct(attribute,na.rm=T)) %>% 
       group_by(temporal_break,BLOCK10_ID) %>% 
       # calculate mean and sd
       summarise(
-        mean_allyrs=mean(attr_totyr,na.rm=T),
-        sd_allyrs=sd(attr_totyr,na.rm=T),
+        mean_allyrs=mean(attr_n,na.rm=T),
+        sd_allyrs=sd(attr_n,na.rm=T),
       ) %>% 
       # calculate rank and quantile
       ungroup() %>% 
@@ -1312,6 +1320,7 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
   
   # finally, join the spatial data
   df_out <- df2 %>%
+    #left_join(grd_dissolved,by="BLOCK10_ID") # pick up here 07-29-2025. need to make grd_dissolved
     left_join(grd,by="BLOCK10_ID") %>% st_as_sf()
   
   df_out
