@@ -93,7 +93,7 @@ TrapTierNumberKey.csv
 
 1. Load the fish ticket data for specified years, which will be used to grab self-reported fishing locations.
 
-*** Note you can skip to the chunk load_dcrb_tix and avoid running chunks 3-18 
+*** Note you can skip to the chunk load_dcrb_tix and avoid running chunks 3-17 
 
 These data can be joined to VMS data
 
@@ -780,13 +780,6 @@ write_rds(dcrb_ticket_df, here('Confidential', 'processed_data', 'fish_tickets',
 
 ```
 
-```{r count_trips}
-# count total records, trips and years
-n_records <- nrow(dcrb_ticket_df)
-n_trips   <- n_distinct(dcrb_ticket_df$Rec_ID)
-n_years   <- n_distinct(dcrb_ticket_df$year_numeric)
-```
-
 If we want to skip the pre-processing above, we can simply read in the rds from the chunk above
 
 ```{r load_dcrb_tix}
@@ -803,6 +796,15 @@ dcrb_ticket_df <- read_rds(
 
 
 ```
+
+
+```{r count_trips}
+# count total records, trips and years
+n_records <- nrow(dcrb_ticket_df)
+n_trips   <- n_distinct(dcrb_ticket_df$Rec_ID)
+n_years   <- n_distinct(dcrb_ticket_df$year_numeric)
+```
+
 
 The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets), `r n_trips` distinct trips (fish tickets), across `r n_years` years.
 
@@ -877,6 +879,12 @@ names(grd)
 coast <- ne_states(country='United States of America',returnclass = 'sf') %>%
   filter(name %in% c('California','Oregon','Washington','Nevada')) %>%
   st_transform(crs = st_crs(grd))
+
+grd_dissolved <- grd %>%
+  dplyr::select(BLOCK10_ID,State,WM_NGDC_m) %>% 
+  group_by(BLOCK10_ID,State) %>% 
+  summarise(NGDC_m_mean=mean(WM_NGDC_m)) %>% 
+  ungroup()
 
 ```
 
@@ -1320,8 +1328,9 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
   
   # finally, join the spatial data
   df_out <- df2 %>%
-    #left_join(grd_dissolved,by="BLOCK10_ID") # pick up here 07-29-2025. need to make grd_dissolved
-    left_join(grd,by="BLOCK10_ID") %>% st_as_sf()
+    left_join(grd_dissolved,by="BLOCK10_ID") %>%
+    #left_join(grd,by="BLOCK10_ID") %>% 
+    st_as_sf()
   
   df_out
 }
@@ -1333,22 +1342,52 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
 
 ### Example correlations between fish tix and VMS records
 
-These are very ugly.
+```{r make_vms_blk_map_df}
 
-```{r vms_rec_map}
+# trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs)
+# pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs)
+# 
+# trips_allyrs %>% st_join(pings_allyrs) %>%
+#   ggplot()+
+#   geom_point(aes(x=quant_trips, y=quant_pings))+
+#   theme(panel.background=element_rect(fill='white'))
+# 
+# pings_allyrs %>% st_join(trips_allyrs) %>%
+#   ggplot()+
+#   geom_point(aes(x=mean_allyrs_trips, y=mean_allyrs_pings))+
+#   theme(panel.background=element_rect(fill='white'))
 
-trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs)
-pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs)
+trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% 
+  rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs) %>% 
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% 
+  rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs) %>% 
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
 
-trips_allyrs %>% st_join(pings_allyrs) %>%
+trips_allyrs %>% 
+  # non-spatial join
+  st_set_geometry(NULL) %>% 
+  left_join(pings_allyrs %>% st_set_geometry(NULL)) %>% 
+  # st_join(pings_allyrs) %>%
   ggplot()+
   geom_point(aes(x=quant_trips, y=quant_pings))+
   theme(panel.background=element_rect(fill='white'))
 
-pings_allyrs %>% st_join(trips_allyrs) %>%
+trips_allyrs %>% 
+  # non-spatial join
+  st_set_geometry(NULL) %>% 
+  left_join(pings_allyrs %>% st_set_geometry(NULL)) %>% 
+  # st_join(pings_allyrs) %>%
   ggplot()+
   geom_point(aes(x=mean_allyrs_trips, y=mean_allyrs_pings))+
   theme(panel.background=element_rect(fill='white'))
+
+# pings_allyrs %>% st_join(trips_allyrs) %>%
+#   ggplot()+
+#   geom_point(aes(x=mean_allyrs_trips, y=mean_allyrs_pings))+
+#   theme(panel.background=element_rect(fill='white'))
+
+# looking better
 
 ```
 
