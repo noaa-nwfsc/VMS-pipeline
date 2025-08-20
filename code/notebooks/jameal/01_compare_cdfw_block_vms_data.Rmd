@@ -58,25 +58,54 @@ rm(temp_name, temp_subdir)
 
 # Introduction
 
-This document compares the spatial distribution of CA Dungeness crab fishing activity based on self-reported CDFW block data from fish tickets and geolocations obtained from VMS data.
+This document qualitatively compares the spatial distribution of CA Dungeness crab fishing activity based on self-reported CDFW block data from fish tickets and geolocations obtained from VMS data. 
 
-1) Using the VMS record-by-record df, calculate distance of VMS point from centroid or edge of CDFW block reported in fish ticket; 
-- Make plot of frequency distribution showing distance of VMS point from CDFW block, with 50/75/90% labeled 
+It uses coarse aggregations of DCRB fishing activity from both data sources. Specifically, it aggregates fishing records on a 10-arc minute grid and in CDFW small, medium, and large offshore blocks.
 
-2) Summarize VMS record-by-record df by trip_ID, and calculate % of VMS points within 0/1/2-degree neighboring blocks across time periods. Try this package: https://link.springer.com/article/10.1007/s10980-024-01930-z 
-- 0-degree neighbor = inside/outside of CDFW block
-- Make plot of % of VMS points (y-axis) and degree neighbor (x-axis), each point estimate representing a time period (eg, yr)
-- Facet by region, vessel size, etc
-- Consider summarizing by vessel first
+The specific analyses conducted here rely upon a summarized version of the VMS record-by-record data frame. The summary is based on trip (equivalent to fish ticket). These analyses include:
+
+1) Frequency histograms of number of trips with 1-n unique blocks indicated by VMS pings for each trip, binned by trips with lower and higher numbers of VMS records
+
+Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
+
+2) Annual time series of % of trips with >=1 VMS record in the reported CDFW block.
+- small (10-arc minute) blocks
+- medium blocks
+- large offshore blocks
+
+Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
+
+<!-- Blake suggested we try this package: https://link.springer.com/article/10.1007/s10980-024-01930-z  -->
 
 3) Spatial visualizations (maps)
-- Summarize VMS record-by-record df by trip_ID and CDFW block
-    - # tix per CDFW block vs # pings/day per CDFW block
-    - # unique vessels per CDFW block based on tix vs # unique vessels/day per CDFW block based on VMS
+
+    (a) # tix per CDFW block vs # pings per CDFW block
+    (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
+    
+    for 60-min ping interval years and 15-min ping interval years, then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023). 
+    
+    also make annual maps of 3ab above.
+    
+ <!-- future: consider # unique vessels per CDFW block based on tix vs # unique vessels per CDFW block based on VMS -->
+
 - Follow this vignette to make a correlation map: https://statnmap.com/2018-01-27-spatial-correlation-between-rasters/ 
 
 
-Reminder that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year
+Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
+
+
+
+
+<!-- 1) Using the VMS record-by-record df, calculate distance of VMS point from centroid or edge of CDFW block reported in fish ticket;  -->
+<!-- - Make plot of frequency distribution showing distance of VMS point from CDFW block, with 50/75/90% labeled  -->
+
+<!-- 2) Summarize VMS record-by-record df by trip_ID, and calculate % of VMS points within 0/1/2-degree neighboring blocks across time periods. Try this package: https://link.springer.com/article/10.1007/s10980-024-01930-z  -->
+<!-- - 0-degree neighbor = inside/outside of CDFW block -->
+<!-- - Make plot of % of VMS points (y-axis) and degree neighbor (x-axis), each point estimate representing a time period (eg, yr) -->
+<!-- - Facet by region, vessel size, etc -->
+<!-- - Consider summarizing by vessel first -->
+
+
 
 
 # Load and join data frames for processing
@@ -803,6 +832,10 @@ dcrb_ticket_df <- read_rds(
 n_records <- nrow(dcrb_ticket_df)
 n_trips   <- n_distinct(dcrb_ticket_df$Rec_ID)
 n_years   <- n_distinct(dcrb_ticket_df$year_numeric)
+
+# n_records
+# n_trips
+# n_years
 ```
 
 
