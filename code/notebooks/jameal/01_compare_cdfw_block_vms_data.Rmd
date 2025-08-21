@@ -79,12 +79,12 @@ Remember that VMS point frequency distributions need to be split into before and
 
 3) Spatial visualizations (maps)
 
-    (a) # tix per CDFW block vs # pings per CDFW block
-    (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
+  (a) # tix per CDFW block vs # pings per CDFW block
+  (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
     
-    for 60-min ping interval years and 15-min ping interval years, then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023). 
+  for 60-min ping interval years and 15-min ping interval years, then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023). 
     
-    also make annual maps of 3ab above.
+  also make annual maps of 3ab above.
     
  <!-- future: consider # unique vessels per CDFW block based on tix vs # unique vessels per CDFW block based on VMS -->
 
@@ -1057,6 +1057,7 @@ dcrb_df <- vms_grid10_df %>%
     Area_m2,
     WM_NGDC_m,
     # temporal fields
+    date,
     westcoastdate,
     westcoastdate_notime,
     crab_year, 
@@ -1074,7 +1075,7 @@ dcrb_df <- vms_grid10_df %>%
     DCRB_revenue_afi
   ) %>%
    left_join(
-    dcrb_ticket_df %>% dplyr::select(year=year_numeric, FTID, CDFW_AREA_BLOCK)
+    dcrb_ticket_df %>% dplyr::select(date, crab_year=crab_year_character, FTID, CDFW_AREA_BLOCK) # changed from year=year_numeric 08-21-2025 to avoid problem that sum(is.na(dcrb_df$CDFW_AREA_BLOCK)) = 25343. also tried crab_year=crab_year_character, which reduced the sum of NAs to 170 (but relates to only 3 fish tix). however, there remained a many to many join problem so i added date and drvid to the join. that cleared up the the many to many join issue but increased the NA problem to 3444. so then i dropped drvid to see what would happen, and that the sum of NAs to 227 but only 5 unique fish tix. call it good here
     )
 
 glimpse(dcrb_df)
@@ -1107,8 +1108,6 @@ write_rds(dcrb_df, here(
 
 ```
 
-# Analyze matched VMS and fish tix
-
 ## shortcut load
 
 ```{r load_dcrb_vms}
@@ -1122,10 +1121,33 @@ dcrb_df <- read_rds(here(
   paste0(
     'dcrb_vms_w_grd_10_arcmin_',
     paste0(load_years[1],'-',load_years[length(load_years)]),
-    '_2025-07-29.rds'
+    '_2025-08-21.rds'
     )
   )
 )
+
+
+
+```
+
+# Analyze matched VMS and fish tix
+
+Drop the 5 trips where we were unable to include a CDFW_AREA_BLOCK 
+
+```{r drop_noblksinfishtix}
+#View(dcrb_df[which(is.na(dcrb_df$CDFW_AREA_BLOCK)),]) 
+# unique(dcrb_df$FTID[which(is.na(dcrb_df$CDFW_AREA_BLOCK))])
+# [1] "O415366" "D579106" "143713E" "229032E" "328806E"
+
+dcrb_df <- dcrb_df[-which(is.na(dcrb_df$CDFW_AREA_BLOCK)),]
+
+```
+
+## 1) Frequency histograms of number of trips with 1-n unique blocks indicated by VMS pings for each trip, binned by trips with lower and higher numbers of VMS records
+
+Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
+
+```{r blks_per_trip}
 
 
 
