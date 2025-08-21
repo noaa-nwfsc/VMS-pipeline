@@ -1149,6 +1149,20 @@ Remember that VMS point frequency distributions need to be split into before and
 
 ```{r blks_per_trip}
 
+BLOCK10_ID_per_trip <- dcrb_df %>% # dcrb_df[10000:12000,]
+  group_by(Rec_ID) %>%
+  summarise(
+    total_BLOCK10_ID = length(unique(BLOCK10_ID)),
+    total_vms_rec = length(unique(VMS_RECNO))
+  )
+
+glimpse(BLOCK10_ID_per_trip)
+
+ggplot(data = BLOCK10_ID_per_trip) +
+  geom_histogram(aes(x = total_BLOCK10_ID))
+  
+
+#Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
 
 
 ```
