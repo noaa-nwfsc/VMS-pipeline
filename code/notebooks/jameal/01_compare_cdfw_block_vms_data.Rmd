@@ -1143,14 +1143,27 @@ dcrb_df <- dcrb_df[-which(is.na(dcrb_df$CDFW_AREA_BLOCK)),]
 
 ```
 
+Add before/after ping interval change to df
+
+```{r add_pinginterval}
+
+dcrb_df <- dcrb_df %>%
+  mutate(
+    vms_ping_interval_period = ifelse(westcoastdate_notime < '2020-09-01',"60-minute ping intervals","15-minute ping intervals")
+  )
+
+```
+
 ## 1) Frequency histograms of number of trips with 1-n unique blocks indicated by VMS pings for each trip, binned by trips with lower and higher numbers of VMS records
 
 Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
 
-```{r blks_per_trip}
+Make summarized data frames
+
+```{r blks_per_trip_df}
 
 BLOCK10_ID_per_trip <- dcrb_df %>% # dcrb_df[10000:12000,]
-  group_by(Rec_ID) %>%
+  group_by(Rec_ID, vms_ping_interval_period) %>%
   summarise(
     total_BLOCK10_ID = length(unique(BLOCK10_ID)),
     total_vms_rec = length(unique(VMS_RECNO))
@@ -1158,16 +1171,91 @@ BLOCK10_ID_per_trip <- dcrb_df %>% # dcrb_df[10000:12000,]
 
 glimpse(BLOCK10_ID_per_trip)
 
-ggplot(data = BLOCK10_ID_per_trip) +
-  geom_histogram(aes(x = total_BLOCK10_ID))
-  
+single_v_multiple_BLOCK10_ID_per_trip <- BLOCK10_ID_per_trip %>%
+         mutate(
+           single_v_multiple_BLOCK10_ID = ifelse(total_BLOCK10_ID > 1, 'multiple', 'single')
+           ) %>%
+  group_by(vms_ping_interval_period, single_v_multiple_BLOCK10_ID) %>%
+  summarise(
+    tot_trips = n_distinct(Rec_ID)
+  )
+
+single_v_multiple_BLOCK10_ID_per_trip$single_v_multiple_BLOCK10_ID <- factor(single_v_multiple_BLOCK10_ID_per_trip$single_v_multiple_BLOCK10_ID, levels = c('single','multiple'))
+
+glimpse(single_v_multiple_BLOCK10_ID_per_trip)
 
 #Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
 
 
 ```
 
-## Determine correspondence between reported and tracked fishing locations
+Make 4 plots:
+1) absolute frequency histogram of blocks visited by ping interval period
+2) proportional frequency histogram of blocks visited by ping interval period
+3) single or multiple blocks visited v number of trips by ping interval period
+4) blocks visited v pings per trip by ping interval period
+
+```{r blks_per_trip_plots}
+
+ggplot(data = BLOCK10_ID_per_trip) +
+  facet_wrap(~vms_ping_interval_period) + 
+  geom_histogram(aes(x = total_BLOCK10_ID), binwidth=2) +
+  labs(x='Number of BLOCK10_IDs Visited',y="Number of Trips") +
+  theme_classic()
+
+ggsave(
+  filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "absolute frequency histogram of blocks visited by ping interval period.png"), 
+  width = 8, height = 5
+  )
+
+ggplot(data = BLOCK10_ID_per_trip) +
+  facet_wrap(~vms_ping_interval_period) + 
+  geom_histogram(aes(x = total_BLOCK10_ID, y = after_stat(density)), binwidth=2) +
+  labs(x='Number of BLOCK10_IDs Visited',y="Proportion of Trips") +
+  theme_classic()
+
+ggsave(
+  filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "proportional frequency histogram of blocks visited by ping interval period.png"), 
+  width = 8, height = 5
+  )
+
+ggplot(data = single_v_multiple_BLOCK10_ID_per_trip) +
+  facet_wrap(~vms_ping_interval_period) + 
+  geom_col(aes(x = single_v_multiple_BLOCK10_ID, y = tot_trips)) +
+  labs(x='BLOCK10_IDs Visited', y="Number of Trips") +
+  theme_classic()
+
+ggsave(
+  filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "single or multiple blocks visited v number of trips by ping interval period.png"), 
+  width = 8, height = 5
+  )
+
+ggplot(data = BLOCK10_ID_per_trip) +
+  facet_wrap(~vms_ping_interval_period) + 
+  geom_point(
+    aes(x = total_vms_rec, y = total_BLOCK10_ID)
+    ) +
+  labs(y='BLOCK10_IDs Visited', x="Number of Pings Per Trip") +
+  theme_classic()
+
+ggsave(
+  filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "blocks visited v pings per trip by ping interval period.png"), 
+  width = 8, height = 5
+  )
+
+
+```
+
+
+RESULTS: 
+
+Both during the 60-minute ping interval period and the 15-minute ping interval period: 
+
+(i) Most trips transit through multiple BLOCK10_IDs.
+(ii) The most common number of BLOCK10_IDs visited is in the range of 2-10.
+(iii) There is a weak positive correlation between the number of BLOCK10_IDs visited and the number of pings per trip.
+
+## 2) Determine correspondence between reported and tracked fishing locations
 
 Quantify % of pings that match reported block, and % of tix where at least one ping matches reported block
 
