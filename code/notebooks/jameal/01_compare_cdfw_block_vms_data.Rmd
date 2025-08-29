@@ -1255,7 +1255,50 @@ Both during the 60-minute ping interval period and the 15-minute ping interval p
 (ii) The most common number of BLOCK10_IDs visited is in the range of 2-10.
 (iii) There is a weak positive correlation between the number of BLOCK10_IDs visited and the number of pings per trip.
 
-## 2) Determine correspondence between reported and tracked fishing locations
+## 2) Annual time series of % of trips with >=1 VMS record in the reported CDFW block.
+- small (10-arc minute) blocks
+- medium blocks
+- large offshore blocks
+
+Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
+
+Goal is to determine correspondence between reported and tracked fishing locations.
+
+
+Define the medium and offshore blocks. 
+```{r define_blks}
+
+offshore_blk_IDs <- 1032:1042
+medium_blk_IDs <- c(138:139, 240:241, 280:281, 484:487, 545:546, 568, 649:650, 697, 776:777, 895:897)
+
+```
+
+Make data frames for small, medium, and large blocks reported.
+
+```{r make_blk_size_dfs}
+
+dcrb_df_sm <- dcrb_df %>%
+  filter(!CDFW_AREA_BLOCK %in% offshore_blk_IDs) %>%
+  filter(!CDFW_AREA_BLOCK %in% medium_blk_IDs)
+
+dcrb_df_med <- dcrb_df %>%
+  filter(CDFW_AREA_BLOCK %in% medium_blk_IDs)
+
+dcrb_df_lg <- dcrb_df %>%
+  filter(CDFW_AREA_BLOCK %in% offshore_blk_IDs)
+
+```
+
+```{r count_trips}
+# count total trips for each blk size
+n_smblk_trips <- length(unique(dcrb_df_sm$Rec_ID))
+n_medblk_trips <- length(unique(dcrb_df_med$Rec_ID))
+n_lgblk_trips <- length(unique(dcrb_df_lg$Rec_ID))
+
+```
+
+The Dungeness crab fish ticket dataframe has `r n_smblk_trips` trips (fish tickets) reporting small blocks, `r n_medblk_trips` trips (fish tickets) reporting medium blocks, and `r n_lgblk_trips` trips (fish tickets) reporting large blocks.
+
 
 Quantify % of pings that match reported block, and % of tix where at least one ping matches reported block
 
@@ -1263,55 +1306,41 @@ For now, I am not accounting for individual vessel level effects, but instead lo
 
 ```{r match_ping_reported}
 
-# # give every ticket a reported an offshore block ID, either because it was reported as 1032:1042 in CDFW_AREA_BLOCK or by using the lookup provided by Blake in Offshrblok
-# 
-# 
-# dcrb_df_match_long <- dcrb_df %>%
-#   mutate(
-#     match_ping_report = case_when(
-#       BLOCK10_ID == CDFW_AREA_BLOCK ~ 1,
-#       BLOCK10_ID != CDFW_AREA_BLOCK ~ 0#,
-#       #.default = 9999 # 4225/1078180 NAs. ignore for now
-#       ),
-#     offshore_reported = case_when(
-#       CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
-#       !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
-#       #.default = 9999
-#     ),
-#    offshore_block = case_when(
-#       offshore_reported == 1 ~ offshore_reported,
-#       offshore_reported == 0 ~ grd$Offshrblok[which(grd$BLOCK10_ID == CDFW_AREA_BLOCK)]
-#   ) 
-
-offshore_blk_IDs <- 1032:1042
-medium_blk_IDs <- c(138:139, 240:241, 280:281, 484:487, 545:546, 568, 649:650, 697, 776:777, 895:897)
-
-dcrb_df_match_long <- dcrb_df %>%
+dcrb_df_sm_match_long <- dcrb_df_sm %>%
   mutate(
     match_ping_report = case_when(
       BLOCK10_ID == CDFW_AREA_BLOCK ~ 1,
-      BLOCK10_ID != CDFW_AREA_BLOCK ~ 0#,
-      #.default = 9999 # 4225/1078180 NAs. ignore for now
-      ),
-    offshore_reported = case_when(
-      CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 1,
-      !CDFW_AREA_BLOCK %in% offshore_blk_IDs ~ 0#,
-      #.default = 9999
+      BLOCK10_ID != CDFW_AREA_BLOCK ~ 0
     ),
-    medium_reported = case_when(
-      CDFW_AREA_BLOCK %in% medium_blk_IDs ~ 1,
-      !CDFW_AREA_BLOCK %in% medium_blk_IDs ~ 0#,
-      #.default = 9999
-    )
+    block_type = 'small'
   )
 
-# length(which(dcrb_df_match$offshore_reported == 1))
-# length(which(dcrb_df_match$offshore_reported == 0))
+dcrb_df_med_match_long <- dcrb_df_med %>%
+  mutate(
+    match_ping_report = case_when(
+      BLOCK10_ID == CDFW_AREA_BLOCK ~ 1,
+      BLOCK10_ID != CDFW_AREA_BLOCK ~ 0
+    ),
+    block_type = 'medium'
+  )
+
+dcrb_df_lg_match_long <- dcrb_df_lg %>%
+  mutate(
+    match_ping_report = case_when(
+      Offshrblok == CDFW_AREA_BLOCK ~ 1,
+      Offshrblok != CDFW_AREA_BLOCK ~ 0
+    ),
+    block_type = 'large'
+  )
+
+dcrb_df_match_long <- dcrb_df_sm_match_long %>%
+  bind_rows(dcrb_df_med_match_long) %>%
+  bind_rows(dcrb_df_lg_match_long)
 
 dcrb_df_match_all_fishtix <- dcrb_df_match_long %>%
   # summarise by each fish ticket
   group_by( 
-    crab_year, Rec_ID, FTID, drvid, agency_code, pacfin_port_code, port_group_code, FINAL_LENGTH #, DCRB_lbs, DCRB_revenue_afi. commented out DCRB_revenue_afi for now because for tix with vms records that span multiple months we end up with >1 row for each unique ticket. fix later
+    block_type, crab_year, vms_ping_interval_period, Rec_ID, FTID, drvid, agency_code, pacfin_port_code, port_group_code, FINAL_LENGTH #, DCRB_lbs, DCRB_revenue_afi. commented out DCRB_revenue_afi for now because for tix with vms records that span multiple months we end up with >1 row for each unique ticket. fix later
   ) %>%
   summarise(
     total_match_ping_report = sum(match_ping_report, na.rm=TRUE),
@@ -1324,7 +1353,7 @@ dcrb_df_match_all_fishtix <- dcrb_df_match_long %>%
 dcrb_df_match_all_crabyrs <- dcrb_df_match_all_fishtix %>%
   # summarise across all fish tix
   group_by(
-    crab_year
+    block_type, crab_year, vms_ping_interval_period
   ) %>%
   summarise(
     prop_match_ping_report_YN = sum(match_ping_report_YN)/n(),
@@ -1336,43 +1365,15 @@ dcrb_df_match_all_crabyrs <- dcrb_df_match_all_fishtix %>%
   ) %>%
   filter(year_numeric != 2024)
 
-dcrb_df_match_block10_fishtix <- dcrb_df_match_long %>%
-  filter(offshore_reported == 0) %>%
-  filter(medium_reported == 0) %>%
-  # summarise by each fish ticket
-  group_by( 
-    crab_year, Rec_ID, FTID, drvid, agency_code, pacfin_port_code, port_group_code, FINAL_LENGTH #, DCRB_lbs, DCRB_revenue_afi. commented out DCRB_revenue_afi for now because for tix with vms records that span multiple months we end up with >1 row for each unique ticket. fix later
-  ) %>%
-  summarise(
-    total_match_ping_report = sum(match_ping_report, na.rm=TRUE),
-    num_vms_records = n(),
-    match_ping_report_YN = ifelse(total_match_ping_report >=1, 1, 0),
-    prop_match_ping_report = total_match_ping_report / num_vms_records
-  ) %>%
-  ungroup()
 
-dcrb_df_match_block10_crabyrs <- dcrb_df_match_block10_fishtix %>%
-  # summarise across all fish tix
-  group_by(
-    crab_year
-  ) %>%
-  summarise(
-    prop_match_ping_report_YN = sum(match_ping_report_YN)/n(),
-    mean_prop_match_ping_report = mean(prop_match_ping_report, na.rm = TRUE)
-  ) %>%
-  ungroup() %>%
-  mutate(
-    year_numeric = substr(crab_year,6,9)
-  ) %>%
-  filter(year_numeric != 2024)
 
 ```
 
-## Make % match plots
+### Make % match plots
 
 Plot % of tickets with at least one match between reported and tracked blocks - include both reported offshore blocks and reported block10s
 
-```{r low_bar_plot_all}
+```{r low_bar_plot_sm}
 
 dcrb_df_match_all_crabyrs %>%
   ggplot(
@@ -1382,43 +1383,20 @@ dcrb_df_match_all_crabyrs %>%
   ) +
   geom_point() +
   geom_line() +
+  facet_grid(block_type~vms_ping_interval_period) + 
   ylim(0,1) +
   labs(
-    subtitle = 'includes both reported offshore blocks and reported block10s',
     y = 'Proportion of trips with >=1 VMS record\nmatching reported CDFW 10-arc minute block',
     x = 'Crab year'
-       ) +
-  theme_classic()
+       ) #+
+ # theme_bw()
 
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_prop_dcrb_tix_match_ping_report_all.png"), width = 8, height = 6)
+ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_prop_dcrb_tix_match_ping_report_all_byblksize.png"), width = 8, height = 6)
 
 ```
 
-Plot % of tickets with at least one match between reported and tracked blocks - include reported block10s only
 
-```{r low_bar_plot_block10}
-
-dcrb_df_match_block10_crabyrs %>%
-  ggplot(
-    aes(
-        x = year_numeric, y = prop_match_ping_report_YN, group = 1
-        )
-  ) +
-  geom_point() +
-  geom_line() +
-  ylim(0,1) +
-  labs(
-    subtitle = 'includes only reported block10s',
-    y = 'Proportion of trips with >=1 VMS record\nmatching reported CDFW 10-arc minute block',
-    x = 'Crab year'
-       ) +
-  theme_classic()
-
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_prop_dcrb_tix_match_ping_report_block10.png"), width = 8, height = 6)
-
-```
-
-## Summarize data frame for mapping
+## 3) Summarize data frame for mapping
 
 Focus on fish tix with self-reported 10-arc minute blocks and associated VMS data
 
