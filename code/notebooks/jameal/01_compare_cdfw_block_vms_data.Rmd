@@ -88,7 +88,7 @@ Remember that VMS point frequency distributions need to be split into before and
     
  <!-- future: consider # unique vessels per CDFW block based on tix vs # unique vessels per CDFW block based on VMS -->
 
-- Follow this vignette to make a correlation map: https://statnmap.com/2018-01-27-spatial-correlation-between-rasters/ 
+- Consider following this vignette to make a correlation map: https://statnmap.com/2018-01-27-spatial-correlation-between-rasters/ 
 
 
 Remember that VMS point frequency distributions need to be split into before and after that ping rate increase, or by year.
@@ -875,32 +875,9 @@ The Dungeness crab fish ticket dataframe has `r n_records` records (fish tickets
 
 ### Fish tix matched to VMS data
 
+*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 21-26, but you still need chunk 20, load_10arcminute_grid
 
-
-1. Load Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds) 
-
-Pre-requisite: Run the pipeline steps 1-5 for calendar years 2011-2023.
-
-The code below borrows heavily from Brooke Hawkins' notebook: 03_blh_hindcasts-of-california-dungeness-crab-fishing-activity.Rmd
-
-*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 20, 22-26, but you still need chunk 21, load_10arcminute_grid
-
-```{r load vms_tix}
-
-# choose years of data to load
-load_years <- 2011:2023
-
-# load fish ticket data joined to vessel length data, but before it was joined to VMS data
-vms_df <- purrr::map(load_years, function(ly) {
-  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'filtered', paste0('matched_filtered_withFTID_length_', ly, '.rds')))
-}) %>% bind_rows()
-
-glimpse(vms_df)
-
-
-```
-
-2. Load grid
+1. Load grid
 
 ```{r load_10arcminute_grid}
 
@@ -921,6 +898,28 @@ grd_dissolved <- grd %>%
 
 ```
 
+2. Load Matched VMS and fish tix (matched_filtered_withFTID_length_yyyy.rds) 
+
+Pre-requisite: Run the pipeline steps 1-5 for calendar years 2011-2023.
+
+The code below borrows heavily from Brooke Hawkins' notebook: 03_blh_hindcasts-of-california-dungeness-crab-fishing-activity.Rmd
+
+
+
+```{r load vms_tix}
+
+# choose years of data to load
+load_years <- 2011:2023
+
+# load fish ticket data joined to vessel length data, but before it was joined to VMS data
+vms_df <- purrr::map(load_years, function(ly) {
+  read_rds(here('Confidential', 'processed_data', 'processed_2025-03-19', 'filtered', paste0('matched_filtered_withFTID_length_', ly, '.rds')))
+}) %>% bind_rows()
+
+glimpse(vms_df)
+
+
+```
 
 3. Join VMS and fish ticket data to grid
 
@@ -1376,31 +1375,50 @@ Plot % of tickets with at least one match between reported and tracked blocks - 
 ```{r low_bar_plot_sm}
 
 dcrb_df_match_all_crabyrs %>%
+  mutate(block_type = fct_relevel(block_type, "small", "medium", "large")) %>%
   ggplot(
     aes(
-        x = year_numeric, y = prop_match_ping_report_YN, group = 1
+        x = year_numeric, y = prop_match_ping_report_YN
         )
   ) +
-  geom_point() +
-  geom_line() +
-  facet_grid(block_type~vms_ping_interval_period) + 
+  geom_point(aes(shape = vms_ping_interval_period, colour = block_type, group = block_type)) +
+  geom_line(aes(colour = block_type, group = block_type)) +
+  # facet_wrap(~vms_ping_interval_period) + 
   ylim(0,1) +
   labs(
     y = 'Proportion of trips with >=1 VMS record\nmatching reported CDFW 10-arc minute block',
-    x = 'Crab year'
+    x = 'Crab year',
+    colour = 'Block size',
+    shape = ' VMS ping interval period'
        ) #+
  # theme_bw()
 
-ggsave(filename = here("Confidential", "hindcast_output", "figures", "time_series_prop_dcrb_tix_match_ping_report_all_byblksize.png"), width = 8, height = 6)
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "time_series_prop_dcrb_tix_match_ping_report_all_byblksize.png"), width = 8, height = 6)
 
 ```
 
+RESULTS: 
+
+Both during the 60-minute ping interval period and the 15-minute ping interval period: 
+
+i) Almost 100% of trips reporting catch from large blocks show at least 1 VMS record in the reported large block.
+ii) ~50$ of trips reporting catch from small blocks show at least 1 VMS record in the reported small block. This percentage seems to be rising from <50% in 2011-2012 to ~60% in 2022-2023.
+iii) None of the trips reporting catch from medium blocks show at least 1 VMS record in the reported medium block. (Jameal thinks this is a real issue)
 
 ## 3) Summarize data frame for mapping
 
 Focus on fish tix with self-reported 10-arc minute blocks and associated VMS data
 
 Use Owen's code as a basis. https://github.com/noaa-nwfsc/VMS-pipeline/blob/7fac4c72968f6235ad1f73975128821cf3ddd933/code/notebooks/owen/summary%20mapping%20dcrb.qmd 
+
+3) Spatial visualizations (maps)
+
+  (a) # tix per CDFW block vs # pings per CDFW block
+  (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
+    
+  for 60-min ping interval years and 15-min ping interval years, then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023). 
+    
+  also make annual maps of 3ab above.
 
 ```{r sum_for_maps}
 
