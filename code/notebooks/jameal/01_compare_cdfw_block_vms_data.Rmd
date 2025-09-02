@@ -1405,20 +1405,22 @@ i) Almost 100% of trips reporting catch from large blocks show at least 1 VMS re
 ii) ~50$ of trips reporting catch from small blocks show at least 1 VMS record in the reported small block. This percentage seems to be rising from <50% in 2011-2012 to ~60% in 2022-2023.
 iii) None of the trips reporting catch from medium blocks show at least 1 VMS record in the reported medium block. (Jameal thinks this is a real issue)
 
-## 3) Summarize data frame for mapping
+## 3) Spatial visualizations (maps)
 
-Focus on fish tix with self-reported 10-arc minute blocks and associated VMS data
-
-Use Owen's code as a basis. https://github.com/noaa-nwfsc/VMS-pipeline/blob/7fac4c72968f6235ad1f73975128821cf3ddd933/code/notebooks/owen/summary%20mapping%20dcrb.qmd 
-
-3) Spatial visualizations (maps)
+Summarize data frame for mapping
 
   (a) # tix per CDFW block vs # pings per CDFW block
   (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
     
   for 60-min ping interval years and 15-min ping interval years, then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023). 
-    
+  
   also make annual maps of 3ab above.
+
+Focus on fish tix with self-reported 10-arc minute (small) blocks and associated VMS data
+
+Use Owen's code as a basis. https://github.com/noaa-nwfsc/VMS-pipeline/blob/7fac4c72968f6235ad1f73975128821cf3ddd933/code/notebooks/owen/summary%20mapping%20dcrb.qmd 
+
+  
 
 ```{r sum_for_maps}
 
@@ -1526,6 +1528,8 @@ trips_allyrs %>%
   geom_point(aes(x=quant_trips, y=quant_pings))+
   theme(panel.background=element_rect(fill='white'))
 
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "correlation_quant_trips_quant_pings.png"), width = 8, height = 6)
+
 trips_allyrs %>% 
   # non-spatial join
   st_set_geometry(NULL) %>% 
@@ -1534,6 +1538,8 @@ trips_allyrs %>%
   ggplot()+
   geom_point(aes(x=mean_allyrs_trips, y=mean_allyrs_pings))+
   theme(panel.background=element_rect(fill='white'))
+
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "correlation_mean_allyrs_trips_mean_allyrs_pings.png"), width = 8, height = 6)
 
 # pings_allyrs %>% st_join(trips_allyrs) %>%
 #   ggplot()+
@@ -1695,11 +1701,11 @@ pings_allyrs_ca <- pings_allyrs %>%
 ```{r 60_min_maps}
 
 make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_trips)+labs(fill="mean number of trips", title = 'CDFW small block-reported fishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
-ggsave(here("Confidential", "hindcast_output", "figures", "60-minute ping intervals reported fishing locations.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals reported fishing locations.png"))
 
 
 make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_pings)+labs(fill="mean number of pings", title = 'VMS-recorded fishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
-ggsave(here("Confidential", "hindcast_output", "figures", "60-minute ping intervals vms-recorded fishing locations.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals vms-recorded fishing locations.png"))
 
 ```
 
@@ -1708,9 +1714,9 @@ ggsave(here("Confidential", "hindcast_output", "figures", "60-minute ping interv
 ```{r 15_min_maps}
 
 make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_trips)+labs(fill="mean number of trips", title = 'CDFW small block-reported fishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
-ggsave(here("Confidential", "hindcast_output", "figures", "15-minute ping intervals reported fishing locations.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals reported fishing locations.png"))
 
 make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_pings)+labs(fill="mean number of pings", title = 'VMS-recorded fishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
-ggsave(here("Confidential", "hindcast_output", "figures", "15-minute ping intervals vms-recorded fishing locations.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals vms-recorded fishing locations.png"))
 
 ```
