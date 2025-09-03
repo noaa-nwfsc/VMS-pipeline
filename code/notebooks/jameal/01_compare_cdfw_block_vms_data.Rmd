@@ -1637,7 +1637,7 @@ make_map_coastwide <- function(df, column,scl_ord=1,...) {
       theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
   } else{
     ggplot() + 
-      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
+      geom_sf(data=dat2,aes(fill= sqrt({{column}})),col=NA)+
       geom_sf(data=coast,fill='#dacf80',col='gray80')+
       xlim(bbox_rot15[1],bbox_rot15[3])+
       ylim(bbox_rot15[2],bbox_rot15[4])+
@@ -1665,7 +1665,7 @@ make_map_ca <- function(df, column,scl_ord=1,...) {
       theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
   } else{
     ggplot() + 
-      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
+      geom_sf(data=dat2,aes(fill= sqrt({{column}})),col=NA)+
       geom_sf(data=coast,fill='#dacf80',col='gray80')+
       xlim(bbox_rot15_ca[1],bbox_rot15_ca[3])+
       ylim(bbox_rot15_ca[2],bbox_rot15_ca[4])+
@@ -1700,12 +1700,24 @@ pings_allyrs_ca <- pings_allyrs %>%
 
 ```{r 60_min_maps}
 
-make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_trips)+labs(fill="mean number of trips", title = 'CDFW small block-reported fishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+trips_60minpinginterval <- make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_trips)+labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+trips_60minpinginterval
+
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals reported fishing locations.png"))
 
 
-make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_pings)+labs(fill="mean number of pings", title = 'VMS-recorded fishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+pings_60minpinginterval <- make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_pings)+labs(fill="sqrt mean\nnumber of pings", title = 'VMS-recorded\nfishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+pings_60minpinginterval
+
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals vms-recorded fishing locations.png"))
+
+plot_grid(trips_60minpinginterval, pings_60minpinginterval,
+          labels = "auto"
+          )
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals reported and vms-recorded fishing locations.png"))
 
 ```
 
@@ -1713,10 +1725,22 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 
 ```{r 15_min_maps}
 
-make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_trips)+labs(fill="mean number of trips", title = 'CDFW small block-reported fishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
+trips_15minpinginterval <- make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_trips)+labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
+
+trips_15minpinginterval
+
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals reported fishing locations.png"))
 
-make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_pings)+labs(fill="mean number of pings", title = 'VMS-recorded fishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
+pings_15minpinginterval <- make_map_ca(pings_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_pings)+labs(fill="sqrt mean\nnumber of pings", title = 'VMS-recorded\nfishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
+
+pings_15minpinginterval
+
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals vms-recorded fishing locations.png"))
+
+plot_grid(trips_15minpinginterval, pings_15minpinginterval,
+          labels = "auto"
+          )
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals reported and vms-recorded fishing locations.png"))
 
 ```
