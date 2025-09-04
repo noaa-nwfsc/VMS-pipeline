@@ -1412,9 +1412,11 @@ Summarize data frame for mapping
   (a) # tix per CDFW block vs # pings per CDFW block
   (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
     
-  for 60-min ping interval years and 15-min ping interval years, then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023). 
+  for 60-min ping interval years and 15-min ping interval years,
   
-  also make annual maps of 3ab above.
+  <!-- then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023).  -->
+  
+  also make summaries for each fishing month (Nov-July) separately, across all years within each ping-interval period, for 3ab above.
 
 Focus on fish tix with self-reported 10-arc minute (small) blocks and associated VMS data
 
@@ -1479,6 +1481,33 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
       dplyr::select(-cume)
   }
   
+  # PICK UP HERE 09-03-2025. WANT THE QUANTILE TO BE RELATIVE TO ALL YEARS. HMM
+  if(temporal_breaks=="month across years") {
+    df2 <- df %>%
+      filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>%
+      mutate(temporal_break=ifelse(westcoastdate_notime < '2020-09-01',paste(month.name[month_numeric], "60-minute ping intervals"), paste(month.name[month_numeric], "15-minute ping intervals"))
+             ) %>%
+      group_by(temporal_break, month_numeric, year, BLOCK10_ID) %>%
+      summarise(attr_n=n_distinct(attribute,na.rm=T)) %>%
+      group_by(temporal_break, month_numeric, BLOCK10_ID) %>%
+      # calculate mean and sd
+      # note that some sd_allyrs values may be NA because there are not multiple months within a temporal_break with values for attr_n
+      summarise(
+        mean_allyrs=mean(attr_n,na.rm=T),
+        sd_allyrs=sd(attr_n,na.rm=T),
+      ) %>% 
+      # calculate rank and quantile
+      ungroup() %>% 
+      mutate(ranked=cume_dist(mean_allyrs)) %>% 
+      arrange(desc(ranked)) %>%
+      mutate(cume=cumsum(mean_allyrs)) %>%
+      mutate(quant=cume/max(cume)) %>%
+      # binned into 5% chunks
+      mutate(quantbinned=ntile(quant,10)*10) %>% 
+      mutate(quantbinned=ordered(quantbinned)) %>%
+      dplyr::select(-cume)
+  }
+  
   #df_out <- df2
   
   # finally, join the spatial data
@@ -1495,9 +1524,34 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
 
 ## Compare metrics
 
-### Example correlations between fish tix and VMS records
+### Summarize data frames across all years and all months, and for each month across all years
 
 ```{r make_vms_blk_map_df}
+
+trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% 
+  rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs) %>% 
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+
+pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% 
+  rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs) %>% 
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+
+trips_monthsallyrs <- summarize_dcrb_attribute_block10('trips', 'month across years') %>% mutate(metric = 'trips') %>% 
+  rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs) %>% 
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+
+pings_monthsallyrs <- summarize_dcrb_attribute_block10('pings', 'month across years') %>% mutate(metric = 'pings') %>% 
+  rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs) %>% 
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+
+
+
+```
+
+
+### Example correlations between fish tix and VMS records
+
+```{r make_corr_plots}
 
 # trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs)
 # pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs)
@@ -1619,70 +1673,14 @@ start adding mapping code, see line 808 of Owen's make_map_coastwide()
 
 ```{r make_map_function}
 
-make_map_coastwide <- function(df, column,scl_ord=1,...) {
+make_map_ca <- function(df, column,scl_ord=1,...) {
   
-  dat2 <- df %>% st_transform(rot15)
-  
-  #is the value a factor (i.e., categorical?)
-  is_factor <- df %>% pull( {{column}} ) %>% is.factor()
-  
-  # coastwide map
-  if(is_factor){
-    ggplot() + 
-      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
-      geom_sf(data=coast,fill='#dacf80',col='gray80')+
-      xlim(bbox_rot15[1],bbox_rot15[3])+
-      ylim(bbox_rot15[2],bbox_rot15[4])+
-      scale_fill_viridis_d(na.value='#abd0d6',option='turbo',direction=scl_ord,...)+
-      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
-  } else{
-    ggplot() + 
-      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
-      geom_sf(data=coast,fill='#dacf80',col='gray80')+
-      xlim(bbox_rot15[1],bbox_rot15[3])+
-      ylim(bbox_rot15[2],bbox_rot15[4])+
-      scale_fill_viridis(option='turbo',na.value='#abd0d6',direction=scl_ord,...)+
-      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
-  }
-  
-}
-
-make_map_coastwide_sqrttransform <- function(df, column,scl_ord=1,...) {
-  
-  dat2 <- df %>% st_transform(rot15)
+  dat2 <- df %>% filter(State == 'CA') %>% st_transform(rot15)
   
   #is the value a factor (i.e., categorical?)
   is_factor <- df %>% pull( {{column}} ) %>% is.factor()
   
-  # coastwide map
-  if(is_factor){
-    ggplot() + 
-      geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
-      geom_sf(data=coast,fill='#dacf80',col='gray80')+
-      xlim(bbox_rot15[1],bbox_rot15[3])+
-      ylim(bbox_rot15[2],bbox_rot15[4])+
-      scale_fill_viridis_d(na.value='#abd0d6',option='turbo',direction=scl_ord,...)+
-      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
-  } else{
-    ggplot() + 
-      geom_sf(data=dat2,aes(fill= sqrt({{column}})),col=NA)+
-      geom_sf(data=coast,fill='#dacf80',col='gray80')+
-      xlim(bbox_rot15[1],bbox_rot15[3])+
-      ylim(bbox_rot15[2],bbox_rot15[4])+
-      scale_fill_viridis(option='turbo',na.value='#abd0d6',direction=scl_ord,...)+
-      theme(panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
-  }
-  
-}
-
-make_map_coastwide <- function(df, column,scl_ord=1,...) {
-  
-  dat2 <- df %>% st_transform(rot15)
-  
-  #is the value a factor (i.e., categorical?)
-  is_factor <- df %>% pull( {{column}} ) %>% is.factor()
-  
-  # coastwide map
+  # ca map
   if(is_factor){
     ggplot() + 
       geom_sf(data=dat2,aes(fill= {{column}}),col=NA)+
@@ -1732,9 +1730,67 @@ make_map_ca_sqrttransform <- function(df, column,scl_ord=1,...) {
 }
 
 # just plotting NGDC_med_m (depth) as the fill to make sure everything is oriented correctly
-make_map_coastwide(grid10_final, NGDC_med_m)+labs(fill="dept")
+# make_map_coastwide(grid10_final, NGDC_med_m)+labs(fill="dept")
+
 make_map_ca(grid10_final, NGDC_med_m)+labs(fill="dept")
+
 # make_map_coastwide(grid5k_final, centro_lat,scl_ord = -1)+labs(fill="latitude")
+
+```
+
+Map functions for >=2 levels for temporal_breaks, continuous variables
+
+```{r make_map_function_multi}
+
+make_map_ca_multi <- function(df, column,scl_ord=1,...) {
+  
+  dat2 <- df %>% filter(State == 'CA') %>% st_transform(rot15)
+  
+  # scale limits for the color bar, to ensure they are common across subplots
+  lims <- dat2 %>% pull( {{column}} ) %>% range()
+  
+  # make the list of maps, with the list members named by the unique values in "temporal breaks"
+  plotnames <- unique(dat2$temporal_break)
+  
+  plotlist <- map(plotnames,function(x){
+    
+    dfsub <- dat2 %>% filter(temporal_break==x)
+    
+    # ca map
+    p1 <- make_map_ca(dfsub, {{column}},scl_ord,limits=lims) + labs(subtitle = x)
+    
+    p1
+    
+    })
+  
+  return(plotlist %>% set_names(plotnames))
+}
+
+make_map_ca_sqrttransform_multi <- function(df, column,scl_ord=1,...) {
+  
+  dat2 <- df %>% filter(State == 'CA') %>% st_transform(rot15)
+  
+  # scale limits for the color bar, to ensure they are common across subplots
+  lims <- sqrt(dat2 %>% pull( {{column}} ) %>% range())
+  
+  # make the list of maps, with the list members named by the unique values in "temporal breaks"
+  plotnames <- unique(dat2$temporal_break)
+  
+  plotlist <- map(plotnames,function(x){
+    
+    dfsub <- dat2 %>% filter(temporal_break==x)
+    
+    # ca map
+    p1 <- make_map_ca_sqrttransform(dfsub, {{column}},scl_ord,limits=lims) + labs(subtitle = x)
+    
+    p1
+    
+    })
+  
+  return(plotlist %>% set_names(plotnames))
+}
+
+
 
 ```
 
@@ -1750,11 +1806,17 @@ trips_allyrs_ca <- trips_allyrs %>%
 pings_allyrs_ca <- pings_allyrs %>%
   filter(State == 'CA')
 
+trips_monthsallyrs_ca <- trips_monthsallyrs %>%
+  filter(State == 'CA')
+
+pings_monthsallyrs_ca <- pings_monthsallyrs %>%
+  filter(State == 'CA')
+
 ```
 
 ##### 1. 60-minute ping interval years
 
-###### Compare means
+###### Compare means across all years
 ```{r 60_min_maps}
 
 trips_60minpinginterval <- make_map_ca_sqrttransform(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_trips)+labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
@@ -1778,7 +1840,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 
 ```
 
-###### Compare quantiles
+###### Compare quantiles across all years
 ```{r 60_min_maps_quantiles}
 
 quantile_trips_60minpinginterval <- make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), quant_trips)+labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
@@ -1805,7 +1867,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 ##### 2. 15-minute ping interval years
 
 
-###### Compare means
+###### Compare means across all years
 ```{r 15_min_maps}
 
 trips_15minpinginterval <- make_map_ca_sqrttransform(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_trips)+labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
@@ -1828,7 +1890,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "1
 
 ```
 
-###### Compare quantiles
+###### Compare quantiles across all years
 ```{r 15_min_maps_quantiles}
 
 quantile_trips_15minpinginterval <- make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), quant_trips)+labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
@@ -1849,5 +1911,74 @@ plot_grid(quantile_trips_15minpinginterval, quantile_pings_15minpinginterval,
           )
 
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles of reported and vms-recorded fishing locations.png"))
+
+```
+
+##### 3. Comparisons for each month across all years
+
+###### Compare means 
+```{r maps_month}
+
+trips_minpinginterval_months <- make_map_ca_sqrttransform_multi(trips_monthsallyrs_ca, mean_allyrs_trips)
+
+trips_minpinginterval_months
+
+# Use iwalk() to save each plot with automatic naming
+iwalk(trips_minpinginterval_months,
+      ~ {
+  # Add a title using the name of the list element (.y)
+  final_plot <- .x + labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations')
+  
+  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0(.y, " - trips.png")), plot = final_plot)
+  }
+  )
+
+pings_minpinginterval_months <- make_map_ca_sqrttransform_multi(pings_monthsallyrs_ca, mean_allyrs_pings)
+
+pings_minpinginterval_months
+
+# Use iwalk() to save each plot with automatic naming
+iwalk(pings_60minpinginterval_months,
+      ~ {
+  # Add a title using the name of the list element (.y)
+  final_plot <- .x + labs(fill="sqrt mean\nnumber of pings", title = 'VMS-recorded\nfishing locations')
+  
+  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0(.y, " - pings.png")), plot = final_plot)
+  }
+  )
+
+```
+
+###### Compare quantiles 
+```{r maps_quantiles_month}
+
+quantile_trips_pinginterval_months <- make_map_ca_multi(trips_monthsallyrs_ca, quant_trips)
+
+quantile_trips_pinginterval_months
+
+# Use iwalk() to save each plot with automatic naming
+iwalk(quantile_trips_pinginterval_months,
+      ~ {
+  # Add a title using the name of the list element (.y)
+  final_plot <- .x + labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations')
+  
+  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0(.y, " - quantile trips.png")), plot = final_plot)
+  }
+  )
+
+quantile_pings_pinginterval_months <- make_map_ca_multi(pings_monthsallyrs_ca, quant_pings)
+
+quantile_pings_pinginterval_months
+
+# Use iwalk() to save each plot with automatic naming
+iwalk(quantile_pings_pinginterval_months,
+      ~ {
+  # Add a title using the name of the list element (.y)
+  final_plot <- .x + labs(fill="quantile number of pings", title = 'VMS-recorded\nfishing locations')
+  
+  ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", paste0(.y, " - quantile pings.png")), plot = final_plot)
+  }
+  )
+
 
 ```
