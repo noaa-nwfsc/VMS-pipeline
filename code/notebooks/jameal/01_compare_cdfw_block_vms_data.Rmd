@@ -346,7 +346,11 @@ dcrb_df <- read_rds(here(
   )
 )
 
-
+# if dcrb_df was developed before Blake added RAMP zone attributes to grd on 09-19-2025, add those in here
+dcrb_df <- grd %>%
+  st_set_geometry(NULL) %>%
+  dplyr::select(BLOCK10_ID, EEZ, State, Salish_Sea, BLOCK10_n, Offshrblok, RAMP_zone, RAMP_over, WM_NGDC_m) %>%
+  right_join(dcrb_df)
 
 
 ```
