@@ -687,9 +687,9 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
     df2 <- df %>% 
       filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>% 
       mutate(temporal_break=ifelse(westcoastdate_notime < '2020-09-01',"60-minute ping intervals","15-minute ping intervals")) %>% 
-      group_by(temporal_break,crab_year,BLOCK10_ID) %>% 
+      group_by(temporal_break,crab_year,BLOCK10_ID, RAMP_zone, RAMP_over) %>% 
       summarise(attr_n=n_distinct(attribute,na.rm=T)) %>% 
-      group_by(temporal_break,BLOCK10_ID) %>% 
+      group_by(temporal_break,BLOCK10_ID, RAMP_zone, RAMP_over) %>% 
       # calculate mean and sd
       summarise(
         mean_allyrs=mean(attr_n,na.rm=T),
@@ -712,9 +712,9 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
       filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>%
       mutate(temporal_break=ifelse(westcoastdate_notime < '2020-09-01',paste(month.name[month_numeric], "60-minute ping intervals"), paste(month.name[month_numeric], "15-minute ping intervals"))
              ) %>%
-      group_by(temporal_break, month_numeric, year, BLOCK10_ID) %>%
+      group_by(temporal_break, month_numeric, year, BLOCK10_ID, RAMP_zone, RAMP_over) %>%
       summarise(attr_n=n_distinct(attribute,na.rm=T)) %>%
-      group_by(temporal_break, month_numeric, BLOCK10_ID) %>%
+      group_by(temporal_break, month_numeric, BLOCK10_ID, RAMP_zone, RAMP_over) %>%
       # calculate mean and sd
       # note that some sd_allyrs values may be NA because there are not multiple months within a temporal_break with values for attr_n
       summarise(
@@ -750,6 +750,10 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
 ## Compare metrics
 
 ### Summarize data frames across all years and all months, and for each month across all years
+
+Remember that quantile means “count up this cell and all those larger than it, and see how much of the total sum we have accumulated”. If, say, a grid cell has a value for quant of 0.05 for pings, this would mean that it is in the first 5% of all grid cells when we are counting up total pings from largest to smallest.
+
+# PICK UP HERE 09-22-2025 TO CALCULATE DIFFERENCE IN QUANT TRIPS AND QUANT PINGS TO MAKE DIFFERENCE MAPS
 
 ```{r make_vms_blk_map_df}
 
