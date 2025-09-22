@@ -98,8 +98,6 @@ Remember that VMS point frequency distributions need to be split into before and
 
 ### Fish tix matched to VMS data
 
-*** Note you can skip to the chunk load_dcrb_vms and avoid running chunks 21-26, but you still need chunk 20, load_10arcminute_grid
-
 1. Load grid
 
 ```{r load_10arcminute_grid}
@@ -347,6 +345,7 @@ dcrb_df <- read_rds(here(
     )
   )
 )
+
 
 
 
@@ -704,8 +703,7 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
       dplyr::select(-cume)
   }
   
-  # PICK UP HERE 09-03-2025. WANT THE QUANTILE TO BE RELATIVE TO ALL YEARS. HMM
-  if(temporal_breaks=="month across years") {
+    if(temporal_breaks=="month across years") {
     df2 <- df %>%
       filter(month_numeric %in% c(1,2,3,4,5,6,7,11,12)) %>%
       mutate(temporal_break=ifelse(westcoastdate_notime < '2020-09-01',paste(month.name[month_numeric], "60-minute ping intervals"), paste(month.name[month_numeric], "15-minute ping intervals"))
