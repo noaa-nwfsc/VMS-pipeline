@@ -753,8 +753,6 @@ summarize_dcrb_attribute_block10 <- function(att,temporal_breaks){
 
 Remember that quantile means “count up this cell and all those larger than it, and see how much of the total sum we have accumulated”. If, say, a grid cell has a value for quant of 0.05 for pings, this would mean that it is in the first 5% of all grid cells when we are counting up total pings from largest to smallest.
 
-# PICK UP HERE 09-22-2025 TO CALCULATE DIFFERENCE IN QUANT TRIPS AND QUANT PINGS TO MAKE DIFFERENCE MAPS
-
 ```{r make_vms_blk_map_df}
 
 trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% 
@@ -764,6 +762,31 @@ trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutat
 pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% 
   rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs) %>% 
   dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+
+# combine all yrs df's into a single one, adding a column for the difference between quantiles
+
+trips_pings_allyrs_full <- trips_allyrs %>%
+  st_join(pings_allyrs,
+          suffix = c("_trips", "_pings"),
+          join = st_intersects
+          ) 
+
+common_col_names <- c('temporal_break', 'BLOCK10_ID', 'RAMP_zone', 'RAMP_over', 'State', 'NGDC_m_mean')
+
+logical_checks <- map(
+  .x = common_col_names,
+  .f = ~ trips_pings_allyrs_full[[paste0(., "_trips")]] == trips_pings_allyrs_full[[paste0(., "_pings")]]
+)
+
+final_filter_condition <- reduce(logical_checks, `&`)
+
+trips_pings_allyrs <- trips_pings_allyrs_full %>%
+  filter(final_filter_condition) %>%
+  mutate(
+    diff_quants_t_minus_p = quant_trips - quant_pings
+  )
+
+# now focus on months across years
 
 trips_monthsallyrs <- summarize_dcrb_attribute_block10('trips', 'month across years') %>% mutate(metric = 'trips') %>% 
   rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs) %>% 
@@ -778,7 +801,9 @@ pings_monthsallyrs <- summarize_dcrb_attribute_block10('pings', 'month across ye
 ```
 
 
-### Example correlations between fish tix and VMS records
+### Example comparisons between fish tix and VMS records
+
+#### Correlations
 
 ```{r make_corr_plots}
 
@@ -830,6 +855,24 @@ ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "f
 #   theme(panel.background=element_rect(fill='white'))
 
 # looking better
+
+```
+
+#### Distribution of quantile differences
+
+```{r make_plot_quant_diffs}
+
+ggplot(trips_pings_allyrs, aes(x = diff_quants_t_minus_p)) +
+  geom_histogram(binwidth = 0.05, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Frequency Distribution of Quantile Differences",
+    subtitle = "(Trips - Pings)",
+    x = "Quantile Difference",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "hist_quant_diffs_trips_pings_allyrs.png"), width = 8, height = 6)
 
 ```
 
@@ -904,7 +947,9 @@ start adding mapping code, see line 808 of Owen's make_map_coastwide()
 
 make_map_ca <- function(df, column,scl_ord=1,...) {
   
-  dat2 <- df %>% filter(State == 'CA') %>% st_transform(rot15)
+  cols_to_check <- c("State", "State_trips", "State_pings")
+  
+  dat2 <- df %>% filter(if_any(any_of(cols_to_check), ~ . == 'CA')) %>% st_transform(rot15)
   
   #is the value a factor (i.e., categorical?)
   is_factor <- df %>% pull( {{column}} ) %>% is.factor()
@@ -1035,6 +1080,10 @@ trips_allyrs_ca <- trips_allyrs %>%
 pings_allyrs_ca <- pings_allyrs %>%
   filter(State == 'CA')
 
+trips_pings_allyrs_ca <- trips_pings_allyrs %>%
+  filter(State_trips == 'CA') %>%
+  filter(State_pings == 'CA')
+
 trips_monthsallyrs_ca <- trips_monthsallyrs %>%
   filter(State == 'CA')
 
@@ -1085,11 +1134,17 @@ quantile_pings_60minpinginterval
 
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantiles of vms-recorded fishing locations.png"))
 
-plot_grid(quantile_trips_60minpinginterval, quantile_pings_60minpinginterval,
-          labels = "auto"
+diff_quants_t_minus_p_60minpinginterval <- make_map_ca(trips_pings_allyrs_ca %>% filter(temporal_break_trips == '60-minute ping intervals') %>% filter(temporal_break_pings == '60-minute ping intervals'), diff_quants_t_minus_p)+labs(fill="Quantile difference\n(trips - pings)", title = 'Difference between\nCDFW small block-reported\nand VMS-recorded\nfishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+diff_quants_t_minus_p_60minpinginterval
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantile differences (reported trips minus vms-recorded fishing locations).png"))
+
+plot_grid(quantile_trips_60minpinginterval, quantile_pings_60minpinginterval,diff_quants_t_minus_p_60minpinginterval,
+          labels = "auto", nrow=1
           )
 
-ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantiles of reported and vms-recorded fishing locations.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantiles and quantile differences of reported and vms-recorded fishing locations.png"))
 
 ```
 
@@ -1135,11 +1190,17 @@ quantile_pings_15minpinginterval
 
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles of vms-recorded fishing locations.png"))
 
-plot_grid(quantile_trips_15minpinginterval, quantile_pings_15minpinginterval,
-          labels = "auto"
+diff_quants_t_minus_p_15minpinginterval <- make_map_ca(trips_pings_allyrs_ca %>% filter(temporal_break_trips == '15-minute ping intervals') %>% filter(temporal_break_pings == '15-minute ping intervals'), diff_quants_t_minus_p)+labs(fill="Quantile difference\n(trips - pings)", title = 'Difference between\nCDFW small block-reported\nand VMS-recorded\nfishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
+
+diff_quants_t_minus_p_15minpinginterval
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantile differences (reported trips minus vms-recorded fishing locations).png"))
+
+plot_grid(quantile_trips_15minpinginterval, quantile_pings_15minpinginterval,diff_quants_t_minus_p_15minpinginterval,
+          labels = "auto",nrow=1
           )
 
-ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles of reported and vms-recorded fishing locations.png"))
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles and quantile differences of reported and vms-recorded fishing locations.png"))
 
 ```
 
