@@ -80,11 +80,16 @@ Remember that VMS point frequency distributions need to be split into before and
 3) Spatial visualizations (maps)
 
   (a) number of tix per CDFW block vs number of pings per CDFW block
-  (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
+  (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block vs difference in those qunatiles per CDFW block
     
-  for 60-min ping interval years and 15-min ping interval years, then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023). 
+  for 60-min ping interval years and 15-min ping interval years
+  
+  <!-- , then subset by whale and non-whale seasons and/or by port group (a la Free et al. 2023).  -->
     
   also make annual maps of 3ab above.
+  
+  (c) number of tix per RAMP zone vs number of pings per RAMP zone
+  (d) quantile of # tix per RAMP zone vs quantile of # pings per RAMP zone vs difference in those qunatiles per RAMP zone
     
  <!-- future: consider # unique vessels per CDFW block based on tix vs # unique vessels per CDFW block based on VMS -->
 
@@ -636,7 +641,7 @@ iii) None of the trips reporting catch from medium blocks show at least 1 VMS re
 Summarize data frame for mapping
 
   (a) number of tix per CDFW block vs number of pings per CDFW block
-  (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW block
+  (b) quantile of # tix per CDFW block vs quantile of # pings per CDFW blockvs difference in those qunatiles per CDFW block
     
   for 60-min ping interval years and 15-min ping interval years,
   
@@ -645,6 +650,9 @@ Summarize data frame for mapping
   also make summaries for each fishing month (Nov-July) separately, across all years within each ping-interval period, for 3ab above.
 
 Focus on fish tix with self-reported 10-arc minute (small) blocks and associated VMS data
+
+  (c) number of tix per RAMP zone vs number of pings per RAMP zone
+  (d) quantile of # tix per RAMP zone vs quantile of # pings per RAMP zone vs difference in those qunatiles per RAMP zone
 
 Use Owen's code as a basis. https://github.com/noaa-nwfsc/VMS-pipeline/blob/7fac4c72968f6235ad1f73975128821cf3ddd933/code/notebooks/owen/summary%20mapping%20dcrb.qmd 
 
@@ -874,6 +882,19 @@ ggplot(trips_pings_allyrs, aes(x = diff_quants_t_minus_p)) +
 
 ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "hist_quant_diffs_trips_pings_allyrs.png"), width = 8, height = 6)
 
+ggplot(trips_pings_allyrs, aes(x = diff_quants_t_minus_p)) +
+  geom_histogram(binwidth = 0.05, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Frequency Distribution of Quantile Differences",
+    subtitle = "(Trips - Pings)",
+    x = "Quantile Difference",
+    y = "Frequency"
+  ) +
+  facet_wrap(~temporal_break_trips) +
+  theme_minimal()
+
+ggsave(filename = here("Confidential", "hindcast_output", output_subdir_name, "figures", "hist_quant_diffs_trips_pings_allyrs_bypinginterval.png"), width = 8, height = 6)
+
 ```
 
 ### Maps
@@ -1094,7 +1115,7 @@ pings_monthsallyrs_ca <- pings_monthsallyrs %>%
 
 ##### 1. 60-minute ping interval years
 
-###### Compare means across all years
+###### Compare means across all years - CDFW blocks
 ```{r 60_min_maps}
 
 trips_60minpinginterval <- make_map_ca_sqrttransform(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), mean_allyrs_trips)+labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
@@ -1118,7 +1139,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 
 ```
 
-###### Compare quantiles across all years
+###### Compare quantiles across all years - CDFW blocks
 ```{r 60_min_maps_quantiles}
 
 quantile_trips_60minpinginterval <- make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '60-minute ping intervals'), quant_trips)+labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
@@ -1148,10 +1169,105 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 
 ```
 
+###### Compare means across all years - RAMP zones
+```{r 60_min_maps_ramp}
+
+trips_60minpinginterval_ramp <- make_map_ca_sqrttransform(
+  trips_allyrs_ca %>% 
+    filter(temporal_break == '60-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      mean_allyrs_trips = mean(mean_allyrs_trips)
+    ),
+  mean_allyrs_trips) + 
+  labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+trips_60minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals reported fishing locations by RAMP zone.png"))
+
+
+pings_60minpinginterval_ramp <- make_map_ca_sqrttransform(
+  pings_allyrs_ca %>% 
+    filter(temporal_break == '60-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      mean_allyrs_pings = mean(mean_allyrs_pings)
+    ), 
+  mean_allyrs_pings) +
+  labs(fill="sqrt mean\nnumber of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+pings_60minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals vms-recorded fishing locations by RAMP zone.png"))
+
+plot_grid(trips_60minpinginterval_ramp, pings_60minpinginterval_ramp,
+          labels = "auto"
+          )
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals reported and vms-recorded fishing locations by RAMP zone.png"))
+
+```
+
+###### Compare quantiles across all years - RAMP zones
+```{r 60_min_maps_quantiles_ramp}
+
+quantile_trips_60minpinginterval_ramp <- make_map_ca(
+  trips_allyrs_ca %>% 
+    filter(temporal_break == '60-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      quant_trips = mean(quant_trips)
+    ), 
+  quant_trips) + 
+  labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+quantile_trips_60minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantiles of reported fishing locations by RAMP zone.png"))
+
+
+quantile_pings_60minpinginterval_ramp <- make_map_ca(
+  pings_allyrs_ca %>% 
+    filter(temporal_break == '60-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      quant_pings = mean(quant_pings)
+    ),
+  quant_pings) + 
+  labs(fill="quantile number of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+quantile_pings_60minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantiles of vms-recorded fishing locations by RAMP zone.png"))
+
+diff_quants_t_minus_p_60minpinginterval_ramp <- make_map_ca(
+  trips_pings_allyrs_ca %>%
+    filter(temporal_break_trips == '60-minute ping intervals') %>% 
+    filter(temporal_break_pings == '60-minute ping intervals') %>%
+    group_by(RAMP_zone_trips, State_trips) %>%
+    summarise(
+      diff_quants_t_minus_p = mean(diff_quants_t_minus_p)
+    ), 
+  diff_quants_t_minus_p) + 
+  labs(fill="Quantile difference\n(trips - pings)", title = 'Difference between\nCDFW small block-reported\nand VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 60-minute ping intervals')
+
+diff_quants_t_minus_p_60minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantile differences (reported trips minus vms-recorded fishing locations) by RAMP zone.png"))
+
+plot_grid(quantile_trips_60minpinginterval_ramp, quantile_pings_60minpinginterval_ramp,diff_quants_t_minus_p_60minpinginterval_ramp,
+          labels = "auto", nrow=1
+          )
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "60-minute ping intervals quantiles and quantile differences of reported and vms-recorded fishing locations by RAMP zone.png"))
+
+```
+
 ##### 2. 15-minute ping interval years
 
 
-###### Compare means across all years
+###### Compare means across all years - CDFW blocks
 ```{r 15_min_maps}
 
 trips_15minpinginterval <- make_map_ca_sqrttransform(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), mean_allyrs_trips)+labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
@@ -1174,7 +1290,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "1
 
 ```
 
-###### Compare quantiles across all years
+###### Compare quantiles across all years - CDFW blocks
 ```{r 15_min_maps_quantiles}
 
 quantile_trips_15minpinginterval <- make_map_ca(trips_allyrs_ca %>% filter(temporal_break == '15-minute ping intervals'), quant_trips)+labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
@@ -1203,10 +1319,106 @@ plot_grid(quantile_trips_15minpinginterval, quantile_pings_15minpinginterval,dif
 ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles and quantile differences of reported and vms-recorded fishing locations.png"))
 
 ```
+###### Compare means across all years - RAMP zones
+
+```{r 15_min_maps_ramp}
+
+trips_15minpinginterval_ramp <- make_map_ca_sqrttransform(
+  trips_allyrs_ca %>% 
+    filter(temporal_break == '15-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      mean_allyrs_trips = mean(mean_allyrs_trips)
+    ),
+  mean_allyrs_trips) + 
+  labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+
+trips_15minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals reported fishing locations by RAMP zone.png"))
+
+
+pings_15minpinginterval_ramp <- make_map_ca_sqrttransform(
+  pings_allyrs_ca %>% 
+    filter(temporal_break == '15-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      mean_allyrs_pings = mean(mean_allyrs_pings)
+    ), 
+  mean_allyrs_pings) +
+  labs(fill="sqrt mean\nnumber of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+
+pings_15minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals vms-recorded fishing locations by RAMP zone.png"))
+
+plot_grid(trips_15minpinginterval_ramp, pings_15minpinginterval_ramp,
+          labels = "auto"
+          )
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals reported and vms-recorded fishing locations by RAMP zone.png"))
+
+```
+
+###### Compare quantiles across all years - RAMP zones
+```{r 15_min_maps_quantiles_ramp}
+
+quantile_trips_15minpinginterval_ramp <- make_map_ca(
+  trips_allyrs_ca %>% 
+    filter(temporal_break == '15-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      quant_trips = mean(quant_trips)
+    ), 
+  quant_trips) + 
+  labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+
+quantile_trips_15minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles of reported fishing locations by RAMP zone.png"))
+
+
+quantile_pings_15minpinginterval_ramp <- make_map_ca(
+  pings_allyrs_ca %>% 
+    filter(temporal_break == '15-minute ping intervals') %>%
+    group_by(RAMP_zone, State) %>%
+    summarise(
+      quant_pings = mean(quant_pings)
+    ),
+  quant_pings) + 
+  labs(fill="quantile number of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+
+quantile_pings_15minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles of vms-recorded fishing locations by RAMP zone.png"))
+
+diff_quants_t_minus_p_15minpinginterval_ramp <- make_map_ca(
+  trips_pings_allyrs_ca %>%
+    filter(temporal_break_trips == '15-minute ping intervals') %>% 
+    filter(temporal_break_pings == '15-minute ping intervals') %>%
+    group_by(RAMP_zone_trips, State_trips) %>%
+    summarise(
+      diff_quants_t_minus_p = mean(diff_quants_t_minus_p)
+    ), 
+  diff_quants_t_minus_p) + 
+  labs(fill="Quantile difference\n(trips - pings)", title = 'Difference between\nCDFW small block-reported\nand VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+
+diff_quants_t_minus_p_15minpinginterval_ramp
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantile differences (reported trips minus vms-recorded fishing locations) by RAMP zone.png"))
+
+plot_grid(quantile_trips_15minpinginterval_ramp, quantile_pings_15minpinginterval_ramp,diff_quants_t_minus_p_15minpinginterval_ramp,
+          labels = "auto", nrow=1
+          )
+
+ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "15-minute ping intervals quantiles and quantile differences of reported and vms-recorded fishing locations by RAMP zone.png"),
+       width = 10, height = 8)
+
+```
 
 ##### 3. Comparisons for each month across all years
 
-###### Compare means 
+###### Compare means - CDFW blocks 
 ```{r maps_month}
 
 trips_minpinginterval_months <- make_map_ca_sqrttransform_multi(trips_monthsallyrs_ca, mean_allyrs_trips)
@@ -1239,7 +1451,7 @@ iwalk(pings_minpinginterval_months,
 
 ```
 
-###### Compare quantiles 
+###### Compare quantiles - CDFW blocks 
 ```{r maps_quantiles_month}
 
 quantile_trips_pinginterval_months <- make_map_ca_multi(trips_monthsallyrs_ca, quant_trips)
