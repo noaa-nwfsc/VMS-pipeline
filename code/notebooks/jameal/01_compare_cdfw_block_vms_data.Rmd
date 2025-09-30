@@ -765,11 +765,27 @@ Remember that quantile means “count up this cell and all those larger than it,
 
 trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% 
   rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs) %>% 
-  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric) %>% 
+  mutate(
+    RAMP_zone_whales = case_when(
+      RAMP_zone == 'Zone 2 & Zone 7' ~ 'Zone 2',
+      RAMP_zone == 'Zone 3 & Zone 7' ~ 'Zone 3',
+      RAMP_zone == 'Zone 4 & Zone 7' ~ 'Zone 4',
+      TRUE ~ RAMP_zone
+      )
+    )
 
 pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% 
   rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs) %>% 
-  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric) %>% 
+  mutate(
+    RAMP_zone_whales = case_when(
+      RAMP_zone == 'Zone 2 & Zone 7' ~ 'Zone 2',
+      RAMP_zone == 'Zone 3 & Zone 7' ~ 'Zone 3',
+      RAMP_zone == 'Zone 4 & Zone 7' ~ 'Zone 4',
+      TRUE ~ RAMP_zone
+      )
+    )
 
 # combine all yrs df's into a single one, adding a column for the difference between quantiles
 
@@ -792,17 +808,41 @@ trips_pings_allyrs <- trips_pings_allyrs_full %>%
   filter(final_filter_condition) %>%
   mutate(
     diff_quants_t_minus_p = quant_trips - quant_pings
-  )
+  ) %>% 
+  mutate(
+    RAMP_zone_whales = case_when(
+      RAMP_zone_pings == 'Zone 2 & Zone 7' ~ 'Zone 2',
+      RAMP_zone_pings == 'Zone 3 & Zone 7' ~ 'Zone 3',
+      RAMP_zone_pings == 'Zone 4 & Zone 7' ~ 'Zone 4',
+      TRUE ~ RAMP_zone_pings
+      )
+    )
 
 # now focus on months across years
 
 trips_monthsallyrs <- summarize_dcrb_attribute_block10('trips', 'month across years') %>% mutate(metric = 'trips') %>% 
   rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs) %>% 
-  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric) %>% 
+  mutate(
+    RAMP_zone_whales = case_when(
+      RAMP_zone == 'Zone 2 & Zone 7' ~ 'Zone 2',
+      RAMP_zone == 'Zone 3 & Zone 7' ~ 'Zone 3',
+      RAMP_zone == 'Zone 4 & Zone 7' ~ 'Zone 4',
+      TRUE ~ RAMP_zone
+      )
+    )
 
 pings_monthsallyrs <- summarize_dcrb_attribute_block10('pings', 'month across years') %>% mutate(metric = 'pings') %>% 
   rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs) %>% 
-  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric) %>% 
+  mutate(
+    RAMP_zone_whales = case_when(
+      RAMP_zone == 'Zone 2 & Zone 7' ~ 'Zone 2',
+      RAMP_zone == 'Zone 3 & Zone 7' ~ 'Zone 3',
+      RAMP_zone == 'Zone 4 & Zone 7' ~ 'Zone 4',
+      TRUE ~ RAMP_zone
+      )
+    )
 
 
 
@@ -830,10 +870,27 @@ pings_monthsallyrs <- summarize_dcrb_attribute_block10('pings', 'month across ye
 
 trips_allyrs <- summarize_dcrb_attribute_block10('trips', 'all years') %>% mutate(metric = 'trips') %>% 
   rename(quant_trips = quant, mean_allyrs_trips = mean_allyrs) %>% 
-  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric) %>% 
+  mutate(
+    RAMP_zone_whales = case_when(
+      RAMP_zone == 'Zone 2 & Zone 7' ~ 'Zone 2',
+      RAMP_zone == 'Zone 3 & Zone 7' ~ 'Zone 3',
+      RAMP_zone == 'Zone 4 & Zone 7' ~ 'Zone 4',
+      TRUE ~ RAMP_zone
+      )
+    )
+
 pings_allyrs <- summarize_dcrb_attribute_block10('pings', 'all years') %>% mutate(metric = 'pings') %>% 
   rename(quant_pings = quant, mean_allyrs_pings = mean_allyrs) %>% 
-  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric)
+  dplyr::select(-sd_allyrs,-ranked,-quantbinned,-metric) %>% 
+  mutate(
+    RAMP_zone_whales = case_when(
+      RAMP_zone == 'Zone 2 & Zone 7' ~ 'Zone 2',
+      RAMP_zone == 'Zone 3 & Zone 7' ~ 'Zone 3',
+      RAMP_zone == 'Zone 4 & Zone 7' ~ 'Zone 4',
+      TRUE ~ RAMP_zone
+      )
+    )
 
 trips_allyrs %>% 
   # non-spatial join
@@ -1175,7 +1232,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 trips_60minpinginterval_ramp <- make_map_ca_sqrttransform(
   trips_allyrs_ca %>% 
     filter(temporal_break == '60-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       mean_allyrs_trips = mean(mean_allyrs_trips)
     ),
@@ -1190,7 +1247,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 pings_60minpinginterval_ramp <- make_map_ca_sqrttransform(
   pings_allyrs_ca %>% 
     filter(temporal_break == '60-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       mean_allyrs_pings = mean(mean_allyrs_pings)
     ), 
@@ -1215,7 +1272,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 quantile_trips_60minpinginterval_ramp <- make_map_ca(
   trips_allyrs_ca %>% 
     filter(temporal_break == '60-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       quant_trips = mean(quant_trips)
     ), 
@@ -1230,7 +1287,7 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "6
 quantile_pings_60minpinginterval_ramp <- make_map_ca(
   pings_allyrs_ca %>% 
     filter(temporal_break == '60-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       quant_pings = mean(quant_pings)
     ),
@@ -1245,7 +1302,7 @@ diff_quants_t_minus_p_60minpinginterval_ramp <- make_map_ca(
   trips_pings_allyrs_ca %>%
     filter(temporal_break_trips == '60-minute ping intervals') %>% 
     filter(temporal_break_pings == '60-minute ping intervals') %>%
-    group_by(RAMP_zone_trips, State_trips) %>%
+    group_by(RAMP_zone_whales, State_trips) %>%
     summarise(
       diff_quants_t_minus_p = mean(diff_quants_t_minus_p)
     ), 
@@ -1326,12 +1383,12 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "1
 trips_15minpinginterval_ramp <- make_map_ca_sqrttransform(
   trips_allyrs_ca %>% 
     filter(temporal_break == '15-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       mean_allyrs_trips = mean(mean_allyrs_trips)
     ),
   mean_allyrs_trips) + 
-  labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+  labs(fill="sqrt mean\nnumber of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
 
 trips_15minpinginterval_ramp
 
@@ -1341,12 +1398,12 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "1
 pings_15minpinginterval_ramp <- make_map_ca_sqrttransform(
   pings_allyrs_ca %>% 
     filter(temporal_break == '15-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       mean_allyrs_pings = mean(mean_allyrs_pings)
     ), 
   mean_allyrs_pings) +
-  labs(fill="sqrt mean\nnumber of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+  labs(fill="sqrt mean\nnumber of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
 
 pings_15minpinginterval_ramp
 
@@ -1366,12 +1423,12 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "1
 quantile_trips_15minpinginterval_ramp <- make_map_ca(
   trips_allyrs_ca %>% 
     filter(temporal_break == '15-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       quant_trips = mean(quant_trips)
     ), 
   quant_trips) + 
-  labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+  labs(fill="quantile number of trips", title = 'CDFW small block-reported\nfishing locations\nby RAMP zone', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
 
 quantile_trips_15minpinginterval_ramp
 
@@ -1381,12 +1438,12 @@ ggsave(here("Confidential", "hindcast_output", output_subdir_name, "figures", "1
 quantile_pings_15minpinginterval_ramp <- make_map_ca(
   pings_allyrs_ca %>% 
     filter(temporal_break == '15-minute ping intervals') %>%
-    group_by(RAMP_zone, State) %>%
+    group_by(RAMP_zone_whales, State) %>%
     summarise(
       quant_pings = mean(quant_pings)
     ),
   quant_pings) + 
-  labs(fill="quantile number of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+  labs(fill="quantile number of pings", title = 'VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
 
 quantile_pings_15minpinginterval_ramp
 
@@ -1396,12 +1453,12 @@ diff_quants_t_minus_p_15minpinginterval_ramp <- make_map_ca(
   trips_pings_allyrs_ca %>%
     filter(temporal_break_trips == '15-minute ping intervals') %>% 
     filter(temporal_break_pings == '15-minute ping intervals') %>%
-    group_by(RAMP_zone_trips, State_trips) %>%
+    group_by(RAMP_zone_whales, State_trips) %>%
     summarise(
       diff_quants_t_minus_p = mean(diff_quants_t_minus_p)
     ), 
   diff_quants_t_minus_p) + 
-  labs(fill="Quantile difference\n(trips - pings)", title = 'Difference between\nCDFW small block-reported\nand VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Nov 2011 - Sep 2020\n 15-minute ping intervals')
+  labs(fill="Quantile difference\n(trips - pings)", title = 'Difference between\nCDFW small block-reported\nand VMS-recorded\nfishing locations\nby RAMP zone', subtitle = 'Sep 2020 - Dec 2023\n 15-minute ping intervals')
 
 diff_quants_t_minus_p_15minpinginterval_ramp
 
