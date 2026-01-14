@@ -1062,6 +1062,9 @@ make_map_zones_categorical <- function(df, column,scl_ord=1) {
 
 # Maps
 
+## Unique Vessels
+
+
 ```{r}
 vessels_allyrs <- summarize_dcrb_attribute(att="vessels",temporal_breaks="all years")
 vessels_whale_seasons <- summarize_dcrb_attribute(att="vessels",temporal_breaks="whale seasons")
@@ -1069,8 +1072,6 @@ vessels_mths <- summarize_dcrb_attribute(att="vessels",temporal_breaks="month ac
 vessels_mhw <- summarize_dcrb_attribute(att="vessels",temporal_breaks="mhw")
 vessels_ramp <- summarize_dcrb_attribute(att="vessels",temporal_breaks="ramp")
 ```
-
-## Unique Vessels
 
 All years
 
@@ -1135,3 +1136,20 @@ vessels_ramp_maps <- make_map_zones_sqrt(vessels_ramp,mean_allyrs)
 # before/after RAMP
 vessels_ramp_maps
 ```
+
+## Landings
+
+```{r}
+landings_allyrs <- summarize_dcrb_attribute(att="landings",temporal_breaks="all years")
+landings_whale_seasons <- summarize_dcrb_attribute(att="landings",temporal_breaks="whale seasons")
+landings_mths <- summarize_dcrb_attribute(att="landings",temporal_breaks="month across years")
+landings_mhw <- summarize_dcrb_attribute(att="landings",temporal_breaks="mhw")
+landings_ramp <- summarize_dcrb_attribute(att="landings",temporal_breaks="ramp")
+```
+
+```{r}
+landings_allyrs_maps <- make_map_zones_categorical(landings_allyrs,quantbinned,scl_ord = -1)
+landings_allyrs_maps
+```
+
+

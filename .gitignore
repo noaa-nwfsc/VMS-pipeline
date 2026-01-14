@@ -5,3 +5,6 @@
 .Ruserdata
 Confidential/
 spatial_data/bathymetry/composite_bath.tif
+.html
+.pdf
+.md

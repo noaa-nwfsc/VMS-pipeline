@@ -1,0 +1,116 @@
+---
+title: "dcrab_sdmTMB"
+format: html
+editor: visual
+---
+
+## Intro
+
+Putting together a simple spatial model for DCRB to look for useful/consistent spatial patterns. The core dataset is the joined and 5k-gridded, monthly summarized data for 2010-2023
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = F)
+
+# import libraries
+library(tidyverse)
+library(sf)
+library(cowplot)
+library(rnaturalearth)
+library(viridis)
+library(knitr)
+library(here)
+library(sdmTMB)
+
+options(dplyr.summarise.inform = FALSE)
+
+# change default ggplot theme for plotting
+plot_theme <- theme_minimal()+theme(panel.border = element_rect(color='black',fill=NA),
+                                    panel.background=element_rect(fill="#abd0d6"),panel.grid=element_line(color='gray70',linewidth = 0.2))
+theme_set(plot_theme)
+```
+
+## Import Data
+
+### Gridded Fishing Effort
+
+This is summarized Dungeness crab fishing effort from a combination of VMS and fish tickets, projected/summarized on a 5km, coastwide grid, monthly.
+
+```{r}
+dat <- read_csv(here('dcrb_5km_monthly_nonconfidential_df.csv'))
+```
+
+## Spatial Grid
+
+Next, load the spatial layers we need for mapping.
+
+```{r}
+# 5km grid, entire coast
+grid5k <- read_sf(here('spatial_data','grids','fivekm_grid_polys_shore_lamb.shp'))
+
+# background map, from rnaturalearth
+coast <- ne_states(country='United States of America',returnclass = 'sf') |>
+  filter(name %in% c('California','Oregon','Washington','Nevada')) |>
+  st_transform(crs = st_crs(grid5k))
+```
+
+```{r}
+# filter the overall grid using grid cells with DCRB effort in any month/year
+cells_we_need <- unique(dat$GRID5KM_ID)
+grid5k_filt <- grid5k |> filter(GRID5KM_ID %in% cells_we_need)
+```
+
+```{r}
+ll <- grid5k_filt |> select(GRID5KM_ID,Centroid_y,Centroid_x)
+dat <- dat |> left_join(ll,by=join_by(GRID5KM_ID))
+```
+
+### Expand?
+
+With zeroes?
+
+```{r}
+dat_expanded <- dat |> 
+  complete(GRID5KM_ID,nesting(month_numeric,year_numeric),
+           fill=list(n_vms_records=0))
+  
+```
+
+```{r}
+x <- count(dat,year_numeric,month_factor)
+y <- x |> group_by(month_factor) |> summarize(mean_n=mean(n)) |> 
+  mutate(mth=factor(month_factor,levels=c("November","December","January","February","March","April","May","June","July","August","September","October")))
+y |> ggplot(aes(mth,mean_n))+geom_point()+geom_hline(yintercept=30,linetype=2)
+
+mths_swap <- tibble(month_numeric=1:12,crab_month=c(3:12,1:2))
+
+dat_filt <- dat |> 
+  left_join(mths_swap,by=join_by(month_numeric)) |> 
+  filter(!(month_numeric%in%c(8,9,10)))
+```
+
+```{r}
+dat_filt |> ggplot(aes(n_vms_records))+geom_density()
+dat_filt |> ggplot(aes(log(n_vms_records)))+geom_density()
+
+```
+
+## Models
+
+### Mesh
+
+```{r}
+mesh <- make_mesh(dat_filt |> mutate(X=Centroid_x/1000,Y=Centroid_y/1000),c("X","Y"),cutoff=50)
+plot(mesh)
+```
+
+```{r}
+m1 <- sdmTMB(
+  n_vms_records~s(crab_month,k=3),
+  data=dat_filt,
+  mesh=mesh,
+  family=gaussian(link='log'),
+  spatial = T,
+  anisotropy = T,
+  time="year_numeric",
+  spatiotemporal = 'iid')
+```
