@@ -10,6 +10,9 @@ library(DescTools)
 # load master 1994 - 2023 fish tickets file
 fishtickets <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/raw_data/fish_tickets/all_fishtickets_1994_2023.rds")
 
+# load master 2011 - 2025 fish tickets file and read thru first 5000 rows to assign attribute type
+fishtickets <- read_tsv("~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/all_fishtix_2011to2025.tsv", guess_max = 5000)
+
 # take a look at the attribute structure
 glimpse(fishtickets)
 
