@@ -125,9 +125,6 @@ SPRW_gear <- Freq(Spot_prawn$GEAR_NAME, ord = "desc")
 # save a tab delimited table
 write_tsv(SPRW_gear, "Spot prawn gear type freq distribution 1994-2023.txt")
 
-
-
-
 # filter only spot prawn tickets
 Sable <- fishtickets %>%
   filter(PACFIN_SPECIES_CODE == "SABL")
@@ -144,6 +141,44 @@ SABL_gear <- Freq(Sable$GEAR_NAME, ord = "desc")
 
 # save a tab delimited table
 write_tsv(SABL_gear, "Sablefish gear type freq distribution 1994-2023.txt")
+
+## prepare a fish ticket .rda specific to SABL FISH POT gear from 2011 - 2023 for use in the VMS Pipeline
+# load the raw fish ticket data (slow)
+load("~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/all_fishtix_2011to2025.rda")
+
+# filter to tickets from 2011 - 2023, filtered to SABL and FISH POT gear
+Sablefish <- fishtickets %>%
+  filter(LANDING_YEAR < 2024 & PACFIN_SPECIES_CODE == "SABL" & PACFIN_GEAR_DESCRIPTION == "FISH POT")
+
+# filter for the 5 sector categories I'm interested in
+Sablefish <- Sablefish %>%
+  filter(
+    FOS_GROUNDFISH_SECTOR_CODE == 'Catch Shares' |
+      FOS_GROUNDFISH_SECTOR_CODE == 'Catch Shares EM' |
+      FOS_GROUNDFISH_SECTOR_CODE == 'LE Fixed Gear DTL' |
+      FOS_GROUNDFISH_SECTOR_CODE == 'Limited Entry Sablefish' |
+      FOS_GROUNDFISH_SECTOR_CODE == 'OA Fixed Gear'
+  )
+
+# create new column named 'BEF_Sector', where 'Catch Shares' and 'Catch Shares EM' are 'Catch Shares';
+# 'LE Fixed Gear DTL' and 'Limited Entry Sablefish' become 'Limited Entry Sablefish'
+# and everything else is 'OA Fixed Gear'
+Sablefish.fin <- Sablefish %>%
+  mutate(
+    BEF_Sector = case_when(
+      # Condition 1: Map 'a' or 'b' to 'c'
+      FOS_GROUNDFISH_SECTOR_CODE == "Catch Shares" | FOS_GROUNDFISH_SECTOR_CODE == "Catch Shares EM" ~ "Catch Shares",
+      
+      # Condition 2: Map 'd' or 'e' to 'x' (NEW REQUIREMENT)
+      FOS_GROUNDFISH_SECTOR_CODE == "LE Fixed Gear DTL" | FOS_GROUNDFISH_SECTOR_CODE == "Limited Entry Sablefish" ~ "Limited Entry Sablefish", 
+      
+      # Default: If none of the above conditions are met, assign "other"
+      TRUE ~ "OA Fixed Gear"                                        
+    )
+  )
+# save as .rda file
+save(Sablefish.fin, file = "~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/sablefish_pot_2011to2023.rda")
+
 
 
 
