@@ -258,7 +258,7 @@ rawdat.sub %>%
   count(Rec_ID) %>%
   ggplot(aes(n, ..count..)) +
   geom_histogram(fill = "seagreen", bins = 30) +
-  labs(x = "Number of records per ticket", "kernel density")
+  labs(x = "Number of records per ticket")
 ```
 
 Calculate landed pounds and revenue by species for each fish ticket. Then use these data to define proportions of pounds and revenue by species/ticket, in order to designate a "target" species for each fishing trip. We denote the target species for both revenue and pounds landed. If a ticket does not have a definitive target (classified as a proportion of landed pounds or revenue that is >10 percent more than the second-place species), denote "NONE" for the target.
