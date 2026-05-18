@@ -10,8 +10,16 @@ library(DescTools)
 # load master 1994 - 2023 fish tickets file
 fishtickets <- readRDS("~/Documents/GitHub/VMS-pipeline/Confidential/raw_data/fish_tickets/all_fishtickets_1994_2023.rds")
 
-# load master 2011 - 2025 fish tickets file and read thru first 5000 rows to assign attribute type
-fishtickets <- read_tsv("~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/all_fishtix_2011to2025.tsv", guess_max = 5000)
+## Process new 2011 - 2025 fish tickets .txt file
+# load master 2011 - 2025 fish tickets .txt file and assign attribute type based on fish tickets used in VMS Pipeline
+fishtickets <- read_tsv("~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/all_fishtix_2011to2025.tsv", col_types = "iiiciiccccciiccciccccccciccccccccicccccccccccciccicccccccccccclcccccccccclddddddlddllcllciccilllicilcicccciccccccicddcicciicc")
+# convert <chr> date format from "15-NOV-19" to yyyy-mm-dd
+library(dplyr)
+library(lubridate)
+fishtickets <- fishtickets %>%
+  mutate(LANDING_DATE = dmy(LANDING_DATE))
+# save as .rda file
+saveRDS(fishtickets, "~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/all_fishtix_2011to2025.rds")
 
 # take a look at the attribute structure
 glimpse(fishtickets)
@@ -129,6 +137,18 @@ write_tsv(SPRW_gear, "Spot prawn gear type freq distribution 1994-2023.txt")
 Sable <- fishtickets %>%
   filter(PACFIN_SPECIES_CODE == "SABL")
 
+# filter for bottom trawl gear only
+rock_trawl <- rockfish %>%
+  filter(
+    PACFIN_GEAR_DESCRIPTION == 'DANISH/SCOTTISH SEINE (TRAWL)' |
+      PACFIN_GEAR_DESCRIPTION == 'FLATFISH TRAWL' |
+      PACFIN_GEAR_DESCRIPTION == 'GROUNDFISH TRAWL (OTTER)' |
+      PACFIN_GEAR_DESCRIPTION == 'GROUNDFISH TRAWL, FOOTROPE < 8 IN.' |
+      PACFIN_GEAR_DESCRIPTION == 'GROUNDFISH TRAWL, FOOTROPE > 8 IN.' |
+      PACFIN_GEAR_DESCRIPTION == 'ROLLER TRAWL' |
+      PACFIN_GEAR_DESCRIPTION == 'SELECTIVE FF TRAWL, SMALL FOOTROPE'
+    )
+
 # take a look at the spot prawn attribute structure
 glimpse(Sable)
 
@@ -166,18 +186,18 @@ Sablefish <- Sablefish %>%
 Sablefish.fin <- Sablefish %>%
   mutate(
     BEF_Sector = case_when(
-      # Condition 1: Map 'a' or 'b' to 'c'
+      # Condition 1: assign "Catch Shares" and "Catch Shares EM" to category "Catch Shares"
       FOS_GROUNDFISH_SECTOR_CODE == "Catch Shares" | FOS_GROUNDFISH_SECTOR_CODE == "Catch Shares EM" ~ "Catch Shares",
       
-      # Condition 2: Map 'd' or 'e' to 'x' (NEW REQUIREMENT)
+      # Condition 2: assign "LE Fixed Gear DTL" and "Limited Entry Sablefish" to category "Limited Entry Sablefish"
       FOS_GROUNDFISH_SECTOR_CODE == "LE Fixed Gear DTL" | FOS_GROUNDFISH_SECTOR_CODE == "Limited Entry Sablefish" ~ "Limited Entry Sablefish", 
       
-      # Default: If none of the above conditions are met, assign "other"
+      # Default: If none of the above conditions are met, assign "OA Fixed Gear"
       TRUE ~ "OA Fixed Gear"                                        
     )
   )
-# save as .rda file
-save(Sablefish.fin, file = "~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/sablefish_pot_2011to2023.rda")
+# save as .rds file
+saveRDS(Sablefish.fin, file = "~/Documents/Projects/Ecosystem Science/Whale Entanglement/West Coast Take Reduction Team (TRT)/CONFIDENTIAL fish tickets from PacFIN/sablefish_pot_2011to2023.rds")
 
 
 

@@ -1,0 +1,29 @@
+========================================================================= 
+Log Path: ./log/2026-05-07 16.33.05.log 
+Program Path: /Users/blake.feist/Documents/GitHub/VMS-pipeline/code/pipeline_steps/main_process.Rmd 
+Working Directory: /Users/blake.feist/Documents/GitHub/VMS-pipeline/code/pipeline_steps 
+User Name: blake.feist 
+R Version: 4.4.1 (2024-06-14) 
+Machine: NWCDM04372090 x86_64 
+Operating System: Darwin 23.6.0 Darwin Kernel Version 23.6.0: Tue Feb 24 20:51:44 PST 2026; root:xnu-10063.141.1.711.7~1/RELEASE_X86_64 
+Base Packages: stats graphics grDevices utils datasets methods base 
+Other Packages: logr_1.3.9 common_1.1.5 here_1.0.2 knitr_1.51 
+Log Start Time: 2026-05-07 16:33:05.739023 
+========================================================================= 
+
+VMS piepeline was initiated with the following parameters: 
+
+output_dir_name processed_2026-05-07 
+process_year 2021 
+spp_codes SABL 
+gear_codes FISH POT; OTHER POT GEAR; ALL POT AND TRAP GEAR 
+pacfin_weight_metric LANDED_WEIGHT_LBS 
+pacfin_revenue_metric EXVESSEL_REVENUE 
+target_cutoff 1.1 
+lookback_window 7 
+interpolate_flag TRUE 
+
+========================================================================= 
+Log End Time: 2026-05-07 16:33:05.750751 
+Log Elapsed Time: 0 00:00:00 
+========================================================================= 
