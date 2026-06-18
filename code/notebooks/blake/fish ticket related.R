@@ -181,9 +181,9 @@ Sablefish <- Sablefish %>%
   )
 
 # create new column named 'BEF_Sector', where 'Catch Shares' and 'Catch Shares EM' are 'Catch Shares';
-# 'LE Fixed Gear DTL' and 'Limited Entry Sablefish' become 'Limited Entry Sablefish'
-# and everything else is 'OA Fixed Gear'
-Sablefish.fin <- Sablefish %>%
+# 'LE Fixed Gear DTL' and 'Limited Entry Sablefish' become 'Limited Entry Sablefish', 'OA Fixed Gear'
+# stays as 'OA Fixed Gear' and everything else is 'Other sector'
+all_pot_SABL_fishtix <- all_pot_SABL_fishtix %>%
   mutate(
     BEF_Sector = case_when(
       # Condition 1: assign "Catch Shares" and "Catch Shares EM" to category "Catch Shares"
@@ -192,8 +192,11 @@ Sablefish.fin <- Sablefish %>%
       # Condition 2: assign "LE Fixed Gear DTL" and "Limited Entry Sablefish" to category "Limited Entry Sablefish"
       FOS_GROUNDFISH_SECTOR_CODE == "LE Fixed Gear DTL" | FOS_GROUNDFISH_SECTOR_CODE == "Limited Entry Sablefish" ~ "Limited Entry Sablefish", 
       
-      # Default: If none of the above conditions are met, assign "OA Fixed Gear"
-      TRUE ~ "OA Fixed Gear"                                        
+      # Condition 3: assign "OA Fixed Gear" to category "OA Fixed Gear"
+      FOS_GROUNDFISH_SECTOR_CODE == "OA Fixed Gear" ~ "OA Fixed Gear", 
+      
+      # Default: If none of the above conditions are met, assign "Other sector"
+      TRUE ~ "Other sector"                                        
     )
   )
 # save as .rds file
